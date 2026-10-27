@@ -100,6 +100,14 @@ Release a Windows build: bump the version in the files listed in
 `.bumpversion.cfg`, commit on `wisprclone`, then push a `v<version>` tag to
 `origin`. The installer lands in a draft release.
 
-Upstream test baseline on Linux is recorded in this file once measured; on
-Windows (2026-10-27) the branch had the same 5–6 environment-only failures
-as clean upstream (ffmpeg/ROCm/HF cache/offline guard/progress).
+Test baseline on GB4 (2026-10-27, `wisprclone` at `f3e4f70`): pytest
+376 passed / 1 failed / 13 skipped in 42 s — the failure,
+`test_progress.py::test_hf_progress_tracker`, also fails on clean upstream;
+`tsc` clean; `cargo check` clean. On Windows the branch had the same 5–6
+environment-only failures as clean upstream (ffmpeg/ROCm/HF cache/offline
+guard/progress).
+
+One-time setup already done on GB4: Tauri system packages (apt), `uv` +
+Python 3.12 (in `/mnt/data/dev/.uv`), `backend/venv` with CPU PyTorch,
+`bun install`, dev sidecar placeholders. GB4 has no GitHub login yet — run
+`gh auth login` there before pushing from it.
