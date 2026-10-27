@@ -71,8 +71,13 @@ Python server 362 MB — ~337 MB of it is PyTorch loaded at startup, Rust
 
 ## Next steps
 
-1. Rename inside the app: product name, identifier, updater endpoint,
-   README (Voicebox → Voloz), with credit to upstream.
+1. ~~Rename inside the app~~ — done in `fb654ee`: product "Voloz",
+   identifier `io.github.mvoloch.voloz`, updater → mvoloch/voloz, README and
+   About credit Voicebox. Kept on purpose: `X-Voicebox-Client-Id`,
+   `voicebox_*` MCP tools, `voicebox-server`/`voicebox-mcp` sidecars. The new
+   identifier is a separate install and data dir: uninstall Voicebox 0.6.x
+   first (both use port 17493) and reconfigure endpoints/keys
+   (`scripts/cloud-dictation/configure-voicebox.ps1`).
 2. Lite edition: build flag that hides Studio routes in the frontend and a
    torch-free backend (lazy PyTorch: `backend/app.py`, `routes/health.py`,
    `utils/hf_offline_patch.py` import it at startup today).
