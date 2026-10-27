@@ -2,7 +2,7 @@ import { Link, useMatchRoute } from '@tanstack/react-router';
 import { AudioLines, Box, Captions, type LucideIcon, Mic, Settings, Volume2, Wand2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import voiceboxLogo from '@/assets/voicebox-logo.png';
+import volozLogo from '@/assets/voloz-logo.svg';
 import { cn } from '@/lib/utils/cn';
 import { usePlatform } from '@/platform/PlatformContext';
 import type { UpdateStatus } from '@/platform/types';
@@ -47,7 +47,7 @@ export function Sidebar({ isMacOS }: SidebarProps) {
     >
       {/* Logo */}
       <div className="mb-2">
-        <img src={voiceboxLogo} alt="Voloz" className="sidebar-logo w-12 h-12 object-contain" />
+        <img src={volozLogo} alt="Voloz" className="sidebar-logo w-12 h-12 object-contain" />
       </div>
 
       {/* Navigation Buttons */}

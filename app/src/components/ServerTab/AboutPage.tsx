@@ -2,7 +2,7 @@ import { ArrowUpRight } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import voiceboxLogo from '@/assets/voicebox-logo.png';
+import volozLogo from '@/assets/voloz-logo.svg';
 import { usePlatform } from '@/platform/PlatformContext';
 
 function FadeIn({ delay = 0, children }: { delay?: number; children: ReactNode }) {
@@ -45,7 +45,7 @@ export function AboutPage() {
       <div className="max-w-md mx-auto h-full flex items-center">
         <div className="flex flex-col items-center text-center space-y-5">
           <FadeIn delay={0}>
-            <img src={voiceboxLogo} alt="Voloz" className="w-20 h-20 object-contain" />
+            <img src={volozLogo} alt="Voloz" className="w-20 h-20 object-contain" />
           </FadeIn>
 
           <FadeIn delay={80}>
