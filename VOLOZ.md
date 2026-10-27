@@ -114,5 +114,5 @@ guard/progress).
 
 One-time setup already done on GB4: Tauri system packages (apt), `uv` +
 Python 3.12 (in `/mnt/data/dev/.uv`), `backend/venv` with CPU PyTorch,
-`bun install`, dev sidecar placeholders. GB4 has no GitHub login yet — run
-`gh auth login` there before pushing from it.
+`bun install`, dev sidecar placeholders, `gh` logged in over HTTPS
+(account mvoloch) so GB4 can push directly.
