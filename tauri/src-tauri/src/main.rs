@@ -13,6 +13,8 @@ mod input_monitoring;
 mod key_codes;
 mod keyboard_layout;
 mod speak_monitor;
+#[cfg(desktop)]
+mod tray;
 mod synthetic_keys;
 
 use std::sync::Mutex;
@@ -1389,7 +1391,13 @@ async fn debug_clipboard_roundtrip(
 /// closes, as before, so "Keep server running" plus the global hotkey keep
 /// dictation available without the main window.
 fn finish_main_window_close(window: &tauri::Window) {
-    if cfg!(target_os = "linux") {
+    // Closing the window normally hides it to the tray (see tray.rs); this
+    // flow only runs for the tray's "Quit", which must end the process.
+    #[cfg(desktop)]
+    let quitting = tray::quit_requested();
+    #[cfg(not(desktop))]
+    let quitting = false;
+    if cfg!(target_os = "linux") || quitting {
         window.app_handle().exit(0);
     } else {
         window.close().ok();
@@ -1398,7 +1406,14 @@ fn finish_main_window_close(window: &tauri::Window) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Registered first so a second launch hands off before anything else
+    // initialises (keyboard tap, backend spawn) in the new process.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        tray::show_main_window(app);
+    }));
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
@@ -1465,6 +1480,7 @@ pub fn run() {
 
                 ensure_dictate_window(app.handle());
                 speak_monitor::spawn_speak_monitor(app.handle().clone());
+                tray::build(app.handle())?;
             }
 
             // Hide title bar icon on Windows
@@ -1553,6 +1569,17 @@ pub fn run() {
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                // The close button hides the main window to the tray; only
+                // the tray's "Quit" runs the cleanup flow below.
+                #[cfg(desktop)]
+                {
+                    if tray::should_hide_on_close(window.label()) {
+                        api.prevent_close();
+                        tray::release_main_window(window);
+                        return;
+                    }
+                }
+
                 // If we're already in the close flow, let it proceed
                 if closing.load(std::sync::atomic::Ordering::SeqCst) {
                     return;
