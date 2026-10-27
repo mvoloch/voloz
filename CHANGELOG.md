@@ -5,6 +5,28 @@
 
 # Changelog
 
+## [0.7.0] - 2026-10-27
+
+**First release as Voloz** — a fork of [Voicebox](https://github.com/jamiepine/voicebox) by Jamie Pine, focused on dictation. Windows only for now; the installer is not code-signed yet.
+
+### Before installing
+
+- Voloz is a separate app from Voicebox (new identifier). **Uninstall Voicebox first** — both use port 17493.
+- Settings and API keys start empty: set the endpoints again under Settings → Captures (or run `scripts/cloud-dictation/configure-voicebox.ps1`).
+
+### Added
+
+- **Cloud transcription:** any OpenAI-compatible `/audio/transcriptions` endpoint (OpenRouter, Groq, OpenAI, self-hosted Whisper) instead of local Whisper.
+- **Claude refinement:** a custom LLM endpoint on `https://api.anthropic.com/v1` uses the native Anthropic SDK (`claude-haiku-5-5` recommended).
+- **System tray:** closing the window sends Voloz to the tray and frees the window's memory; the hotkey keeps working. Launching Voloz again focuses the running copy.
+- Portuguese in the transcription language picker; pt-BR strings for the new settings.
+- New Voloz logo and app icons (`branding/`, regenerated with `scripts/brand/make-icons.py`).
+
+### Changed
+
+- Renamed to Voloz: product name, identifier `io.github.mvoloch.voloz`, main binary `voloz.exe`, updates from github.com/mvoloch/voloz. Credits to Voicebox and Jamie Pine are kept in the app (About), README and LICENSE.
+- The transcription endpoint reuses one HTTP connection between dictations.
+
 ## [Unreleased]
 
 ### Text-to-speech
