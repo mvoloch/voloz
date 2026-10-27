@@ -9,6 +9,9 @@ Rules:
   signing key live outside the repo (GB4: `~/.config/wisprclone/`). This
   repository is public. Before every push, scan new commits for `sk-or-`,
   `sk-ant-`, `PRIVATE KEY` and `rsign encrypted secret key`.
+- **Always keep the credits to Voicebox and Jamie Pine** (README, About page,
+  LICENSE notice). Removing Voicebox *branding* is fine; removing *credit*
+  never is.
 - Keep `feat/*` branches upstream-clean (they may become PRs to
   jamiepine/voicebox). Fork-only config (updater, release workflow, branding)
   belongs on `wisprclone`.

@@ -980,9 +980,9 @@ fn stop_audio_playback(
 #[cfg(target_os = "macos")]
 const VOICEBOX_BUNDLE_ID: &str = "io.github.mvoloch.voloz";
 #[cfg(target_os = "windows")]
-const VOICEBOX_BUNDLE_ID: &str = "voicebox.exe";
+const VOICEBOX_BUNDLE_ID: &str = "voloz.exe";
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const VOICEBOX_BUNDLE_ID: &str = "voicebox";
+const VOICEBOX_BUNDLE_ID: &str = "voloz";
 
 /// Milliseconds to wait between activating the target app and firing the
 /// synthetic ⌘V, giving AppKit time to finish re-ordering windows and
