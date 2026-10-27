@@ -3,7 +3,7 @@
 //! Closing the main window hides it here instead of quitting, so the
 //! backend and the global dictation hotkey keep running and a stray click
 //! on the close button can't silently kill dictation. Left-clicking the
-//! icon (or "Open Voicebox" in its menu) brings the window back; "Quit"
+//! icon (or "Abrir Voloz" in its menu) brings the window back; "Quit"
 //! runs the existing close flow — the frontend stops the server unless
 //! "Keep server running" is on — and then exits the app.
 
@@ -94,12 +94,12 @@ pub fn request_quit<R: Runtime>(app: &AppHandle<R>) {
 
 /// Create the tray icon and its menu.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Abrir Voicebox", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Abrir Voloz", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
 
     let mut builder = TrayIconBuilder::with_id("main")
-        .tooltip("Voicebox")
+        .tooltip("Voloz")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {

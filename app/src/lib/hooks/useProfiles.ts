@@ -134,7 +134,7 @@ export function useExportProfile() {
 
       await platform.filesystem.saveFile(filename, blob, [
         {
-          name: 'Voicebox Profile',
+          name: 'Voloz Profile',
           extensions: ['zip'],
         },
       ]);

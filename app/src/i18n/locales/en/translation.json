@@ -135,13 +135,13 @@
       },
       "inputMonitoring": {
         "label": "Input Monitoring permission",
-        "ready": "macOS allows Voicebox to detect your global shortcut.",
-        "missing": "macOS needs to allow Voicebox to detect the global shortcut.",
+        "ready": "macOS allows Voloz to detect your global shortcut.",
+        "missing": "macOS needs to allow Voloz to detect the global shortcut.",
         "openSettings": "Open Settings"
       },
       "accessibility": {
         "label": "Accessibility permission",
-        "ready": "Voicebox can paste transcriptions into other apps.",
+        "ready": "Voloz can paste transcriptions into other apps.",
         "missing": "Required so transcriptions can paste into the focused app.",
         "openSettings": "Open Settings"
       }
@@ -149,19 +149,19 @@
     "permissions": {
       "accessibility": {
         "title": "Grant Accessibility permission to enable auto-paste",
-        "body": "Voicebox needs <path>System Settings → Privacy & Security → Accessibility</path> to paste transcriptions into other apps. Your dictation still lands in the Captures tab without it.",
+        "body": "Voloz needs <path>System Settings → Privacy & Security → Accessibility</path> to paste transcriptions into other apps. Your dictation still lands in the Captures tab without it.",
         "openSettings": "Open Settings",
         "recheck": "I've enabled it",
         "rechecking": "Checking…",
-        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voicebox after toggling the permission."
+        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voloz after toggling the permission."
       },
       "inputMonitoring": {
         "title": "Grant Input Monitoring to enable the global shortcut",
-        "body": "Voicebox needs <path>System Settings → Privacy & Security → Input Monitoring</path> to detect your dictation chord. The toggle is on, but macOS is blocking key events until you allow it.",
+        "body": "Voloz needs <path>System Settings → Privacy & Security → Input Monitoring</path> to detect your dictation chord. The toggle is on, but macOS is blocking key events until you allow it.",
         "openSettings": "Open Settings",
         "recheck": "I've enabled it",
         "rechecking": "Checking…",
-        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voicebox after toggling the permission."
+        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voloz after toggling the permission."
       }
     }
   },
@@ -768,7 +768,7 @@
     },
     "language": {
       "label": "Language",
-      "description": "Choose the display language for Voicebox."
+      "description": "Choose the display language for Voloz."
     },
     "theme": {
       "label": "Theme",
@@ -844,7 +844,7 @@
       },
       "api": {
         "title": "API Access",
-        "description": "Integrate Voicebox into your workflow via the REST API at <code>{{url}}</code>",
+        "description": "Integrate Voloz into your workflow via the REST API at <code>{{url}}</code>",
         "viewReference": "View the full API reference",
         "endpoints": {
           "generate": "Generate speech",
@@ -933,7 +933,7 @@
         },
         "autoPaste": {
           "title": "Auto-paste into focused text field",
-          "description": "If a text input is focused in another app, paste directly into it. Voicebox saves and restores whatever was on your clipboard."
+          "description": "If a text input is focused in another app, paste directly into it. Voloz saves and restores whatever was on your clipboard."
         }
       },
       "transcription": {
@@ -941,7 +941,7 @@
         "description": "Pick which speech-to-text model runs on your captures.",
         "model": {
           "title": "Transcription model",
-          "description": "Whisper ships with Voicebox and runs entirely on your machine.",
+          "description": "Whisper ships with Voloz and runs entirely on your machine.",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
@@ -1048,7 +1048,7 @@
       },
       "storage": {
         "title": "Storage",
-        "description": "Captures are saved as paired audio and transcript files in your Voicebox data directory.",
+        "description": "Captures are saved as paired audio and transcript files in your Voloz data directory.",
         "retention": {
           "title": "Retention",
           "description": "How long to keep captures. Applies to both audio and transcripts.",
@@ -1065,7 +1065,7 @@
       },
       "sidebar": {
         "aboutTitle": "About Captures",
-        "aboutBody": "Hold a shortcut anywhere on your machine, speak, and Voicebox turns your voice into text. Replay it in any cloned voice, paste it into any app, or pipe it into your coding agent.",
+        "aboutBody": "Hold a shortcut anywhere on your machine, speak, and Voloz turns your voice into text. Replay it in any cloned voice, paste it into any app, or pipe it into your coding agent.",
         "differencesTitle": "What's different",
         "local": {
           "title": "Fully local.",
@@ -1085,14 +1085,14 @@
         },
         "windowsCaveat": {
           "title": "Heads-up on Windows",
-          "body": "The shortcut won't fire while Voicebox itself or any app running as administrator is focused. Working on it."
+          "body": "The shortcut won't fire while Voloz itself or any app running as administrator is focused. Working on it."
         }
       }
     },
     "mcp": {
       "install": {
         "title": "Install into your agent",
-        "description": "Voicebox exposes a local MCP server whenever the app is open. Paste one of these snippets into your agent's MCP config.",
+        "description": "Voloz exposes a local MCP server whenever the app is open. Paste one of these snippets into your agent's MCP config.",
         "http": {
           "title": "HTTP (recommended)",
           "description": "For clients that speak HTTP MCP — Claude Code, Cursor, Windsurf, VS Code."
@@ -1133,7 +1133,7 @@
       },
       "sidebar": {
         "aboutTitle": "About MCP",
-        "aboutBody": "Model Context Protocol lets your AI coding agent — Claude Code, Cursor, Windsurf — call Voicebox tools. Speak in a cloned voice, transcribe audio, browse captures.",
+        "aboutBody": "Model Context Protocol lets your AI coding agent — Claude Code, Cursor, Windsurf — call Voloz tools. Speak in a cloned voice, transcribe audio, browse captures.",
         "toolsTitle": "Available tools",
         "tools": {
           "speak": "Speak text in a voice profile.",
@@ -1193,7 +1193,7 @@
         "deleteCuda": "Failed to delete CUDA backend",
         "deleteRocm": "Failed to delete ROCm backend"
       },
-      "footer": "Voicebox automatically detects and uses the best available GPU on your system. On Apple Silicon Macs, the MLX backend runs natively on the Neural Engine and GPU via Metal Performance Shaders (MPS), with no additional setup required. On Windows and Linux, you can download optional CUDA (NVIDIA) or ROCm (AMD) backends for hardware-accelerated inference. Intel XPU and DirectML are also supported where available through PyTorch. When no GPU is detected, Voicebox falls back to CPU — all engines still work, just slower.",
+      "footer": "Voloz automatically detects and uses the best available GPU on your system. On Apple Silicon Macs, the MLX backend runs natively on the Neural Engine and GPU via Metal Performance Shaders (MPS), with no additional setup required. On Windows and Linux, you can download optional CUDA (NVIDIA) or ROCm (AMD) backends for hardware-accelerated inference. Intel XPU and DirectML are also supported where available through PyTorch. When no GPU is detected, Voloz falls back to CPU — all engines still work, just slower.",
       "rocm": {
         "title": "AMD ROCm Backend",
         "activeTitle": "ROCm Backend Active",
@@ -1233,11 +1233,14 @@
       "showMore": "Show more"
     },
     "about": {
-      "tagline": "The open-source voice synthesis studio. Clone voices, generate speech, apply effects, and build voice-powered apps — all running locally on your machine.",
+      "tagline": "Speak anywhere and get polished text in any app — with cloud APIs or local models, plus a full voice studio.",
       "createdBy": "Created by",
       "builtWith": "Built with",
       "buyCoffee": "Buy me a coffee",
-      "license": "Licensed under <link>MIT</link>"
+      "license": "Licensed under <link>MIT</link>",
+      "forkBy": "Voloz by",
+      "basedOn": "Based on",
+      "by": "by"
     }
   },
   "models": {

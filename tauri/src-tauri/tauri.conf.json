@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Voicebox",
+  "productName": "Voloz",
   "version": "0.6.1",
-  "identifier": "sh.voicebox.app",
+  "identifier": "io.github.mvoloch.voloz",
   "build": {
     "beforeDevCommand": "bun run dev",
     "beforeBuildCommand": "bun run build",
@@ -61,7 +61,7 @@
     },
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk0MEJCNjVEMzFEMkYwNjQKUldSazhOSXhYYllMbFBZbU9YZmZQZ0JWdFllTUgxNWVLV1dlTHFMemRvQ3U5aFpzdGtNRFRLYUcK",
-      "endpoints": ["https://github.com/mvoloch/voicebox/releases/latest/download/latest.json"]
+      "endpoints": ["https://github.com/mvoloch/voloz/releases/latest/download/latest.json"]
     }
   }
 }

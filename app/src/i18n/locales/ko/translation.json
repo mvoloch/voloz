@@ -1016,7 +1016,7 @@
       },
       "storage": {
         "title": "저장소",
-        "description": "캡처는 Voicebox 데이터 디렉토리에 오디오와 대본 파일 쌍으로 저장됩니다.",
+        "description": "캡처는 Voloz 데이터 디렉토리에 오디오와 대본 파일 쌍으로 저장됩니다.",
         "retention": {
           "title": "보관 기간",
           "description": "캡처 보관 기간입니다. 오디오와 대본 모두에 적용됩니다.",
@@ -1049,7 +1049,7 @@
         },
         "windowsCaveat": {
           "title": "Windows 참고사항",
-          "body": "Voicebox 자체 또는 관리자 권한으로 실행 중인 앱이 포커스된 경우 단축키가 작동하지 않습니다. 개선 중입니다."
+          "body": "Voloz 자체 또는 관리자 권한으로 실행 중인 앱이 포커스된 경우 단축키가 작동하지 않습니다. 개선 중입니다."
         }
       }
     },
@@ -1097,7 +1097,7 @@
       },
       "sidebar": {
         "aboutTitle": "MCP 정보",
-        "aboutBody": "Model Context Protocol을 통해 AI 코딩 에이전트(Claude Code, Cursor, Windsurf)가 Voicebox 도구를 호출할 수 있습니다. 복제된 음성으로 말하고, 오디오를 변환하고, 캡처를 탐색하세요.",
+        "aboutBody": "Model Context Protocol을 통해 AI 코딩 에이전트(Claude Code, Cursor, Windsurf)가 Voloz 도구를 호출할 수 있습니다. 복제된 음성으로 말하고, 오디오를 변환하고, 캡처를 탐색하세요.",
         "toolsTitle": "사용 가능한 도구",
         "tools": {
           "speak": "음성 프로필로 텍스트 읽기.",

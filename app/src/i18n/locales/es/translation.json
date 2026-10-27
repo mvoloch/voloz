@@ -135,13 +135,13 @@
       },
       "inputMonitoring": {
         "label": "Permiso de Monitorización de entrada",
-        "ready": "macOS permite que Voicebox detecte tu atajo global.",
-        "missing": "macOS debe permitir que Voicebox detecte el atajo global.",
+        "ready": "macOS permite que Voloz detecte tu atajo global.",
+        "missing": "macOS debe permitir que Voloz detecte el atajo global.",
         "openSettings": "Abrir Ajustes"
       },
       "accessibility": {
         "label": "Permiso de Accesibilidad",
-        "ready": "Voicebox puede pegar transcripciones en otras apps.",
+        "ready": "Voloz puede pegar transcripciones en otras apps.",
         "missing": "Necesario para que las transcripciones se peguen en la app activa.",
         "openSettings": "Abrir Ajustes"
       }
@@ -149,19 +149,19 @@
     "permissions": {
       "accessibility": {
         "title": "Concede el permiso de Accesibilidad para habilitar el pegado automático",
-        "body": "Voicebox necesita <path>Ajustes del Sistema → Privacidad y seguridad → Accesibilidad</path> para pegar transcripciones en otras apps. Tu dictado igualmente aparece en la pestaña Capturas sin él.",
+        "body": "Voloz necesita <path>Ajustes del Sistema → Privacidad y seguridad → Accesibilidad</path> para pegar transcripciones en otras apps. Tu dictado igualmente aparece en la pestaña Capturas sin él.",
         "openSettings": "Abrir Ajustes",
         "recheck": "Ya lo he activado",
         "rechecking": "Comprobando…",
-        "stillMissing": "Sigue sin detectarse. macOS suele requerir salir y reabrir Voicebox tras cambiar el permiso."
+        "stillMissing": "Sigue sin detectarse. macOS suele requerir salir y reabrir Voloz tras cambiar el permiso."
       },
       "inputMonitoring": {
         "title": "Concede Monitorización de entrada para habilitar el atajo global",
-        "body": "Voicebox necesita <path>Ajustes del Sistema → Privacidad y seguridad → Monitorización de entrada</path> para detectar tu combinación de dictado. La opción está activada, pero macOS bloquea los eventos de teclado hasta que lo permitas.",
+        "body": "Voloz necesita <path>Ajustes del Sistema → Privacidad y seguridad → Monitorización de entrada</path> para detectar tu combinación de dictado. La opción está activada, pero macOS bloquea los eventos de teclado hasta que lo permitas.",
         "openSettings": "Abrir Ajustes",
         "recheck": "Ya lo he activado",
         "rechecking": "Comprobando…",
-        "stillMissing": "Sigue sin detectarse. macOS suele requerir salir y reabrir Voicebox tras cambiar el permiso."
+        "stillMissing": "Sigue sin detectarse. macOS suele requerir salir y reabrir Voloz tras cambiar el permiso."
       }
     }
   },
@@ -767,7 +767,7 @@
     },
     "language": {
       "label": "Idioma",
-      "description": "Elige el idioma de la interfaz de Voicebox."
+      "description": "Elige el idioma de la interfaz de Voloz."
     },
     "theme": {
       "label": "Tema",
@@ -788,7 +788,7 @@
       },
       "serverUrl": {
         "title": "URL del servidor",
-        "description": "La dirección de tu servidor backend de Voicebox.",
+        "description": "La dirección de tu servidor backend de Voloz.",
         "invalidUrl": "Introduce una URL válida",
         "updatedTitle": "URL del servidor actualizada",
         "updatedDescription": "Conectado a {{url}}"
@@ -843,7 +843,7 @@
       },
       "api": {
         "title": "Acceso a la API",
-        "description": "Integra Voicebox en tu flujo de trabajo mediante la API REST en <code>{{url}}</code>",
+        "description": "Integra Voloz en tu flujo de trabajo mediante la API REST en <code>{{url}}</code>",
         "viewReference": "Ver la referencia completa de la API",
         "endpoints": {
           "generate": "Generar voz",
@@ -932,7 +932,7 @@
         },
         "autoPaste": {
           "title": "Pegar automáticamente en el campo de texto activo",
-          "description": "Si hay un campo de texto activo en otra app, pega directamente en él. Voicebox guarda y restaura lo que hubiera en tu portapapeles."
+          "description": "Si hay un campo de texto activo en otra app, pega directamente en él. Voloz guarda y restaura lo que hubiera en tu portapapeles."
         }
       },
       "transcription": {
@@ -940,7 +940,7 @@
         "description": "Elige qué modelo de voz a texto se ejecuta en tus capturas.",
         "model": {
           "title": "Modelo de transcripción",
-          "description": "Whisper viene incluido con Voicebox y se ejecuta enteramente en tu equipo.",
+          "description": "Whisper viene incluido con Voloz y se ejecuta enteramente en tu equipo.",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
@@ -1016,7 +1016,7 @@
       },
       "storage": {
         "title": "Almacenamiento",
-        "description": "Las capturas se guardan como archivos emparejados de audio y transcripción en tu directorio de datos de Voicebox.",
+        "description": "Las capturas se guardan como archivos emparejados de audio y transcripción en tu directorio de datos de Voloz.",
         "retention": {
           "title": "Retención",
           "description": "Cuánto tiempo conservar las capturas. Se aplica tanto al audio como a las transcripciones.",
@@ -1033,7 +1033,7 @@
       },
       "sidebar": {
         "aboutTitle": "Acerca de Capturas",
-        "aboutBody": "Mantén pulsado un atajo en cualquier parte de tu equipo, habla, y Voicebox convierte tu voz en texto. Reprodúcelo con cualquier voz clonada, pégalo en cualquier app o canalízalo a tu agente de programación.",
+        "aboutBody": "Mantén pulsado un atajo en cualquier parte de tu equipo, habla, y Voloz convierte tu voz en texto. Reprodúcelo con cualquier voz clonada, pégalo en cualquier app o canalízalo a tu agente de programación.",
         "differencesTitle": "Qué lo diferencia",
         "local": {
           "title": "Totalmente local.",
@@ -1049,14 +1049,14 @@
         },
         "windowsCaveat": {
           "title": "Aviso en Windows",
-          "body": "El atajo no se activará mientras Voicebox o cualquier app ejecutada como administrador esté en primer plano. Estamos en ello."
+          "body": "El atajo no se activará mientras Voloz o cualquier app ejecutada como administrador esté en primer plano. Estamos en ello."
         }
       }
     },
     "mcp": {
       "install": {
         "title": "Instalar en tu agente",
-        "description": "Voicebox expone un servidor MCP local siempre que la app está abierta. Pega uno de estos fragmentos en la configuración MCP de tu agente.",
+        "description": "Voloz expone un servidor MCP local siempre que la app está abierta. Pega uno de estos fragmentos en la configuración MCP de tu agente.",
         "http": {
           "title": "HTTP (recomendado)",
           "description": "Para clientes que hablan MCP por HTTP: Claude Code, Cursor, Windsurf, VS Code."
@@ -1097,7 +1097,7 @@
       },
       "sidebar": {
         "aboutTitle": "Acerca de MCP",
-        "aboutBody": "El Model Context Protocol permite que tu agente de programación con IA —Claude Code, Cursor, Windsurf— llame a las herramientas de Voicebox. Habla con una voz clonada, transcribe audio, explora capturas.",
+        "aboutBody": "El Model Context Protocol permite que tu agente de programación con IA —Claude Code, Cursor, Windsurf— llame a las herramientas de Voloz. Habla con una voz clonada, transcribe audio, explora capturas.",
         "toolsTitle": "Herramientas disponibles",
         "tools": {
           "speak": "Pronuncia texto con un perfil de voz.",
@@ -1154,7 +1154,7 @@
         "deleteCuda": "Error al eliminar el backend CUDA",
         "deleteRocm": "Error al eliminar el backend ROCm"
       },
-      "footer": "Voicebox detecta y usa automáticamente la mejor GPU disponible en tu sistema. En Macs con Apple Silicon, el backend MLX se ejecuta de forma nativa en el Neural Engine y la GPU mediante Metal Performance Shaders (MPS), sin configuración adicional. En Windows y Linux, puedes descargar backends opcionales CUDA (NVIDIA) o ROCm (AMD) para inferencia acelerada por hardware. Intel XPU y DirectML también son compatibles cuando están disponibles a través de PyTorch. Cuando no se detecta ninguna GPU, Voicebox recurre a la CPU: todos los motores siguen funcionando, solo que más despacio.",
+      "footer": "Voloz detecta y usa automáticamente la mejor GPU disponible en tu sistema. En Macs con Apple Silicon, el backend MLX se ejecuta de forma nativa en el Neural Engine y la GPU mediante Metal Performance Shaders (MPS), sin configuración adicional. En Windows y Linux, puedes descargar backends opcionales CUDA (NVIDIA) o ROCm (AMD) para inferencia acelerada por hardware. Intel XPU y DirectML también son compatibles cuando están disponibles a través de PyTorch. Cuando no se detecta ninguna GPU, Voloz recurre a la CPU: todos los motores siguen funcionando, solo que más despacio.",
       "activeBackend": {
         "description": "La aceleración por GPU está habilitada actualmente."
       },

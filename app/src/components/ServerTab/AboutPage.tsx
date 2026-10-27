@@ -45,12 +45,12 @@ export function AboutPage() {
       <div className="max-w-md mx-auto h-full flex items-center">
         <div className="flex flex-col items-center text-center space-y-5">
           <FadeIn delay={0}>
-            <img src={voiceboxLogo} alt="Voicebox" className="w-20 h-20 object-contain" />
+            <img src={voiceboxLogo} alt="Voloz" className="w-20 h-20 object-contain" />
           </FadeIn>
 
           <FadeIn delay={80}>
             <div className="space-y-1.5">
-              <h1 className="text-lg font-semibold">Voicebox</h1>
+              <h1 className="text-lg font-semibold">Voloz</h1>
               <p className="text-xs text-muted-foreground/60 h-4">
                 {version ? `v${version}` : '\u00A0'}
               </p>
@@ -66,7 +66,27 @@ export function AboutPage() {
           <FadeIn delay={240}>
             <div className="flex flex-col items-center gap-1 text-sm text-muted-foreground">
               <div className="flex items-center gap-1.5">
-                <span>{t('settings.about.createdBy')}</span>
+                <span>{t('settings.about.forkBy')}</span>
+                <a
+                  href="https://github.com/mvoloch/voloz"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  Marcus Voloch
+                </a>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span>{t('settings.about.basedOn')}</span>
+                <a
+                  href="https://github.com/jamiepine/voicebox"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  Voicebox
+                </a>
+                <span>{t('settings.about.by')}</span>
                 <a
                   href="https://github.com/jamiepine"
                   target="_blank"
@@ -74,17 +94,6 @@ export function AboutPage() {
                   className="text-accent hover:underline"
                 >
                   Jamie Pine
-                </a>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span>{t('settings.about.builtWith')}</span>
-                <a
-                  href="https://capy.ai?utm_source=voicebox&utm_medium=app-about&utm_campaign=built-with-capy"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  Capy
                 </a>
               </div>
             </div>
