@@ -14,14 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-            python-version: "3.12"
-            backend: "mlx"
-          - platform: "macos-15-intel"
-            args: "--target x86_64-apple-darwin"
-            python-version: "3.12"
-            backend: "pytorch"
+          # wisprclone fork: Windows only (no Apple signing certificates here).
           - platform: "windows-latest"
             args: ""
             python-version: "3.12"
@@ -274,6 +267,8 @@ jobs:
           done
 
   build-cuda-windows:
+    # GPU server packages are only built for the upstream release.
+    if: github.repository == 'jamiepine/voicebox'
     runs-on: windows-latest
     permissions:
       contents: write
@@ -348,6 +343,8 @@ jobs:
           retention-days: 7
 
   build-gpu-linux:
+    # GPU server packages are only built for the upstream release.
+    if: github.repository == 'jamiepine/voicebox'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -436,6 +433,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-rocm-windows:
+    # GPU server packages are only built for the upstream release.
+    if: github.repository == 'jamiepine/voicebox'
     runs-on: windows-latest
     permissions:
       contents: write
