@@ -13,6 +13,7 @@ The user configures ``custom_stt_endpoint`` / ``custom_stt_model`` /
 built-in Whisper backend.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional
@@ -24,6 +25,12 @@ logger = logging.getLogger(__name__)
 # Transcription of a dictation-length clip returns in well under a second on
 # hosted Whisper; the generous ceiling only matters for long file uploads.
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
+
+# Keep the TLS connection to the endpoint open between dictations so each
+# capture skips the TCP + TLS handshake (~50-300 ms to a US region from
+# elsewhere). httpx's default keep-alive expiry is 5 s, shorter than the
+# usual gap between two dictations.
+KEEPALIVE_EXPIRY_SECONDS = 120.0
 
 
 class OpenAICompatSTTBackend:
@@ -60,6 +67,25 @@ class OpenAICompatSTTBackend:
         # label results; report the remote model name so stored captures
         # say which model actually produced the transcript.
         self.model_size = model
+        # One pooled client per event loop (see ``_get_client``).
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Pooled client bound to the running event loop.
+
+        httpx clients can't be shared across event loops, so a new loop
+        (tests, a restarted server loop) gets a fresh client.
+        """
+        loop = asyncio.get_running_loop()
+        if self._client is None or self._client_loop is not loop:
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=True,
+                limits=httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS),
+            )
+            self._client_loop = loop
+        return self._client
 
     def is_loaded(self) -> bool:
         """Return ``True`` unconditionally — the remote server owns model state."""
@@ -111,32 +137,32 @@ class OpenAICompatSTTBackend:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         url = f"{self.endpoint}/audio/transcriptions"
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            try:
-                with path.open("rb") as fh:
-                    response = await client.post(
-                        url,
-                        headers=headers,
-                        data=data,
-                        files={"file": (path.name, fh, _mime_for(path))},
-                    )
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                body_preview = exc.response.text[:500]
-                logger.error(
-                    "OpenAI-compat STT endpoint %s returned %d: %s",
+        client = self._get_client()
+        try:
+            with path.open("rb") as fh:
+                response = await client.post(
                     url,
-                    exc.response.status_code,
-                    body_preview,
+                    headers=headers,
+                    data=data,
+                    files={"file": (path.name, fh, _mime_for(path))},
                 )
-                raise RuntimeError(
-                    f"Custom STT endpoint {url} returned HTTP {exc.response.status_code}: "
-                    f"{body_preview}"
-                ) from exc
-            except httpx.HTTPError as exc:
-                raise RuntimeError(
-                    f"Custom STT endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
-                ) from exc
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            body_preview = exc.response.text[:500]
+            logger.error(
+                "OpenAI-compat STT endpoint %s returned %d: %s",
+                url,
+                exc.response.status_code,
+                body_preview,
+            )
+            raise RuntimeError(
+                f"Custom STT endpoint {url} returned HTTP {exc.response.status_code}: "
+                f"{body_preview}"
+            ) from exc
+        except httpx.HTTPError as exc:
+            raise RuntimeError(
+                f"Custom STT endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
+            ) from exc
 
         try:
             payload = response.json()

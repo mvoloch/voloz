@@ -133,6 +133,20 @@ async def test_transcribe_sends_multipart_with_bearer_model_and_language(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_transcribe_reuses_one_pooled_client_across_dictations(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: (200, {"text": "ok"})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m")
+        await backend.transcribe(str(audio))
+        first_client = backend._client
+        await backend.transcribe(str(audio))
+    assert first_client is not None
+    assert backend._client is first_client, "each dictation must not pay a new TLS handshake"
+    assert len(server.requests) == 2
+
+
+@pytest.mark.asyncio
 async def test_transcribe_without_language_or_key_omits_both(tmp_path):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(_wav_bytes())
