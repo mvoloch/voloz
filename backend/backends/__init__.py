@@ -227,6 +227,16 @@ _custom_llm_api_key: Optional[str] = None
 # lookup + on-miss install) can't drift on the string literal.
 _OPENAI_COMPAT_CACHE_KEY = "openai_compat"
 
+# Custom OpenAI-compatible speech-to-text endpoint config — the STT twin of
+# the custom LLM config above, seeded and refreshed the same way. When both
+# endpoint and model are set, ``get_stt_backend()`` returns the remote
+# backend instead of local Whisper.
+_custom_stt_endpoint: Optional[str] = None
+_custom_stt_model: Optional[str] = None
+_custom_stt_api_key: Optional[str] = None
+_remote_stt_backend: Optional[STTBackend] = None
+_stt_config_lock = threading.Lock()
+
 # Supported TTS engines — keyed by engine name, value is the backend class import path.
 # The factory function uses this for the if/elif chain; the model configs live on the backend classes.
 TTS_ENGINES = {
@@ -859,12 +869,29 @@ def get_tts_backend_for_engine(engine: str) -> TTSBackend:
 
 def get_stt_backend() -> STTBackend:
     """
-    Get or create STT backend instance based on platform.
+    Get or create the active STT backend.
+
+    When a custom OpenAI-compatible transcription endpoint has been
+    configured via ``set_stt_config()``, returns an
+    ``OpenAICompatSTTBackend`` targeting it; otherwise the platform's
+    local Whisper backend.
 
     Returns:
-        STT backend instance (MLX or PyTorch)
+        STT backend instance (remote, MLX or PyTorch)
     """
-    global _stt_backend
+    global _stt_backend, _remote_stt_backend
+
+    with _stt_config_lock:
+        if _custom_stt_endpoint and _custom_stt_model:
+            if _remote_stt_backend is None:
+                from .openai_compat_stt_backend import OpenAICompatSTTBackend
+
+                _remote_stt_backend = OpenAICompatSTTBackend(
+                    endpoint=_custom_stt_endpoint,
+                    model=_custom_stt_model,
+                    api_key=_custom_stt_api_key,
+                )
+            return _remote_stt_backend
 
     if _stt_backend is None:
         backend_type = get_backend_type()
@@ -879,6 +906,36 @@ def get_stt_backend() -> STTBackend:
             _stt_backend = PyTorchSTTBackend()
 
     return _stt_backend
+
+
+def set_stt_config(
+    endpoint: Optional[str],
+    model: Optional[str],
+    api_key: Optional[str],
+) -> None:
+    """Update the runtime custom-STT endpoint config atomically.
+
+    Called from the settings service whenever the user writes to the
+    ``custom_stt_*`` fields, and once on startup with the persisted row.
+    Empty strings or ``None`` clear the config and revert
+    ``get_stt_backend()`` to local Whisper. A change drops the cached
+    remote backend so the next call picks up the new URL / key.
+    """
+    global _custom_stt_endpoint, _custom_stt_model, _custom_stt_api_key, _remote_stt_backend
+    endpoint = endpoint or None
+    model = model or None
+    api_key = api_key or None
+    with _stt_config_lock:
+        changed = (
+            endpoint != _custom_stt_endpoint
+            or model != _custom_stt_model
+            or api_key != _custom_stt_api_key
+        )
+        _custom_stt_endpoint = endpoint
+        _custom_stt_model = model
+        _custom_stt_api_key = api_key
+        if changed:
+            _remote_stt_backend = None
 
 
 def set_llm_config(
@@ -929,6 +986,7 @@ def get_llm_backend() -> LLMBackend:
     can't race a ``set_llm_config()`` write and end up talking to a
     prior endpoint using fresh credentials, or the reverse.
     """
+    from .anthropic_backend import AnthropicLLMBackend, is_anthropic_endpoint
     from .openai_compat_backend import OpenAICompatLLMBackend
 
     with _llm_backends_lock:
@@ -939,7 +997,12 @@ def get_llm_backend() -> LLMBackend:
             cached = _llm_backends.get(_OPENAI_COMPAT_CACHE_KEY)
             if cached is not None:
                 return cached
-            backend = OpenAICompatLLMBackend(
+            # The Claude API gets its native SDK backend: its OpenAI-compat
+            # layer rejects the ``temperature`` the generic backend sends.
+            backend_cls = (
+                AnthropicLLMBackend if is_anthropic_endpoint(endpoint) else OpenAICompatLLMBackend
+            )
+            backend = backend_cls(
                 endpoint=endpoint,
                 model=model,
                 api_key=api_key,
@@ -988,6 +1051,7 @@ def reset_backends():
     """Reset backend instances (useful for testing)."""
     global _tts_backend, _tts_backends, _stt_backend, _llm_backends
     global _custom_llm_endpoint, _custom_llm_model, _custom_llm_api_key
+    global _custom_stt_endpoint, _custom_stt_model, _custom_stt_api_key, _remote_stt_backend
     _tts_backend = None
     _tts_backends.clear()
     _stt_backend = None
@@ -995,3 +1059,7 @@ def reset_backends():
     _custom_llm_endpoint = None
     _custom_llm_model = None
     _custom_llm_api_key = None
+    _custom_stt_endpoint = None
+    _custom_stt_model = None
+    _custom_stt_api_key = None
+    _remote_stt_backend = None

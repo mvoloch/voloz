@@ -1,0 +1,417 @@
+"""
+Tests for cloud dictation: the custom OpenAI-compatible transcription
+endpoint and the native Claude refinement backend.
+
+Both run against tiny in-process HTTP servers (no network, no keys) that
+record what Voicebox sends, in the same spirit as
+``test_openai_compat_backend.py``.
+"""
+
+import io
+import json
+import threading
+import wave
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+import pytest
+
+from backend import models
+from backend.backends import (
+    get_llm_backend,
+    get_stt_backend,
+    reset_backends,
+    set_llm_config,
+    set_stt_config,
+)
+from backend.backends.anthropic_backend import AnthropicLLMBackend, is_anthropic_endpoint
+from backend.backends.openai_compat_backend import OpenAICompatLLMBackend
+from backend.backends.openai_compat_stt_backend import OpenAICompatSTTBackend
+from backend.services.transcribe import is_remote, resolve_stt_model
+
+
+class FakeServer:
+    """In-process HTTP server that records raw requests.
+
+    ``script`` is ``(path, headers, raw_body) -> (status, payload)``; dict
+    payloads are JSON-encoded, ``bytes`` are sent verbatim.
+    """
+
+    def __init__(self, script):
+        self.script = script
+        self.requests: list[dict] = []
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length)
+                # HTTP header names are case-insensitive; store them lower-cased.
+                headers = {k.lower(): v for k, v in self.headers.items()}
+                server.requests.append({"path": self.path, "headers": headers, "raw": raw})
+                status, payload = server.script(self.path, self.headers, raw)
+                data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *args):
+                pass
+
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+
+    @property
+    def base_url(self) -> str:
+        host, port = self.httpd.server_address[:2]
+        return f"http://{host}:{port}/v1"
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+
+
+def _wav_bytes(seconds: float = 0.5, rate: int = 16_000) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(b"\x00\x00" * int(seconds * rate))
+    return buf.getvalue()
+
+
+def _claude_reply(text: str, stop_reason: str = "end_turn"):
+    return 200, {
+        "id": "msg_test",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-haiku-5-5",
+        "content": [{"type": "text", "text": text}],
+        "stop_reason": stop_reason,
+        "stop_sequence": None,
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    }
+
+
+@pytest.fixture(autouse=True)
+def _clean_backends():
+    reset_backends()
+    yield
+    reset_backends()
+
+
+# ── Remote STT backend ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_transcribe_sends_multipart_with_bearer_model_and_language(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: (200, {"text": "  Olá, Pascoal.  "})) as server:
+        backend = OpenAICompatSTTBackend(
+            endpoint=server.base_url + "/", model="openai/whisper-large-v3-turbo", api_key="sk-or"
+        )
+        out = await backend.transcribe(str(audio), language="pt", model_size="turbo")
+
+    assert out == "Olá, Pascoal."
+    (req,) = server.requests
+    assert req["path"] == "/v1/audio/transcriptions"
+    assert req["headers"]["authorization"] == "Bearer sk-or"
+    assert req["headers"]["content-type"].startswith("multipart/form-data")
+    raw = req["raw"]
+    assert b'name="model"\r\n\r\nopenai/whisper-large-v3-turbo' in raw
+    assert b'name="language"\r\n\r\npt' in raw
+    assert b'name="response_format"\r\n\r\njson' in raw
+    assert b'filename="clip.wav"' in raw
+    assert b"Content-Type: audio/wav" in raw
+
+
+@pytest.mark.asyncio
+async def test_transcribe_without_language_or_key_omits_both(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: (200, {"text": "hi"})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m", api_key="")
+        assert await backend.transcribe(str(audio)) == "hi"
+    req = server.requests[0]
+    assert "authorization" not in req["headers"]
+    assert b'name="language"' not in req["raw"]
+
+
+@pytest.mark.asyncio
+async def test_stt_http_error_names_the_endpoint(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: (402, {"error": {"message": "insufficient credits"}})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m")
+        with pytest.raises(RuntimeError) as excinfo:
+            await backend.transcribe(str(audio))
+    message = str(excinfo.value)
+    assert "HTTP 402" in message
+    assert server.base_url in message
+    assert "insufficient credits" in message
+
+
+@pytest.mark.asyncio
+async def test_stt_unreachable_and_bad_bodies(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+
+    with FakeServer(lambda *_: (200, {"text": "x"})) as server:
+        dead_url = server.base_url
+    with pytest.raises(RuntimeError, match="unreachable"):
+        await OpenAICompatSTTBackend(endpoint=dead_url, model="m", timeout=2.0).transcribe(str(audio))
+
+    with FakeServer(lambda *_: (200, b"<html>proxy</html>")) as server:
+        with pytest.raises(RuntimeError, match="non-JSON"):
+            await OpenAICompatSTTBackend(endpoint=server.base_url, model="m").transcribe(str(audio))
+
+    with FakeServer(lambda *_: (200, {"segments": []})) as server:
+        with pytest.raises(ValueError, match="No transcript text"):
+            await OpenAICompatSTTBackend(endpoint=server.base_url, model="m").transcribe(str(audio))
+
+
+def test_stt_dispatch_switches_between_remote_and_local():
+    set_stt_config("http://localhost:1/v1", "remote-stt", None)
+    remote = get_stt_backend()
+    assert isinstance(remote, OpenAICompatSTTBackend)
+    assert get_stt_backend() is remote, "same config must reuse the cached instance"
+    assert is_remote(remote)
+    assert resolve_stt_model(remote, "turbo") == "remote-stt"
+
+    set_stt_config("http://localhost:2/v1", "remote-stt", "key")
+    rotated = get_stt_backend()
+    assert rotated is not remote
+    assert (rotated.endpoint, rotated.api_key) == ("http://localhost:2/v1", "key")
+
+    set_stt_config("", "", "")
+    local = get_stt_backend()
+    assert not isinstance(local, OpenAICompatSTTBackend)
+    assert not is_remote(local)
+    assert resolve_stt_model(local, "small") == "small"
+
+
+def test_stt_dispatch_requires_both_endpoint_and_model():
+    set_stt_config("http://localhost:1/v1", None, None)
+    assert not isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+    set_stt_config(None, "m", None)
+    assert not isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+
+
+def test_capture_settings_response_masks_both_api_keys():
+    stored = models.CaptureSettingsResponse(
+        custom_llm_api_key="sk-llm-secret",
+        custom_stt_endpoint="https://openrouter.ai/api/v1",
+        custom_stt_model="openai/whisper-large-v3-turbo",
+        custom_stt_api_key="sk-stt-secret",
+    )
+    dumped = stored.model_dump_json()
+    assert stored.custom_llm_api_key_configured is True
+    assert stored.custom_stt_api_key_configured is True
+    assert "sk-llm-secret" not in dumped
+    assert "sk-stt-secret" not in dumped
+
+    empty = models.CaptureSettingsResponse()
+    assert empty.custom_stt_api_key_configured is False
+
+
+def test_settings_write_syncs_stt_dispatch_and_readiness(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.backends import get_stt_model_configs
+    from backend.database.models import Base
+    from backend.routes.captures import _stt_readiness
+    from backend.services import settings as settings_service
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'settings.db'}")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        row = settings_service.update_capture_settings(
+            db,
+            {
+                "custom_stt_endpoint": "http://localhost:1/v1",
+                "custom_stt_model": "remote-stt",
+                "custom_stt_api_key": "k",
+            },
+        )
+        assert isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+
+        stt_cfg = next(c for c in get_stt_model_configs() if c.model_size == row.stt_model)
+        readiness = _stt_readiness(row, stt_cfg)
+        assert readiness.ready is True
+        assert readiness.display_name == "remote-stt"
+
+        reset_backends()
+        settings_service.bootstrap_llm_backend_config(db)
+        assert isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+
+        row = settings_service.update_capture_settings(db, {"custom_stt_endpoint": None})
+        assert not isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+        assert _stt_readiness(row, stt_cfg).display_name == stt_cfg.display_name
+    finally:
+        db.close()
+
+
+def test_transcribe_route_uses_remote_endpoint_without_local_model(tmp_path):
+    """PUT /settings/captures → GET masks the key → /capture/readiness is
+    green without a Whisper download → /transcribe hits the remote server."""
+    from fastapi import FastAPI
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from starlette.testclient import TestClient
+
+    from backend.database import get_db
+    from backend.database.models import Base
+    from backend.routes import (
+        captures as captures_routes,
+        settings as settings_routes,
+        transcription as transcription_routes,
+    )
+
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'routes.db'}", connect_args={"check_same_thread": False}
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine)
+
+    def _db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app = FastAPI()
+    app.include_router(settings_routes.router)
+    app.include_router(captures_routes.router)
+    app.include_router(transcription_routes.router)
+    app.dependency_overrides[get_db] = _db
+    client = TestClient(app)
+
+    with FakeServer(lambda *_: (200, {"text": "Ditado na nuvem."})) as server:
+        res = client.put(
+            "/settings/captures",
+            json={
+                "custom_stt_endpoint": server.base_url,
+                "custom_stt_model": "openai/whisper-large-v3-turbo",
+                "custom_stt_api_key": "sk-stt-secret",
+            },
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["custom_stt_api_key_configured"] is True
+        assert "sk-stt-secret" not in res.text
+        assert "sk-stt-secret" not in client.get("/settings/captures").text
+
+        readiness = client.get("/capture/readiness").json()
+        assert readiness["stt"]["ready"] is True
+        assert readiness["stt"]["display_name"] == "openai/whisper-large-v3-turbo"
+
+        res = client.post(
+            "/transcribe",
+            files={"file": ("clip.wav", _wav_bytes(), "audio/wav")},
+            data={"language": "pt"},
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["text"] == "Ditado na nuvem."
+        req = server.requests[-1]
+        assert req["path"] == "/v1/audio/transcriptions"
+        assert req["headers"]["authorization"] == "Bearer sk-stt-secret"
+
+    client.put("/settings/captures", json={"custom_stt_endpoint": None, "custom_stt_model": None})
+    assert not isinstance(get_stt_backend(), OpenAICompatSTTBackend)
+
+
+# ── Claude refinement backend ─────────────────────────────────────────────
+
+
+def test_is_anthropic_endpoint():
+    assert is_anthropic_endpoint("https://api.anthropic.com/v1")
+    assert is_anthropic_endpoint("https://api.anthropic.com")
+    assert not is_anthropic_endpoint("https://openrouter.ai/api/v1")
+    assert not is_anthropic_endpoint("https://anthropic.com.evil.example/v1")
+    assert not is_anthropic_endpoint("")
+    assert not is_anthropic_endpoint(None)
+
+
+def test_llm_dispatch_routes_claude_api_to_native_backend():
+    set_llm_config("https://api.anthropic.com/v1", "claude-haiku-5-5", "sk-ant")
+    backend = get_llm_backend()
+    assert isinstance(backend, AnthropicLLMBackend)
+    assert backend.endpoint == "https://api.anthropic.com"
+    assert backend.model_size == "claude-haiku-5-5"
+
+    set_llm_config("https://openrouter.ai/api/v1", "anthropic/claude-haiku-5-5", "sk-or")
+    assert isinstance(get_llm_backend(), OpenAICompatLLMBackend)
+
+
+@pytest.mark.asyncio
+async def test_claude_generate_sends_messages_shape_without_sampling_params():
+    with FakeServer(lambda *_: _claude_reply("  Texto polido.  ")) as server:
+        backend = AnthropicLLMBackend(endpoint=server.base_url, model="claude-haiku-5-5", api_key="sk-ant")
+        out = await backend.generate(
+            prompt="é, oi tudo bem",
+            system="Limpe o ditado.",
+            max_tokens=256,
+            temperature=0.7,
+            examples=[("um oi", "Oi.")],
+        )
+
+    assert out == "Texto polido."
+    (req,) = server.requests
+    assert req["path"] == "/v1/messages"
+    # anthropic SDK 2.x authenticates API keys with a bearer token.
+    assert req["headers"]["authorization"] == "Bearer sk-ant"
+    body = json.loads(req["raw"])
+    assert body["model"] == "claude-haiku-5-5"
+    assert body["system"] == "Limpe o ditado."
+    assert body["output_config"] == {"effort": "low"}
+    assert body["max_tokens"] > 256, "thinking headroom on top of the reply budget"
+    assert "temperature" not in body
+    assert body["messages"] == [
+        {"role": "user", "content": "um oi"},
+        {"role": "assistant", "content": "Oi."},
+        {"role": "user", "content": "é, oi tudo bem"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_claude_refusal_and_http_error_surface_as_runtime_errors():
+    with FakeServer(lambda *_: _claude_reply("", stop_reason="refusal")) as server:
+        backend = AnthropicLLMBackend(endpoint=server.base_url, model="claude-haiku-5-5", api_key="k")
+        with pytest.raises(RuntimeError, match="declined"):
+            await backend.generate(prompt="x")
+
+    error = {"type": "error", "error": {"type": "invalid_request_error", "message": "bad model"}}
+    with FakeServer(lambda *_: (400, error)) as server:
+        backend = AnthropicLLMBackend(endpoint=server.base_url, model="nope", api_key="k")
+        with pytest.raises(RuntimeError) as excinfo:
+            await backend.generate(prompt="x")
+    assert "HTTP 400" in str(excinfo.value)
+    assert "bad model" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_refinement_records_claude_model_label():
+    from backend.services import refinement
+
+    with FakeServer(lambda *_: _claude_reply("Refinado.")) as server:
+        set_llm_config(server.base_url, "claude-haiku-5-5", "k")
+        # A local fake URL isn't api.anthropic.com, so wire the native
+        # backend in directly to exercise the label path end to end.
+        from backend.backends import _OPENAI_COMPAT_CACHE_KEY, _llm_backends
+
+        _llm_backends[_OPENAI_COMPAT_CACHE_KEY] = AnthropicLLMBackend(
+            endpoint=server.base_url, model="claude-haiku-5-5", api_key="k"
+        )
+        text, size = await refinement.refine_transcript(
+            "é, oi", refinement.RefinementFlags(), model_size="0.6B"
+        )
+    assert (text, size) == ("Refinado.", "claude-haiku-5-5")

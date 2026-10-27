@@ -271,30 +271,37 @@ class CaptureSettingsResponse(BaseModel):
     # used to exfiltrate stored keys and the frontend can't rehydrate them
     # into React state where a browser cache could pick them up.
     custom_llm_api_key_configured: bool = False
+    custom_stt_endpoint: Optional[str] = None
+    custom_stt_model: Optional[str] = None
+    # Same write-only treatment as ``custom_llm_api_key``.
+    custom_stt_api_key_configured: bool = False
 
     @model_validator(mode="before")
     @classmethod
-    def _mask_custom_llm_api_key(cls, data: Any) -> Any:
-        """Replace the raw ``custom_llm_api_key`` with a boolean ``_configured`` flag.
+    def _mask_custom_api_keys(cls, data: Any) -> Any:
+        """Replace each raw ``custom_*_api_key`` with a boolean ``_configured`` flag.
 
-        Runs before field validation so the stored credential is never
+        Runs before field validation so the stored credentials are never
         materialised on a Response instance, even in memory. Accepts both
         SQLAlchemy ORM rows (``from_attributes=True`` path) and plain dicts
         so tests that construct the model directly get the same treatment.
         """
+        secret_fields = ("custom_llm_api_key", "custom_stt_api_key")
         if isinstance(data, dict):
-            raw_key = data.pop("custom_llm_api_key", None)
-            data.setdefault("custom_llm_api_key_configured", bool(raw_key))
+            for field in secret_fields:
+                raw_key = data.pop(field, None)
+                data.setdefault(f"{field}_configured", bool(raw_key))
             return data
-        # ORM row — build a snapshot dict, drop the secret, and hand the
+        # ORM row — build a snapshot dict, drop the secrets, and hand the
         # rest to Pydantic. ``from_attributes`` won't reach the raw
-        # attribute anymore because the returned dict wins.
+        # attributes anymore because the returned dict wins.
         columns = getattr(getattr(data, "__table__", None), "columns", None)
         if columns is None:
             return data
         snapshot = {c.name: getattr(data, c.name, None) for c in columns}
-        raw_key = snapshot.pop("custom_llm_api_key", None)
-        snapshot["custom_llm_api_key_configured"] = bool(raw_key)
+        for field in secret_fields:
+            raw_key = snapshot.pop(field, None)
+            snapshot[f"{field}_configured"] = bool(raw_key)
         return snapshot
 
     class Config:
@@ -319,6 +326,9 @@ class CaptureSettingsUpdate(BaseModel):
     custom_llm_endpoint: Optional[str] = None
     custom_llm_model: Optional[str] = None
     custom_llm_api_key: Optional[str] = None
+    custom_stt_endpoint: Optional[str] = None
+    custom_stt_model: Optional[str] = None
+    custom_stt_api_key: Optional[str] = None
 
 
 class GenerationSettingsResponse(BaseModel):

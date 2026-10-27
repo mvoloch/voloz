@@ -962,9 +962,25 @@
           "es": "Espanhol",
           "fr": "Francês",
           "de": "Alemão",
+          "pt": "Português",
           "ja": "Japonês",
           "zh": "Chinês",
           "hi": "Hindi"
+        },
+        "customEndpoint": {
+          "title": "Endpoint de transcrição personalizado (avançado)",
+          "description": "Envia as capturas para qualquer servidor /audio/transcriptions compatível com OpenAI — OpenRouter, Groq, OpenAI ou um Whisper próprio. Deixe em branco para usar o Whisper embutido.",
+          "endpointLabel": "URL do endpoint",
+          "endpointPlaceholder": "https://openrouter.ai/api/v1",
+          "modelLabel": "Nome do modelo",
+          "modelPlaceholder": "Nome do modelo (ex.: openai/whisper-large-v3-turbo)",
+          "apiKeyLabel": "Chave de API",
+          "apiKeyPlaceholder": "Chave de API (opcional)",
+          "apiKeyPlaceholderReplace": "Digite uma nova chave para substituir a salva",
+          "apiKeyConfigured": "Salva",
+          "apiKeyClear": "Limpar",
+          "statusBuiltin": "Usando o modelo Whisper embutido selecionado acima.",
+          "statusRemote": "Enviando cada captura para {{endpoint}} para transcrição."
         },
         "archive": {
           "title": "Arquivar áudio",
@@ -1001,6 +1017,21 @@
         "preserveTechnical": {
           "title": "Preservar termos técnicos",
           "description": "Mantém identificadores de código, nomes de comandos e siglas exatamente como falados. Ative quando ditar em um prompt de código."
+        },
+        "customEndpoint": {
+          "title": "Endpoint de LLM personalizado (avançado)",
+          "description": "Delega o polimento e as reescritas de personalidade para qualquer servidor compatível com OpenAI — llama.cpp, vLLM, LM Studio, LocalAI, Ollama ou a própria API da OpenAI — ou para a API do Claude (https://api.anthropic.com/v1). Deixe em branco para usar o Qwen3 embutido.",
+          "endpointLabel": "URL do endpoint",
+          "endpointPlaceholder": "http://localhost:8090/v1",
+          "modelLabel": "Nome do modelo",
+          "modelPlaceholder": "Nome do modelo (ex.: claude-haiku-5-5)",
+          "apiKeyLabel": "Chave de API",
+          "apiKeyPlaceholder": "Chave de API (opcional)",
+          "apiKeyPlaceholderReplace": "Digite uma nova chave para substituir a salva",
+          "apiKeyConfigured": "Salva",
+          "apiKeyClear": "Limpar",
+          "statusBuiltin": "Usando o modelo Qwen3 embutido selecionado acima.",
+          "statusRemote": "Enviando todo polimento e reescrita de personalidade para {{endpoint}}."
         }
       },
       "playback": {

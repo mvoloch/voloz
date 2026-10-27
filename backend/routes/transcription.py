@@ -55,10 +55,12 @@ async def transcribe_audio(
             await asyncio.to_thread(save_audio, audio, stt_path, sr)
 
         whisper_model = transcribe.get_whisper_model()
-        model_size = model if model else whisper_model.model_size
+        model_size = transcribe.resolve_stt_model(whisper_model, model)
 
+        # A remote STT endpoint has no local sizes or downloads; the
+        # loaded/cached check below short-circuits for it as well.
         valid_sizes = list(WHISPER_HF_REPOS.keys())
-        if model_size not in valid_sizes:
+        if not transcribe.is_remote(whisper_model) and model_size not in valid_sizes:
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid model size '{model_size}'. Must be one of: {', '.join(valid_sizes)}",

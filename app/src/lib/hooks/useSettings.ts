@@ -53,7 +53,9 @@ export function useCaptureSettings() {
         patch.llm_model !== undefined ||
         patch.auto_refine !== undefined ||
         patch.custom_llm_endpoint !== undefined ||
-        patch.custom_llm_model !== undefined
+        patch.custom_llm_model !== undefined ||
+        patch.custom_stt_endpoint !== undefined ||
+        patch.custom_stt_model !== undefined
       ) {
         queryClient.invalidateQueries({ queryKey: ['capture-readiness'] });
       }

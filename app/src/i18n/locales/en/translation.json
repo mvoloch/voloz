@@ -963,9 +963,25 @@
           "es": "Spanish",
           "fr": "French",
           "de": "German",
+          "pt": "Portuguese",
           "ja": "Japanese",
           "zh": "Chinese",
           "hi": "Hindi"
+        },
+        "customEndpoint": {
+          "title": "Custom transcription endpoint (advanced)",
+          "description": "Send captures to any OpenAI-compatible /audio/transcriptions server — OpenRouter, Groq, OpenAI, or a self-hosted Whisper. Leave blank to use the built-in Whisper.",
+          "endpointLabel": "Endpoint URL",
+          "endpointPlaceholder": "https://openrouter.ai/api/v1",
+          "modelLabel": "Model name",
+          "modelPlaceholder": "Model name (e.g. openai/whisper-large-v3-turbo)",
+          "apiKeyLabel": "API key",
+          "apiKeyPlaceholder": "API key (optional)",
+          "apiKeyPlaceholderReplace": "Enter a new key to replace the stored one",
+          "apiKeyConfigured": "Stored",
+          "apiKeyClear": "Clear",
+          "statusBuiltin": "Using the built-in Whisper model selected above.",
+          "statusRemote": "Sending every capture to {{endpoint}} for transcription."
         },
         "archive": {
           "title": "Archive audio",
@@ -1005,7 +1021,7 @@
         },
         "customEndpoint": {
           "title": "Custom LLM endpoint (advanced)",
-          "description": "Delegate refinement and personality rewrites to any OpenAI-compatible server — llama.cpp, vLLM, LM Studio, LocalAI, Ollama's shim, or the OpenAI API itself. Leave blank to use the built-in Qwen3.",
+          "description": "Delegate refinement and personality rewrites to any OpenAI-compatible server — llama.cpp, vLLM, LM Studio, LocalAI, Ollama's shim, or the OpenAI API itself — or the Claude API (https://api.anthropic.com/v1). Leave blank to use the built-in Qwen3.",
           "endpointLabel": "Endpoint URL",
           "endpointPlaceholder": "http://localhost:8090/v1",
           "modelLabel": "Model name",

@@ -303,9 +303,9 @@ async def _transcribe_file(
     from ..utils.audio import load_audio
 
     whisper = transcribe_service.get_whisper_model()
-    model_size = model or whisper.model_size
+    model_size = transcribe_service.resolve_stt_model(whisper, model)
     valid = list(WHISPER_HF_REPOS.keys())
-    if model_size not in valid:
+    if not transcribe_service.is_remote(whisper) and model_size not in valid:
         raise ValueError(
             f"Invalid STT model '{model_size}'. Must be one of: {', '.join(valid)}"
         )

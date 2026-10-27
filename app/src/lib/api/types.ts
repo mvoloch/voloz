@@ -235,13 +235,25 @@ export interface CaptureSettings {
    * Writes still go through ``CaptureSettingsUpdate.custom_llm_api_key``.
    */
   custom_llm_api_key_configured: boolean;
+  /**
+   * Optional OpenAI-compatible transcription endpoint that overrides local
+   * Whisper. When set, captures are uploaded to
+   * `POST {custom_stt_endpoint}/audio/transcriptions` with the model named by
+   * ``custom_stt_model``; leaving it null keeps the on-device Whisper path.
+   */
+  custom_stt_endpoint: string | null;
+  custom_stt_model: string | null;
+  /** Same write-only contract as ``custom_llm_api_key_configured``. */
+  custom_stt_api_key_configured: boolean;
 }
 
 export type CaptureSettingsUpdate = Partial<
-  Omit<CaptureSettings, 'custom_llm_api_key_configured'>
+  Omit<CaptureSettings, 'custom_llm_api_key_configured' | 'custom_stt_api_key_configured'>
 > & {
   /** Write-only: setting this to a non-empty string stores it, ``null`` clears it. */
   custom_llm_api_key?: string | null;
+  /** Write-only: setting this to a non-empty string stores it, ``null`` clears it. */
+  custom_stt_api_key?: string | null;
 };
 
 /**

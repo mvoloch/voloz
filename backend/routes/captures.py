@@ -183,14 +183,32 @@ async def capture_readiness_endpoint(db: Session = Depends(get_db)):
         )
 
     return models.CaptureReadinessResponse(
-        stt=models.ModelReadiness(
-            ready=is_model_cached(stt_cfg.hf_repo_id),
-            model_name=stt_cfg.model_name,
-            display_name=stt_cfg.display_name,
-            size=stt_cfg.model_size,
-            size_mb=stt_cfg.size_mb or None,
-        ),
+        stt=_stt_readiness(saved, stt_cfg),
         llm=_llm_readiness(saved, llm_cfg),
+    )
+
+
+def _stt_readiness(saved, stt_cfg) -> models.ModelReadiness:
+    """STT row of the readiness checklist.
+
+    A configured custom transcription endpoint owns the model, so the gate
+    is green without a local Whisper download; the row names the remote
+    model instead.
+    """
+    if saved.custom_stt_endpoint and saved.custom_stt_model:
+        return models.ModelReadiness(
+            ready=True,
+            model_name=stt_cfg.model_name,
+            display_name=saved.custom_stt_model,
+            size=saved.custom_stt_model,
+            size_mb=None,
+        )
+    return models.ModelReadiness(
+        ready=is_model_cached(stt_cfg.hf_repo_id),
+        model_name=stt_cfg.model_name,
+        display_name=stt_cfg.display_name,
+        size=stt_cfg.model_size,
+        size_mb=stt_cfg.size_mb or None,
     )
 
 

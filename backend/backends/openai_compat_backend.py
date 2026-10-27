@@ -28,6 +28,9 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
 class OpenAICompatLLMBackend:
     """LLM backend that delegates to an OpenAI-compatible chat endpoint."""
 
+    # Read by ``llm.resolve_model_size`` to record the remote model label.
+    is_remote = True
+
     def __init__(
         self,
         endpoint: str,

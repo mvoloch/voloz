@@ -97,7 +97,7 @@ def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSett
 
 
 def _sync_llm_backend_config(row: DBCaptureSettings) -> None:
-    """Push the persisted custom-LLM endpoint into the backend module state.
+    """Push the persisted custom-LLM and custom-STT endpoints into the backend module state.
 
     Called after every capture-settings write and once on startup from
     ``bootstrap_llm_backend_config``. Keeps the runtime dispatch in
@@ -113,6 +113,11 @@ def _sync_llm_backend_config(row: DBCaptureSettings) -> None:
         endpoint=row.custom_llm_endpoint,
         model=row.custom_llm_model,
         api_key=row.custom_llm_api_key,
+    )
+    backends.set_stt_config(
+        endpoint=row.custom_stt_endpoint,
+        model=row.custom_stt_model,
+        api_key=row.custom_stt_api_key,
     )
 
 

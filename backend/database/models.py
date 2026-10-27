@@ -226,6 +226,12 @@ class CaptureSettings(Base):
     custom_llm_endpoint = Column(String, nullable=True)
     custom_llm_model = Column(String, nullable=True)
     custom_llm_api_key = Column(String, nullable=True)
+    # Optional OpenAI-compatible transcription endpoint (``/audio/transcriptions``)
+    # that overrides local Whisper. Same semantics as the custom LLM trio: null
+    # keeps the on-device path and the ``stt_model`` size selector above.
+    custom_stt_endpoint = Column(String, nullable=True)
+    custom_stt_model = Column(String, nullable=True)
+    custom_stt_api_key = Column(String, nullable=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

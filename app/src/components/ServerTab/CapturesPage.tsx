@@ -33,6 +33,7 @@ import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
 import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
+import { CustomSttEndpointRow } from './CustomSttEndpointRow';
 import { SettingRow, SettingSection } from './SettingRow';
 
 function ChordPreview({ keys }: { keys: string[] }) {
@@ -409,6 +410,7 @@ export function CapturesPage() {
                 <SelectItem value="es">{t('settings.captures.transcription.language.es')}</SelectItem>
                 <SelectItem value="fr">{t('settings.captures.transcription.language.fr')}</SelectItem>
                 <SelectItem value="de">{t('settings.captures.transcription.language.de')}</SelectItem>
+                <SelectItem value="pt">{t('settings.captures.transcription.language.pt')}</SelectItem>
                 <SelectItem value="ja">{t('settings.captures.transcription.language.ja')}</SelectItem>
                 <SelectItem value="zh">{t('settings.captures.transcription.language.zh')}</SelectItem>
                 <SelectItem value="hi">{t('settings.captures.transcription.language.hi')}</SelectItem>
@@ -416,6 +418,8 @@ export function CapturesPage() {
             </Select>
           }
         />
+
+        <CustomSttEndpointRow settings={settings} update={update} />
 
       </SettingSection>
 
