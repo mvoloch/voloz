@@ -145,6 +145,31 @@ async def test_transcribe_sends_multipart_with_bearer_model_and_language(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_transcribe_uploads_wav_dictations_at_16k_mono(tmp_path):
+    """The webview records 48 kHz WAV: three times the bytes Whisper needs,
+    and long dictations would pass hosted endpoints' 25 MB request limit."""
+    import numpy as np
+    import soundfile as sf
+
+    audio = tmp_path / "dictation.wav"
+    t = np.linspace(0, 1.0, 48_000, endpoint=False)
+    tone = 0.3 * np.sin(2 * np.pi * 440 * t)
+    sf.write(audio, np.stack([tone, tone], axis=1), 48_000, subtype="PCM_16")
+
+    with FakeServer(lambda *_: (200, {"text": "ok"})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m", api_key="k")
+        assert await backend.transcribe(str(audio)) == "ok"
+
+    raw = server.requests[0]["raw"]
+    start = raw.index(b"RIFF")
+    size = int.from_bytes(raw[start + 4 : start + 8], "little") + 8
+    with wave.open(io.BytesIO(raw[start : start + size])) as w:
+        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16_000, 1, 2)
+        assert abs(w.getnframes() / 16_000 - 1.0) < 0.01
+    assert b'filename="dictation.wav"' in raw
+
+
+@pytest.mark.asyncio
 async def test_transcribe_reuses_one_pooled_client_across_dictations(tmp_path):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(_wav_bytes())

@@ -14,11 +14,13 @@ built-in Whisper backend.
 """
 
 import asyncio
+import io
 import logging
 from pathlib import Path
 from typing import Optional
 
 import httpx
+import soundfile as sf
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +33,9 @@ DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
 # elsewhere). httpx's default keep-alive expiry is 5 s, shorter than the
 # usual gap between two dictations.
 KEEPALIVE_EXPIRY_SECONDS = 120.0
+
+# Whisper works at 16 kHz mono; anything more is just bytes to upload.
+WHISPER_SAMPLE_RATE = 16_000
 
 
 class OpenAICompatSTTBackend:
@@ -155,13 +160,19 @@ class OpenAICompatSTTBackend:
         url = f"{self.endpoint}/audio/transcriptions"
         client = self._get_client()
         try:
-            with path.open("rb") as fh:
-                response = await client.post(
-                    url,
-                    headers=headers,
-                    data=data,
-                    files={"file": (path.name, fh, _mime_for(path))},
-                )
+            # Dictations arrive as 48 kHz WAV from the webview: three times the
+            # upload Whisper needs, and long ones would pass the 25 MB request
+            # limit hosted endpoints set. Compressed formats go as they are.
+            if path.suffix.lower() == ".wav":
+                upload = await asyncio.to_thread(_wav_for_whisper, path)
+            else:
+                upload = path.read_bytes()
+            response = await client.post(
+                url,
+                headers=headers,
+                data=data,
+                files={"file": (path.name, upload, _mime_for(path))},
+            )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             body_preview = exc.response.text[:500]
@@ -201,6 +212,19 @@ _MIME_BY_SUFFIX = {
     ".ogg": "audio/ogg",
     ".webm": "audio/webm",
 }
+
+
+def _wav_for_whisper(path: Path) -> bytes:
+    """Return the WAV as 16 kHz mono 16-bit, untouched if it already is."""
+    info = sf.info(str(path))
+    if info.samplerate <= WHISPER_SAMPLE_RATE and info.channels == 1:
+        return path.read_bytes()
+    from ..utils.audio import load_audio
+
+    audio, sr = load_audio(str(path), sample_rate=WHISPER_SAMPLE_RATE)
+    buf = io.BytesIO()
+    sf.write(buf, audio, sr, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
 
 
 def _mime_for(path: Path) -> str:
