@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-28 (after 0.8.0: audit fixes, Groq). Update this file whenever state or decisions change._
+_Last updated: 2026-10-28 (after 0.8.0: audit fixes, Groq, open findings fixed). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -134,20 +134,26 @@ keep-alive). Still to confirm in an installed build.
    (41–63 s measured on the Dell; onefile leaves 1.3 GB in `%TEMP%` per
    force-killed server).
 
-### Open findings from the 2026-10-28 audit (not fixed)
+### Findings from the 2026-10-28 audit
 
-- Auto-paste focuses the first visible window of the target process, not
-  the one that had focus (`focus_capture.rs`), e.g. Explorer's taskbar.
-- Alt+F4 on the dictate pill runs the main window's quit handshake.
-- Linux: the main window rebuilt after close-to-tray lacks the microphone
-  permission handler (`main.rs` sets it in `setup` only).
-- A non-cp1252 character on the server's stderr pipe switches all later
-  stderr to devnull (`_PipeSafeStream` treats UnicodeEncodeError as a
-  broken pipe).
-- Cancelling a CPU TTS job does not stop inference; `load_model_async` has
-  no lock; `init_db()` runs twice per startup.
-- Superseded STT/LLM HTTP clients are not closed on settings changes.
-- pt-BR: a few dictation errors and relative dates are English-only.
+Fixed after 0.8.0 (`5c29190`, `b3ff491`, `c9068b4`; none is in an
+installer yet): auto-paste into the window that had focus (not the first
+window of that process); Alt+F4 on the dictate pill only hides it; Linux
+microphone permission on the rebuilt main window and the pill; awaited
+stop signal in audio capture; stderr survives a non-cp1252 character;
+`init_db()` once per startup; one model load at a time per backend;
+pt-BR relative dates and dictation/microphone messages.
+
+Left open on purpose:
+
+- Cancelling a running TTS job does not stop inference: the worker
+  thread keeps going and the next queued job starts beside it. Stopping
+  it needs an interrupt hook in each engine (Studio only).
+- Superseded STT/LLM HTTP clients are not closed on settings changes;
+  they are freed by GC. Closing them on change could cut a dictation that
+  is still using the old client, so the leak is the lesser risk.
+- Backend error texts shown in the pill (e.g. a Claude or Groq error)
+  stay in English; they come from the server and the provider.
 
 ## Developing on GB4
 
@@ -174,9 +180,9 @@ Release a Windows build: bump the version in the files listed in
 `.bumpversion.cfg`, commit on `wisprclone`, then push a `v<version>` tag to
 `origin`. The installer lands in a draft release.
 
-Test baseline on GB4 (2026-10-28, `wisprclone` at `721b564`): pytest
-392 passed / 0 failed / 13 skipped; `tsc` clean; `cargo check` and clippy
-clean of new warnings on Linux and Windows (17 pre-existing on Windows).
+Test baseline on GB4 (2026-10-28, `wisprclone` at `c9068b4`): pytest
+394 passed / 0 failed / 13 skipped; `tsc` clean; `cargo check` and clippy
+clean of new warnings on Linux and Windows (16 pre-existing on Windows).
 `biome check` has 8 pre-existing findings in files the fork touched
 (import order, formatting, two a11y rules) — none introduced by the fork.
 The old `test_hf_progress_tracker` failure was a stale test, fixed here
