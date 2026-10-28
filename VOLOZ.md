@@ -69,6 +69,17 @@ Memory, app idle on Windows: 1.24 GB (WebView2 785 MB in 9 processes,
 Python server 362 MB — ~337 MB of it is PyTorch loaded at startup, Rust
 89 MB). Idle CPU ~0.
 
+### First-dictation latency (fixed in `200c026`, not yet in an installer)
+
+Installed 0.7.0 on the Dell: first dictation after launch 15.3 s, later
+ones 1.1–3.3 s. Measured in a fresh process: first audio decode 1.36 s
+(GB4) / 3.86 s (Windows, from source; the frozen app adds more, likely
+antivirus scanning DLLs on first load — inferred), first remote
+transcription ~1.5–2 s slower than the next. Fix: decode a silent clip and
+open the remote connections at server startup, and `POST /capture/warmup`
+when recording starts (HEAD for STT, `models.list` for Claude, 120 s
+keep-alive). Still to confirm in an installed build.
+
 ## Next steps
 
 1. ~~Rename inside the app~~ — done in `fb654ee`: product "Voloz",
