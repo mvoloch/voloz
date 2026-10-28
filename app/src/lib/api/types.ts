@@ -153,6 +153,8 @@ export interface FocusSnapshot {
   pid: number;
   bundle_id: string | null;
   role: string | null;
+  /** Windows: the focused window's HWND, so the paste returns to it. */
+  window?: number | null;
 }
 
 export interface RefinementFlags {

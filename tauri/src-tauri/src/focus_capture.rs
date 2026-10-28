@@ -34,6 +34,11 @@ pub struct FocusSnapshot {
     pub pid: i32,
     pub bundle_id: Option<String>,
     pub role: Option<String>,
+    /// Windows: the foreground window's HWND, so the paste goes back to
+    /// that window and not to another one of the same process (Explorer's
+    /// taskbar is an Explorer window too). `None` elsewhere.
+    #[serde(default)]
+    pub window: Option<isize>,
 }
 
 #[cfg(target_os = "macos")]
@@ -243,6 +248,7 @@ pub fn capture_focus() -> Result<FocusSnapshot, String> {
             pid,
             bundle_id,
             role,
+            window: None,
         })
     }
 }
@@ -338,8 +344,8 @@ mod win {
     };
     use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetForegroundWindow, GetWindow, GetWindowThreadProcessId, IsWindowVisible,
-        SetForegroundWindow, GW_OWNER,
+        EnumWindows, GetForegroundWindow, GetWindow, GetWindowThreadProcessId, IsWindow,
+        IsWindowVisible, SetForegroundWindow, GW_OWNER,
     };
 
     /// Read the PID that owns `hwnd`. Returns 0 on failure.
@@ -403,6 +409,22 @@ mod win {
                 None
             } else {
                 Some(s)
+            }
+        }
+    }
+
+    /// The captured window, if it still exists, is visible and still belongs
+    /// to `pid` (Windows reuses the handle of a closed window).
+    pub fn live_window(raw: isize, pid: u32) -> Option<HWND> {
+        let hwnd = HWND(raw as *mut _);
+        unsafe {
+            if IsWindow(Some(hwnd)).as_bool()
+                && IsWindowVisible(hwnd).as_bool()
+                && hwnd_pid(hwnd) == pid
+            {
+                Some(hwnd)
+            } else {
+                None
             }
         }
     }
@@ -510,6 +532,7 @@ pub fn capture_focus() -> Result<FocusSnapshot, String> {
             pid: pid as i32,
             bundle_id,
             role,
+            window: Some(hwnd.0 as isize),
         })
     }
 }
@@ -522,6 +545,23 @@ pub fn activate_pid(pid: i32) -> Result<(), String> {
     let hwnd = win::find_top_level_window(pid as u32)
         .ok_or_else(|| format!("No visible top-level window for PID {pid}"))?;
     win::activate_hwnd(hwnd)
+}
+
+/// Bring back the window the snapshot was taken in. Falls back to the
+/// process's first top-level window when that window is gone.
+#[cfg(target_os = "windows")]
+pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
+    if focus.pid > 0 {
+        if let Some(hwnd) = focus.window.and_then(|raw| win::live_window(raw, focus.pid as u32)) {
+            return win::activate_hwnd(hwnd);
+        }
+    }
+    activate_pid(focus.pid)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
+    activate_pid(focus.pid)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]

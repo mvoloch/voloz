@@ -117,9 +117,11 @@ pub async fn start_capture(
 }
 
 pub async fn stop_capture(state: &AudioCaptureState) -> Result<String, String> {
-    // Signal stop
-    if let Some(tx) = state.stop_tx.lock().unwrap().take() {
-        let _ = tx.send(());
+    // Signal stop. Take the sender first so the lock isn't held across the
+    // await; `send` returns a future that does nothing unless awaited.
+    let tx = state.stop_tx.lock().unwrap().take();
+    if let Some(tx) = tx {
+        let _ = tx.send(()).await;
     }
 
     // Stop stream if still active

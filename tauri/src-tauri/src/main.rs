@@ -51,6 +51,9 @@ fn build_dictate_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewW
     .visible(false)
     .build()?;
 
+    #[cfg(target_os = "linux")]
+    allow_microphone(&window);
+
     if let Some(monitor) = window.current_monitor()? {
         let monitor_size = monitor.size();
         let win_size = window.outer_size()?;
@@ -1319,7 +1322,7 @@ async fn paste_final_text(
         );
     }
 
-    focus_capture::activate_pid(focus.pid)?;
+    focus_capture::activate(&focus)?;
     tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
 
     let snapshot = clipboard::save_clipboard()?;
@@ -1374,7 +1377,7 @@ async fn debug_focus_roundtrip(
 
     tokio::time::sleep(std::time::Duration::from_millis(drift_ms)).await;
 
-    focus_capture::activate_pid(snapshot.pid)?;
+    focus_capture::activate(&snapshot)?;
     // Give AppKit a beat to process the activation before the synthetic
     // Cmd+V arrives — without this the paste sometimes races ahead of the
     // window-ordering animation and lands in the previous frontmost app.
@@ -1494,6 +1497,43 @@ fn finish_main_window_close(window: &tauri::Window) {
     }
 }
 
+/// Let a webview record from the microphone on Linux: WebKitGTK denies
+/// getUserMedia by default. Every webview that records needs it — the main
+/// window at startup and when rebuilt from the tray (tray.rs), and the
+/// dictate pill.
+#[cfg(target_os = "linux")]
+pub fn allow_microphone<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.with_webview(|webview| {
+        use webkit2gtk::{WebViewExt, SettingsExt, PermissionRequestExt};
+        use webkit2gtk::glib::ObjectExt;
+        let wk_webview = webview.inner();
+
+        // Enable media stream support in WebKitGTK settings
+        if let Some(settings) = WebViewExt::settings(&wk_webview) {
+            settings.set_enable_media_stream(true);
+        }
+
+        // Auto-grant UserMediaPermissionRequest (microphone access)
+        // Only for trusted local origins (Tauri dev server or custom protocol)
+        wk_webview.connect_permission_request(move |webview, request: &webkit2gtk::PermissionRequest| {
+            if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
+                let uri = WebViewExt::uri(webview).unwrap_or_default();
+                let is_trusted = uri.starts_with("tauri://")
+                    || uri.starts_with("https://tauri.localhost")
+                    || uri.starts_with("http://localhost")
+                    || uri.starts_with("http://127.0.0.1");
+                if is_trusted {
+                    request.allow();
+                    return true;
+                }
+                request.deny();
+                return true;
+            }
+            false
+        });
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
@@ -1591,40 +1631,11 @@ pub fn run() {
                 }
             }
 
-            // Enable microphone access on Linux (WebKitGTK denies getUserMedia by default)
             #[cfg(target_os = "linux")]
             {
                 use tauri::Manager;
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.with_webview(|webview| {
-                        use webkit2gtk::{WebViewExt, SettingsExt, PermissionRequestExt};
-                        use webkit2gtk::glib::ObjectExt;
-                        let wk_webview = webview.inner();
-
-                        // Enable media stream support in WebKitGTK settings
-                        if let Some(settings) = WebViewExt::settings(&wk_webview) {
-                            settings.set_enable_media_stream(true);
-                        }
-
-                        // Auto-grant UserMediaPermissionRequest (microphone access)
-                        // Only for trusted local origins (Tauri dev server or custom protocol)
-                        wk_webview.connect_permission_request(move |webview, request: &webkit2gtk::PermissionRequest| {
-                            if request.is::<webkit2gtk::UserMediaPermissionRequest>() {
-                                let uri = WebViewExt::uri(webview).unwrap_or_default();
-                                let is_trusted = uri.starts_with("tauri://")
-                                    || uri.starts_with("https://tauri.localhost")
-                                    || uri.starts_with("http://localhost")
-                                    || uri.starts_with("http://127.0.0.1");
-                                if is_trusted {
-                                    request.allow();
-                                    return true;
-                                }
-                                request.deny();
-                                return true;
-                            }
-                            false
-                        });
-                    });
+                    allow_microphone(&window);
                 }
             }
 
@@ -1659,6 +1670,15 @@ pub fn run() {
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             move |window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                // Only the main window owns the quit flow below. Alt+F4 on the
+                // dictate pill would otherwise stop the server (and exit the
+                // app on Linux); hide the pill instead, the next chord shows it.
+                if window.label() == DICTATE_WINDOW_LABEL {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
+
                 // The close button hides the main window to the tray; only
                 // the tray's "Quit" runs the cleanup flow below.
                 #[cfg(desktop)]

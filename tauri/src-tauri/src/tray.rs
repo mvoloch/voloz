@@ -70,7 +70,11 @@ fn rebuild_main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R
         .find(|w| w.label == MAIN_WINDOW_LABEL)?
         .clone();
     match WebviewWindowBuilder::from_config(app, &config).and_then(|builder| builder.build()) {
-        Ok(window) => Some(window),
+        Ok(window) => {
+            #[cfg(target_os = "linux")]
+            crate::allow_microphone(&window);
+            Some(window)
+        }
         Err(e) => {
             eprintln!("Failed to rebuild main window: {}", e);
             None
