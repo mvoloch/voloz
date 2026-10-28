@@ -1251,7 +1251,8 @@
       "forkBy": "Voloz by",
       "basedOn": "Based on",
       "by": "by"
-    }
+    },
+    "saveFailed": "Couldn't save the setting"
   },
   "models": {
     "title": "Models",

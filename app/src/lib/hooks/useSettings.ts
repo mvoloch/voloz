@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+import { toast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type {
   CaptureSettings,
@@ -17,6 +19,7 @@ const GENERATION_SETTINGS_KEY = ['settings', 'generation'] as const;
  */
 export function useCaptureSettings() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const query = useQuery({
     queryKey: CAPTURE_SETTINGS_KEY,
@@ -37,10 +40,12 @@ export function useCaptureSettings() {
       }
       return { previous };
     },
-    onError: (_err, _patch, ctx) => {
+    onError: (err, _patch, ctx) => {
       if (ctx?.previous) {
         queryClient.setQueryData(CAPTURE_SETTINGS_KEY, ctx.previous);
       }
+      // The rollback alone looked like the click did nothing.
+      toast({ title: t('settings.saveFailed'), description: err.message, variant: 'destructive' });
     },
     onSettled: (data, _err, patch) => {
       if (data) queryClient.setQueryData(CAPTURE_SETTINGS_KEY, data);
@@ -75,6 +80,7 @@ export function useCaptureSettings() {
  */
 export function useGenerationSettings() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   const query = useQuery({
     queryKey: GENERATION_SETTINGS_KEY,
@@ -96,10 +102,11 @@ export function useGenerationSettings() {
       }
       return { previous };
     },
-    onError: (_err, _patch, ctx) => {
+    onError: (err, _patch, ctx) => {
       if (ctx?.previous) {
         queryClient.setQueryData(GENERATION_SETTINGS_KEY, ctx.previous);
       }
+      toast({ title: t('settings.saveFailed'), description: err.message, variant: 'destructive' });
     },
     onSettled: (data) => {
       if (data) queryClient.setQueryData(GENERATION_SETTINGS_KEY, data);

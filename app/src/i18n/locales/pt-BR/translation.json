@@ -1221,7 +1221,8 @@
       "forkBy": "Voloz por",
       "basedOn": "Baseado no",
       "by": "de"
-    }
+    },
+    "saveFailed": "Não foi possível salvar a configuração"
   },
   "models": {
     "title": "Modelos",
