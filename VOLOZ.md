@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-27 (0.8.0). Update this file whenever state or decisions change._
+_Last updated: 2026-10-28 (after 0.8.0: audit fixes, Groq). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -44,6 +44,11 @@ Remotes on GB4: `origin` = mvoloch/voloz, `upstream` = jamiepine/voicebox.
   cloud APIs or local models. The lite installer ships cloud-only; local
   models come as an optional on-demand download (reuse the CUDA-libs
   download mechanism Voicebox already has).
+- **Transcription:** Groq direct, `https://api.groq.com/openai/v1` with
+  `whisper-large-v3-turbo` (since 2026-10-28; was OpenRouter). Same model,
+  about 4x faster here and steady; it also honours Whisper's `prompt`.
+  Rollback: set the STT endpoint back to `https://openrouter.ai/api/v1`,
+  model `openai/whisper-large-v3-turbo`, with the OpenRouter key.
 - **Refinement model:** `claude-haiku-5-5` (best quality of 5 measured; see
   below). Native SDK, `effort: "low"`, no sampling parameters.
 - **Builds:** Windows on GitHub Actions (PyInstaller can't cross-compile
@@ -69,6 +74,22 @@ Memory, app idle on Windows: 1.24 GB (WebView2 785 MB in 9 processes,
 Python server 362 MB — ~337 MB of it is PyTorch loaded at startup, Rust
 89 MB). Idle CPU ~0.
 
+### Groq vs OpenRouter (2026-10-28, Dell, 25 s Portuguese clip)
+
+STT only, warm connection, 6 runs each, median (min–max):
+
+| Endpoint | 48 kHz WAV (what the app sent) | 16 kHz WAV |
+| --- | --- | --- |
+| OpenRouter | 3.40 s (2.28–3.86); a later run 2.19 s | 1.21 s (0.72–2.13) |
+| Groq | 0.87 s (0.72–1.05); a later run 0.45 s | 0.63 s (0.46–0.87) |
+
+Whole dictation in the installed 0.8.0 app after switching to Groq, 8 runs:
+transcribe median 0.61 s, refine (Haiku) median 1.2 s, total median 1.8 s
+(1.6–3.0 s), against a 3.2 s median with OpenRouter on 2026-10-27. Refinement
+is now the larger share. English and Portuguese clips (2 + 4) kept their
+language through refinement; none was translated. Since `f13529f` the app
+uploads 16 kHz itself. One clip, one machine, one evening: indicative.
+
 ### First-dictation latency (fixed in `200c026`, shipped in 0.8.0)
 
 Installed 0.7.0 on the Dell: first dictation after launch 15.3 s, later
@@ -92,15 +113,41 @@ keep-alive). Still to confirm in an installed build.
 2. Lite edition: build flag that hides Studio routes in the frontend and a
    torch-free backend (lazy PyTorch: `backend/app.py`, `routes/health.py`,
    `utils/hf_offline_patch.py` import it at startup today).
-3. STT: Groq direct (needs a Groq key) and a vocabulary/prompt setting for
-   names and jargon (Whisper `prompt`; OpenRouter ignores it).
+3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Still to do: a
+   vocabulary/prompt setting for names and jargon (Whisper `prompt`; Groq
+   honours it, OpenRouter ignored it).
 4. Streaming STT + incremental refinement to approach Wispr's ~0.7 s.
 5. Linux build and test on GB4; then Android.
 6. Studio: cloud TTS/cloning engine (ElevenLabs/Cartesia/Fish Audio).
    Known bug: a Qwen3-TTS 1.7B generation on CPU failed with the generic
    "Worker exited without writing terminal status"
    (`backend/services/task_queue.py`); retry and delete also failed — root
-   cause not captured yet.
+   cause not captured yet. Since `721b564` the next failure stores its real
+   cause; likely candidates are a SQLite error or memory (1.7B loads as fp32
+   on CPU, several GB).
+7. Installer and updater choices (need the owner's call before the first
+   public release): the updater always installs the MSI (`windows-x86_64`
+   in latest.json), which needs admin on every update — ship NSIS only or
+   prefer NSIS in latest.json; set `bundle.publisher` (today "github", from
+   the identifier); drop `v1Compatible` updater zips (+1.1 GB per release);
+   CPU server as PyInstaller onedir to stop unpacking 1.3 GB per launch
+   (41–63 s measured on the Dell; onefile leaves 1.3 GB in `%TEMP%` per
+   force-killed server).
+
+### Open findings from the 2026-10-28 audit (not fixed)
+
+- Auto-paste focuses the first visible window of the target process, not
+  the one that had focus (`focus_capture.rs`), e.g. Explorer's taskbar.
+- Alt+F4 on the dictate pill runs the main window's quit handshake.
+- Linux: the main window rebuilt after close-to-tray lacks the microphone
+  permission handler (`main.rs` sets it in `setup` only).
+- A non-cp1252 character on the server's stderr pipe switches all later
+  stderr to devnull (`_PipeSafeStream` treats UnicodeEncodeError as a
+  broken pipe).
+- Cancelling a CPU TTS job does not stop inference; `load_model_async` has
+  no lock; `init_db()` runs twice per startup.
+- Superseded STT/LLM HTTP clients are not closed on settings changes.
+- pt-BR: a few dictation errors and relative dates are English-only.
 
 ## Developing on GB4
 
@@ -110,14 +157,26 @@ cd $VOLOZ_HOME
 backend/venv/bin/python -m pytest backend/tests -q   # backend tests
 bunx tsc -p app/tsconfig.json --noEmit               # frontend typecheck
 (cd tauri/src-tauri && cargo check)                  # Rust
+# Rust for Windows (the cfg(windows) code), with the rustup toolchain kept
+# apart from the system cargo:
+(cd tauri/src-tauri && PATH=/mnt/data/dev/.rustup-bin:$PATH \
+  RUSTUP_HOME=/mnt/data/dev/.rustup CARGO_HOME=/mnt/data/dev/.cargo \
+  cargo clippy --target x86_64-pc-windows-gnu \
+  --target-dir /mnt/data/dev/voloz-wincheck-target)
 ```
+
+The Windows check needs empty placeholders
+`tauri/src-tauri/binaries/voicebox-{server,mcp}-x86_64-pc-windows-gnu.exe`
+(git-ignored; already there on GB4). It type-checks and lints; it does not
+build an installer.
 
 Release a Windows build: bump the version in the files listed in
 `.bumpversion.cfg`, commit on `wisprclone`, then push a `v<version>` tag to
 `origin`. The installer lands in a draft release.
 
-Test baseline on GB4 (2026-10-27, `wisprclone` at 0.8.0): pytest
-383 passed / 0 failed / 13 skipped; `tsc` clean; `cargo check` clean.
+Test baseline on GB4 (2026-10-28, `wisprclone` at `721b564`): pytest
+392 passed / 0 failed / 13 skipped; `tsc` clean; `cargo check` and clippy
+clean of new warnings on Linux and Windows (17 pre-existing on Windows).
 `biome check` has 8 pre-existing findings in files the fork touched
 (import order, formatting, two a11y rules) — none introduced by the fork.
 The old `test_hf_progress_tracker` failure was a stale test, fixed here
@@ -128,4 +187,6 @@ guard/progress).
 One-time setup already done on GB4: Tauri system packages (apt), `uv` +
 Python 3.12 (in `/mnt/data/dev/.uv`), `backend/venv` with CPU PyTorch,
 `bun install`, dev sidecar placeholders, `gh` logged in over HTTPS
-(account mvoloch) so GB4 can push directly.
+(account mvoloch) so GB4 can push directly; `mingw-w64` (apt) and a rustup
+toolchain 1.93.1 with the `x86_64-pc-windows-gnu` target in
+`/mnt/data/dev/.rustup` (proxies in `/mnt/data/dev/.rustup-bin`, not on PATH).
