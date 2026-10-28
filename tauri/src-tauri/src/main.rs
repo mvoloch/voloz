@@ -755,15 +755,18 @@ async fn start_server(
     *state.server_pid.lock().unwrap() = Some(process_pid);
     *state.child.lock().unwrap() = Some(child);
 
-    // Wait for server to be ready by listening for startup log
-    // PyInstaller bundles can be slow on first import, especially torch/transformers
-    let timeout = tokio::time::Duration::from_secs(120);
+    // Wait for server to be ready by listening for startup log.
+    // PyInstaller bundles can be slow on first import, especially torch/transformers,
+    // and the Windows onefile build unpacks ~1.3 GB to %TEMP% on every launch first:
+    // 58-94 s on one Dell with Defender scanning each file, so 120 s was too tight.
+    const STARTUP_TIMEOUT_SECS: u64 = 300;
+    let timeout = tokio::time::Duration::from_secs(STARTUP_TIMEOUT_SECS);
     let start_time = tokio::time::Instant::now();
     let mut error_output = Vec::new();
 
     loop {
         if start_time.elapsed() > timeout {
-            eprintln!("Server startup timeout after 120 seconds");
+            eprintln!("Server startup timeout after {} seconds", STARTUP_TIMEOUT_SECS);
             if !error_output.is_empty() {
                 eprintln!("Collected error output:");
                 for line in &error_output {
@@ -792,7 +795,10 @@ async fn start_server(
                 let _ = child.kill();
             }
             state.server_pid.lock().unwrap().take();
-            return Err("Server startup timeout - check Console.app for detailed logs".to_string());
+            return Err(format!(
+                "The server did not start within {} seconds.",
+                STARTUP_TIMEOUT_SECS
+            ));
         }
 
         match tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv()).await {

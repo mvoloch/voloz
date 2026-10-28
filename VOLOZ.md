@@ -131,8 +131,27 @@ keep-alive). Still to confirm in an installed build.
    prefer NSIS in latest.json; set `bundle.publisher` (today "github", from
    the identifier); drop `v1Compatible` updater zips (+1.1 GB per release);
    CPU server as PyInstaller onedir to stop unpacking 1.3 GB per launch
-   (41–63 s measured on the Dell; onefile leaves 1.3 GB in `%TEMP%` per
-   force-killed server).
+   (41–63 s measured on the Dell with 0.8.0, 58–94 s with 0.8.1; onefile
+   leaves 1.3 GB in `%TEMP%` per force-killed server). Until then the app
+   waits up to 300 s for the server (was 120 s; see below).
+
+### Installing 0.8.1 on the Dell (2026-10-28)
+
+- The Dell is still enrolled in the Log-In MDM (two enrollments, state 1),
+  so Defender's ASR rule `01443614` ("block executables unless prevalent")
+  blocked the new `voloz.exe` (event 1121). The owner added an ASR-only
+  exclusion for `C:\Program Files\Voloz` (antivirus scanning stays on;
+  undo: `Remove-MpPreference -AttackSurfaceReductionOnlyExclusions
+  'C:\Program Files\Voloz'`, as admin). The MDM policy did not override it.
+  Every new build has a new hash, so without the exclusion each release
+  would be blocked again.
+- The first two server starts after the install unpacked at 5–7 MB/s and
+  hit the 120 s startup limit ("Server startup timeout"); a later start took
+  155 s from launch to healthy (94 s of it unpacking). Since the next commit
+  after `7c841cb` the limit is 300 s and the error no longer points to
+  macOS's Console.app; this ships in the next build, not in 0.8.1.
+- Not yet tested by the owner on 0.8.1: paste into an Explorer folder,
+  Alt+F4 on the pill.
 
 ### Findings from the 2026-10-28 audit
 
