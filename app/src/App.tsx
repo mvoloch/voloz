@@ -1,9 +1,9 @@
 import { RouterProvider } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import volozLogo from '@/assets/voloz-logo.svg';
+import { useTranslation } from 'react-i18next';
 import { DictateWindow } from '@/components/DictateWindow/DictateWindow';
-import ShinyText from '@/components/ShinyText';
 import { TitleBarDragRegion } from '@/components/TitleBarDragRegion';
+import { VolozWordmark } from '@/components/VolozWordmark';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
 import { useThemeSync } from '@/hooks/useThemeSync';
 import { apiClient } from '@/lib/api/client';
@@ -52,28 +52,25 @@ function isPortInUseError(error: unknown): boolean {
   );
 }
 
-const LOADING_MESSAGES = [
-  'Warming up tensors...',
-  'Calibrating synthesizer engine...',
-  'Initializing voice models...',
-  'Loading neural networks...',
-  'Preparing audio pipelines...',
-  'Optimizing waveform generators...',
-  'Tuning frequency analyzers...',
-  'Building voice embeddings...',
-  'Configuring text-to-speech cores...',
-  'Syncing audio buffers...',
-  'Establishing model connections...',
-  'Preprocessing training data...',
-  'Validating voice samples...',
-  'Compiling inference engines...',
-  'Mapping phoneme sequences...',
-  'Aligning prosody parameters...',
-  'Activating speech synthesis...',
-  'Fine-tuning acoustic models...',
-  'Preparing voice cloning matrices...',
-  'Initializing Qwen TTS framework...',
-];
+const STARTUP_MESSAGES = [
+  'startup.messages.starting',
+  'startup.messages.transcriber',
+  'startup.messages.listening',
+  'startup.messages.words',
+  'startup.messages.almost',
+] as const;
+
+/**
+ * Dev-only preview of the startup screen, which otherwise only shows in Tauri:
+ * `?splash` for the loading state, `?splash=error` for the failure state.
+ * Always null in production builds.
+ */
+function getSplashPreview(): 'loading' | 'error' | null {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get('splash');
+  if (value === null) return null;
+  return value === 'error' ? 'error' : 'loading';
+}
 
 function App() {
   useThemeSync();
@@ -89,7 +86,9 @@ function App() {
 }
 
 function MainApp() {
+  const { t } = useTranslation();
   const platform = usePlatform();
+  const [splashPreview] = useState(getSplashPreview);
   const [serverReady, setServerReady] = useState(false);
   const [startupError, setStartupError] = useState<string | null>(null);
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
@@ -235,21 +234,25 @@ function MainApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [platform.metadata.isTauri, platform.lifecycle]);
 
+  const showSplash = (platform.metadata.isTauri && !serverReady) || splashPreview !== null;
+  const splashError =
+    splashPreview === 'error' ? 'Example: the server sidecar could not be started.' : startupError;
+
   // Cycle through loading messages every 3 seconds
   useEffect(() => {
-    if (!platform.metadata.isTauri || serverReady) {
+    if (!showSplash) {
       return;
     }
 
     const interval = setInterval(() => {
-      setLoadingMessageIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+      setLoadingMessageIndex((prev) => (prev + 1) % STARTUP_MESSAGES.length);
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [serverReady, platform.metadata.isTauri]);
+  }, [showSplash]);
 
   // Show loading screen while server is starting in Tauri
-  if (platform.metadata.isTauri && !serverReady) {
+  if (showSplash) {
     return (
       <div
         className={cn(
@@ -258,21 +261,12 @@ function MainApp() {
         )}
       >
         <TitleBarDragRegion />
-        <div className="text-center space-y-6">
-          <div className="flex justify-center relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-48 h-48 rounded-full bg-accent/20 blur-3xl" />
-            </div>
-            <img
-              src={volozLogo}
-              alt="Voloz"
-              className="w-48 h-48 object-contain animate-fade-in-scale relative z-10"
-            />
-          </div>
-          {startupError ? (
+        <div className="flex flex-col items-center gap-10 text-center">
+          <VolozWordmark animated={!splashError} className="h-16 w-auto animate-fade-in-scale" />
+          {splashError ? (
             <div className="animate-fade-in-delayed max-w-md mx-auto space-y-3">
-              <p className="text-lg font-medium text-destructive">Server startup failed</p>
-              <p className="text-sm text-muted-foreground">{startupError}</p>
+              <p className="text-lg font-medium text-destructive">{t('startup.failed')}</p>
+              <p className="text-sm text-muted-foreground">{splashError}</p>
               <button
                 type="button"
                 className="mt-2 px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -283,19 +277,17 @@ function MainApp() {
                   window.location.reload();
                 }}
               >
-                Retry
+                {t('startup.retry')}
               </button>
             </div>
           ) : (
-            <div className="animate-fade-in-delayed">
-              <ShinyText
-                text={LOADING_MESSAGES[loadingMessageIndex]}
-                className="text-lg font-medium text-muted-foreground"
-                speed={2}
-                color="hsl(var(--muted-foreground))"
-                shineColor="hsl(var(--foreground))"
-              />
-            </div>
+            <p
+              key={loadingMessageIndex}
+              className="startup-message text-sm text-muted-foreground"
+              aria-live="polite"
+            >
+              {t(STARTUP_MESSAGES[loadingMessageIndex])}
+            </p>
           )}
         </div>
       </div>

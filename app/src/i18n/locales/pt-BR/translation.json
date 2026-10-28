@@ -12,8 +12,10 @@
     "unknownError": "Erro desconhecido"
   },
   "nav": {
-    "generate": "Gerar",
-    "stories": "Histórias",
+    "home": "Início",
+    "studio": "Estúdio",
+    "generate": "Gerar fala",
+    "stories": "Roteiros",
     "captures": "Capturas",
     "voices": "Vozes",
     "effects": "Efeitos",
@@ -40,7 +42,7 @@
     "transcript": {
       "refined": "Refinada",
       "raw": "Bruta",
-      "refinedHint": "Refinada com Qwen3 · {{model}}",
+      "refinedHint": "Refinada com {{model}}",
       "rawHint": "Transcrita com Whisper {{model}}"
     },
     "actions": {
@@ -571,62 +573,62 @@
     }
   },
   "stories": {
-    "title": "Histórias",
-    "newStory": "Nova História",
-    "loading": "Carregando histórias…",
-    "searchPlaceholder": "Buscar histórias…",
+    "title": "Roteiros",
+    "newStory": "Novo Roteiro",
+    "loading": "Carregando roteiros…",
+    "searchPlaceholder": "Buscar roteiros…",
     "empty": {
-      "title": "Nenhuma história ainda",
-      "hint": "Crie sua primeira história para começar",
-      "noMatches": "Nenhuma história corresponde a \"{{query}}\""
+      "title": "Nenhum roteiro ainda",
+      "hint": "Crie seu primeiro roteiro para começar",
+      "noMatches": "Nenhum roteiro corresponde a \"{{query}}\""
     },
     "row": {
       "itemCount_one": "{{count}} item",
       "itemCount_other": "{{count}} itens",
-      "ariaLabel": "História {{name}}, {{count}} itens, {{updated}}",
+      "ariaLabel": "Roteiro {{name}}, {{count}} itens, {{updated}}",
       "actionsLabel": "Ações para {{name}}"
     },
     "createDialog": {
-      "title": "Criar Nova História",
-      "description": "Crie uma nova história para organizar suas gerações de voz em conversas.",
+      "title": "Criar Novo Roteiro",
+      "description": "Crie um novo roteiro para organizar suas gerações de voz em conversas.",
       "action": "Criar",
       "creating": "Criando…"
     },
     "editDialog": {
-      "title": "Editar História",
-      "description": "Atualize o nome e a descrição da história.",
+      "title": "Editar Roteiro",
+      "description": "Atualize o nome e a descrição do roteiro.",
       "saving": "Salvando…"
     },
     "deleteDialog": {
       "title": "Tem certeza?",
-      "description": "Isso vai excluir permanentemente a história e todos os seus itens. Esta ação não pode ser desfeita.",
+      "description": "Isso vai excluir permanentemente o roteiro e todos os seus itens. Esta ação não pode ser desfeita.",
       "deleting": "Excluindo…"
     },
     "fields": {
       "name": "Nome",
-      "namePlaceholder": "Minha História",
+      "namePlaceholder": "Meu Roteiro",
       "descriptionLabel": "Descrição (opcional)",
       "descriptionPlaceholder": "Uma conversa entre…"
     },
     "toast": {
       "nameRequired": "Nome obrigatório",
-      "nameRequiredDescription": "Digite um nome para a história",
-      "created": "História criada",
+      "nameRequiredDescription": "Digite um nome para o roteiro",
+      "created": "Roteiro criado",
       "createdDescription": "\"{{name}}\" foi criada",
-      "createFailed": "Falha ao criar a história",
-      "updateFailed": "Falha ao atualizar a história",
-      "deleteFailed": "Falha ao excluir a história"
+      "createFailed": "Falha ao criar o roteiro",
+      "updateFailed": "Falha ao atualizar o roteiro",
+      "deleteFailed": "Falha ao excluir o roteiro"
     }
   },
   "storyContent": {
     "selectStory": {
-      "title": "Selecione uma história",
-      "hint": "Escolha uma história da lista para ver seu conteúdo"
+      "title": "Selecione um roteiro",
+      "hint": "Escolha um roteiro da lista para ver seu conteúdo"
     },
-    "loading": "Carregando história…",
+    "loading": "Carregando roteiro…",
     "notFound": {
-      "title": "História não encontrada",
-      "hint": "A história selecionada não pôde ser carregada"
+      "title": "Roteiro não encontrado",
+      "hint": "O roteiro selecionado não pôde ser carregado"
     },
     "generatingCount_one": "Gerando {{count}} áudio",
     "generatingCount_other": "Gerando {{count}} áudios",
@@ -635,20 +637,20 @@
     "searchNoMatches": "Nenhuma geração correspondente encontrada",
     "searchNoAvailable": "Nenhuma geração disponível",
     "exportAudio": "Exportar Áudio",
-    "exportDropdownLabel": "Exportar história como",
+    "exportDropdownLabel": "Exportar roteiro como",
     "exportFormats": {
       "wav": "Áudio (WAV)",
       "mp3": "Áudio (MP3)",
       "m4b": "Audiolivro (M4B, capítulos)"
     },
     "empty": {
-      "title": "Nenhum item nesta história",
+      "title": "Nenhum item neste roteiro",
       "hint": "Gere fala usando a caixa abaixo para adicionar itens"
     },
     "itemActions": {
       "playFromHere": "Reproduzir a partir daqui",
       "regenerate": "Regenerar",
-      "removeFromStory": "Remover da História"
+      "removeFromStory": "Remover do Roteiro"
     },
     "importAudio": "Importar áudio…",
     "importing": "Importando…",
@@ -758,7 +760,7 @@
     "tabs": {
       "general": "Geral",
       "generation": "Geração",
-      "captures": "Capturas",
+      "captures": "Ditado",
       "mcp": "MCP",
       "gpu": "GPU",
       "logs": "Logs",
@@ -1294,6 +1296,41 @@
       "migrationFailed": "Falha na migração",
       "migrationFailedGeneric": "Falha ao migrar os modelos",
       "migrationConnectionLost": "Conexão perdida durante a migração"
+    }
+  },
+  "startup": {
+    "messages": {
+      "starting": "Iniciando o Voloz…",
+      "transcriber": "Acordando a transcrição…",
+      "listening": "Preparando para ouvir…",
+      "words": "Alinhando suas palavras…",
+      "almost": "Quase pronto…"
+    },
+    "failed": "Falha ao iniciar o servidor",
+    "retry": "Tentar de novo"
+  },
+  "home": {
+    "today": "Hoje",
+    "yesterday": "Ontem",
+    "details": "Detalhes do ditado",
+    "hero": {
+      "hold": "Segure",
+      "speak": "e fale.",
+      "holdHint": "Solte as teclas e o Voloz escreve onde estiver o cursor.",
+      "toggleBefore": "Ou aperte",
+      "toggleAfter": "para falar sem segurar.",
+      "noShortcut": "Dite em qualquer app.",
+      "noShortcutHint": "Ative o atalho global nas configurações de ditado, ou use Ditar aqui."
+    },
+    "actions": {
+      "dictate": "Ditar aqui",
+      "import": "Importar áudio",
+      "configure": "Configurar ditado"
+    },
+    "stats": {
+      "words": "palavras ditadas",
+      "captures": "ditados",
+      "minutes": "minutos de fala"
     }
   }
 }

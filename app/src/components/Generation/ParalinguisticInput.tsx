@@ -419,7 +419,7 @@ export const ParalinguisticInput = forwardRef<ParalinguisticInputRef, Paralingui
                     className={cn(
                       'flex items-center gap-2 w-full px-3 py-1.5 text-sm text-left transition-colors',
                       i === menuIndex
-                        ? 'bg-accent/20 text-accent-foreground'
+                        ? 'bg-accent/20 text-foreground'
                         : 'text-popover-foreground hover:bg-muted/50',
                     )}
                     onMouseDown={(e) => {
