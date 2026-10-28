@@ -54,11 +54,12 @@ async def _generation_worker():
             except asyncio.CancelledError:
                 if not task.cancelled():
                     raise
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            # Keep the cause: stderr may never be seen (the app keeps no log).
             await _force_fail_if_active(
                 job.generation_id,
-                "Worker exited without writing terminal status",
+                f"Worker exited without writing terminal status: {e}",
             )
         finally:
             _running_generation_tasks.pop(job.generation_id, None)

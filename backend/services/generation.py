@@ -153,6 +153,9 @@ async def run_generation(
         )
 
     except asyncio.CancelledError:
+        # A failed flush leaves the session unusable until rolled back,
+        # and the status write below would then raise instead.
+        bg_db.rollback()
         await history.update_generation_status(
             generation_id=generation_id,
             status="failed",
@@ -162,6 +165,9 @@ async def run_generation(
         _notify_speak_end(generation_id, status="cancelled")
     except Exception as e:
         traceback.print_exc()
+        # A failed flush leaves the session unusable until rolled back,
+        # and the status write below would then raise instead.
+        bg_db.rollback()
         await history.update_generation_status(
             generation_id=generation_id,
             status="failed",

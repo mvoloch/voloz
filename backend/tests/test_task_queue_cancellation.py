@@ -52,3 +52,28 @@ async def test_cancel_running_generation_cancels_task():
 
     assert task_queue.cancel_generation("gen-running") == "running"
     await asyncio.wait_for(running_cancelled.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_worker_failure_keeps_the_cause_in_the_error(monkeypatch):
+    """A job that dies without writing its own status used to leave only
+    "Worker exited without writing terminal status"; the cause must show."""
+    task_queue.init_queue(force=True)
+    recorded = {}
+
+    async def fake_force_fail(generation_id, error):
+        recorded[generation_id] = error
+
+    monkeypatch.setattr(task_queue, "_force_fail_if_active", fake_force_fail)
+
+    async def failing_job():
+        raise RuntimeError("database is locked")
+
+    task_queue.enqueue_generation("gen-broken", failing_job())
+    for _ in range(50):
+        if "gen-broken" in recorded:
+            break
+        await asyncio.sleep(0.02)
+
+    assert "Worker exited without writing terminal status" in recorded["gen-broken"]
+    assert "database is locked" in recorded["gen-broken"]
