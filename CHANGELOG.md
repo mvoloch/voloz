@@ -5,6 +5,31 @@
 
 # Changelog
 
+## [0.8.1] - 2026-10-28
+
+Windows only for now; the installer is not code-signed yet. Upgrading from 0.8.0 keeps your settings and keys.
+
+### Changed
+
+- Dictations are sent to the transcription endpoint as 16 kHz mono WAV, a third of the size: long dictations no longer hit 25 MB upload limits. With Groq (`https://api.groq.com/openai/v1`, `whisper-large-v3-turbo`) a whole dictation took 1.8 s (median) on our test machine.
+- About: Buy Me a Coffee, GitHub and licence links point to Voloz. The credit to Voicebox and Jamie Pine stays.
+- Home: "No dictations yet", and the shortcut hint only shows when a shortcut is set.
+- `scripts/cloud-dictation/set-keys.ps1` asks for a Groq key and refuses a key with the wrong prefix instead of saving it.
+
+### Fixed
+
+- **Dictation:** a quick tap of the shortcut could leave the microphone recording; a dictation started while the previous one was still refining was never pasted; a refinement error dropped the dictation (the raw transcript is pasted now); a silent recording no longer ends in a refinement error.
+- **Auto-paste** returns to the window you dictated in, not to another window of the same app (e.g. the taskbar instead of an Explorer folder).
+- Alt+F4 on the dictation pill only hides it; it used to stop the server.
+- **Server lifecycle:** a server left running by another Voloz version is replaced on launch; a server that failed to start is no longer reported as running; quitting from the tray stops the server right away; "Keep server running" works again; a force-closed Voloz no longer leaves its server behind; no more console windows flashing.
+- A Claude reply cut off at its token limit is reported as an error instead of pasted half-finished.
+- Moving the transcription or refinement endpoint to another provider no longer sends the previous provider's key.
+- A setting that fails to save now says so; the updater no longer shows an error when there is simply no update.
+- The details panel shows the refined text right after refining; the privacy note is right when transcription is in the cloud.
+- Studio: a failed generation keeps its real cause in the error.
+- Server: an unusual character no longer silences the rest of the log; the database is initialised once per start; a local model is loaded once even when two requests need it at the same time.
+- Portuguese: relative dates ("há 3 minutos") and the dictation and microphone messages.
+
 ## [0.8.0] - 2026-10-27
 
 Windows only for now; the installer is not code-signed yet. Upgrading from 0.7.0 keeps your settings and keys.

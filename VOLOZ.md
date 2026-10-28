@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-28 (after 0.8.0: audit fixes, Groq, open findings fixed). Update this file whenever state or decisions change._
+_Last updated: 2026-10-28 (0.8.1: audit fixes, Groq, open findings fixed). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -136,8 +136,7 @@ keep-alive). Still to confirm in an installed build.
 
 ### Findings from the 2026-10-28 audit
 
-Fixed after 0.8.0 (`5c29190`, `b3ff491`, `c9068b4`; none is in an
-installer yet): auto-paste into the window that had focus (not the first
+Fixed in 0.8.1 (`5c29190`, `b3ff491`, `c9068b4`): auto-paste into the window that had focus (not the first
 window of that process); Alt+F4 on the dictate pill only hides it; Linux
 microphone permission on the rebuilt main window and the pill; awaited
 stop signal in audio capture; stderr survives a non-cp1252 character;
