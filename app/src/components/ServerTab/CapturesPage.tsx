@@ -149,6 +149,8 @@ export function CapturesPage() {
   // React state below is a freshly-typed key that hasn't been sent yet.
   const customLlmApiKeyConfigured = Boolean(settings?.custom_llm_api_key_configured);
   const customLlmActive = Boolean(customLlmEndpointSaved && customLlmModelSaved);
+  const customSttEndpointSaved = settings?.custom_stt_endpoint ?? '';
+  const customSttActive = Boolean(customSttEndpointSaved && settings?.custom_stt_model);
 
   const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | null>(null);
   const [opening, setOpening] = useState(false);
@@ -686,13 +688,24 @@ export function CapturesPage() {
               <Lock className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
               <span className="leading-relaxed">
                 <span className="text-foreground font-medium">
-                  {customLlmActive
-                    ? t('settings.captures.sidebar.remote.title')
-                    : t('settings.captures.sidebar.local.title')}
+                  {customSttActive && customLlmActive
+                    ? t('settings.captures.sidebar.cloud.title')
+                    : customSttActive
+                      ? t('settings.captures.sidebar.sttRemote.title')
+                      : customLlmActive
+                        ? t('settings.captures.sidebar.remote.title')
+                        : t('settings.captures.sidebar.local.title')}
                 </span>{' '}
-                {customLlmActive
-                  ? t('settings.captures.sidebar.remote.body', { endpoint: customLlmEndpointSaved })
-                  : t('settings.captures.sidebar.local.body')}
+                {customSttActive && customLlmActive
+                  ? t('settings.captures.sidebar.cloud.body', {
+                      stt: customSttEndpointSaved,
+                      llm: customLlmEndpointSaved,
+                    })
+                  : customSttActive
+                    ? t('settings.captures.sidebar.sttRemote.body', { endpoint: customSttEndpointSaved })
+                    : customLlmActive
+                      ? t('settings.captures.sidebar.remote.body', { endpoint: customLlmEndpointSaved })
+                      : t('settings.captures.sidebar.local.body')}
               </span>
             </li>
             <li className="flex gap-2.5">

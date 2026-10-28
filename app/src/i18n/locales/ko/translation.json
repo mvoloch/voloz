@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "정제됨",
       "raw": "원본",
-      "refinedHint": "Qwen3 · {{model}}로 정제됨",
+      "refinedHint": "{{model}}로 정제됨",
       "rawHint": "Whisper {{model}}로 변환됨"
     },
     "actions": {

@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "整形済み",
       "raw": "生テキスト",
-      "refinedHint": "Qwen3 · {{model}} で整形",
+      "refinedHint": "{{model}} で整形",
       "rawHint": "Whisper {{model}} で文字起こし"
     },
     "actions": {

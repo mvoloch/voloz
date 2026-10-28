@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Corrigé",
       "raw": "Brut",
-      "refinedHint": "Corrigé avec Qwen3 · {{model}}",
+      "refinedHint": "Corrigé avec {{model}}",
       "rawHint": "Transcrit avec Whisper {{model}}"
     },
     "actions": {

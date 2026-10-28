@@ -832,9 +832,20 @@ export function CapturesTab() {
               <div className="flex-1" />
               <span className="text-xs text-muted-foreground">
                 {showRefined && selected.transcript_refined
-                  ? t('captures.transcript.refinedHint', { model: selected.llm_model ?? llmLabel })
+                  ? t('captures.transcript.refinedHint', {
+                      // Local refinement stores only the size ("0.6B").
+                      model: selected.llm_model
+                        ? /^\d+(\.\d+)?B$/i.test(selected.llm_model)
+                          ? `Qwen3 ${selected.llm_model}`
+                          : selected.llm_model
+                        : llmLabel,
+                    })
                   : selected.stt_model
-                    ? t('captures.transcript.rawHint', { model: selected.stt_model })
+                    ? t('captures.transcript.rawHint', {
+                        // The string already says "Whisper": show "large-v3-turbo",
+                        // not "Whisper openai/whisper-large-v3-turbo".
+                        model: selected.stt_model.replace(/^.*\//, '').replace(/^whisper-/i, ''),
+                      })
                     : null}
               </span>
             </div>
@@ -843,10 +854,11 @@ export function CapturesTab() {
             <div className="rounded-xl border border-border bg-muted/10">
               <Textarea
                 key={`${selected.id}-${showRefined}`}
-                defaultValue={
-                  showRefined && selected.transcript_refined
+                // Controlled, so a refine that lands while the panel is open shows up.
+                value={
+                  (showRefined && selected.transcript_refined
                     ? selected.transcript_refined
-                    : selected.transcript_raw
+                    : selected.transcript_raw) ?? ''
                 }
                 readOnly
                 className="text-[15px] leading-relaxed min-h-[260px] border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 p-6"

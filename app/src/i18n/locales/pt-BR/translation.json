@@ -1072,6 +1072,18 @@
           "title": "Totalmente local.",
           "body": "O Whisper e o LLM de refinamento rodam no seu hardware. Sem nuvem, sem contas, sua voz nunca sai da máquina."
         },
+        "remote": {
+          "title": "O refinamento roda remotamente.",
+          "body": "O Whisper continua transcrevendo no seu hardware, mas as transcrições refinadas e as reescritas de personalidade são enviadas para {{endpoint}}. O áudio da sua voz nunca sai da máquina."
+        },
+        "sttRemote": {
+          "title": "A transcrição roda remotamente.",
+          "body": "O áudio gravado é enviado para {{endpoint}} para ser transcrito; o refinamento continua no seu hardware."
+        },
+        "cloud": {
+          "title": "Transcrição e refinamento rodam remotamente.",
+          "body": "O áudio gravado é enviado para {{stt}} para ser transcrito, e o texto para {{llm}} para ser refinado. Gravações e transcrições ficam guardadas pelo Voloz nesta máquina."
+        },
         "playAs": {
           "title": "Reproduza como qualquer voz.",
           "body": "As transcrições podem ser lidas de volta em qualquer perfil que você clonou."

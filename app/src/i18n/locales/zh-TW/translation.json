@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "精修",
       "raw": "原始",
-      "refinedHint": "由 Qwen3 · {{model}} 精修",
+      "refinedHint": "由 {{model}} 精修",
       "rawHint": "由 Whisper {{model}} 轉錄"
     },
     "actions": {

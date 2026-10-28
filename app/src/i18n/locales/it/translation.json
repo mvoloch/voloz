@@ -40,7 +40,7 @@
     "transcript": {
       "refined": "Perfezionata",
       "raw": "Grezza",
-      "refinedHint": "Perfezionata con Qwen3 · {{model}}",
+      "refinedHint": "Perfezionata con {{model}}",
       "rawHint": "Trascritto con Whisper {{model}}"
     },
     "actions": {

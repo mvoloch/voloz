@@ -1077,6 +1077,14 @@
           "title": "Refinement runs remotely.",
           "body": "Whisper still transcribes on your hardware, but refined transcripts and personality rewrites are sent to {{endpoint}}. Voice audio itself never leaves the machine."
         },
+        "sttRemote": {
+          "title": "Transcription runs remotely.",
+          "body": "Recorded audio is sent to {{endpoint}} to be transcribed; refinement stays on your hardware."
+        },
+        "cloud": {
+          "title": "Transcription and refinement run remotely.",
+          "body": "Recorded audio is sent to {{stt}} to be transcribed, and the transcript to {{llm}} to be refined. Recordings and transcripts are stored by Voloz on this machine."
+        },
         "playAs": {
           "title": "Play as any voice.",
           "body": "Transcripts can be read back in any profile you've cloned."
