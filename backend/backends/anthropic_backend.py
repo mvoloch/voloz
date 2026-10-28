@@ -18,12 +18,18 @@ from typing import Optional
 from urllib.parse import urlparse
 
 import anthropic
+import httpx2
 
 from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 60.0
+
+# Keep the pooled TLS connection alive across a whole dictation: ``warm()``
+# runs when recording starts and refinement follows the transcription, often
+# more than the SDK's default 5 s keep-alive later.
+KEEPALIVE_EXPIRY_SECONDS = 120.0
 
 # Refinement is a cleanup pass, not a reasoning task — low effort keeps
 # latency down. Thinking tokens count toward ``max_tokens``, so the cap
@@ -75,11 +81,27 @@ class AnthropicLLMBackend:
             api_key=api_key or None,
             base_url=base_url,
             timeout=timeout,
+            http_client=anthropic.DefaultAsyncHttpxClient(
+                limits=httpx2.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS),
+            ),
         )
 
     def is_loaded(self) -> bool:
         """Return ``True`` unconditionally — the remote API owns model state."""
         return True
+
+    async def warm(self) -> None:
+        """Open the pooled connection with a free call, ahead of a refinement.
+
+        Lists one model — no tokens billed — so the TLS handshake and the
+        first round trip are paid while the user is still speaking. Errors
+        are logged and swallowed: warming is best-effort and must never
+        surface to the dictation flow.
+        """
+        try:
+            await self._client.models.list(limit=1)
+        except Exception as exc:  # noqa: BLE001 — best-effort
+            logger.debug("Claude warm-up failed (ignored): %s", exc)
 
     async def load_model(self, model_size: Optional[str] = None) -> None:  # noqa: ARG002
         """No-op — remote API holds the model."""

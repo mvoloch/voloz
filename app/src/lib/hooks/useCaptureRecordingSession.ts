@@ -284,6 +284,9 @@ export function useCaptureRecordingSession(
     setFrozenElapsedMs(0);
     setPillState('recording');
     beginAudioRecording();
+    // Open the remote STT/LLM connections while the user is still speaking,
+    // so the upload after release doesn't pay the TLS handshake. Never awaited.
+    apiClient.warmupCapture().catch(() => {});
   }, [isRecording, beginAudioRecording, clearRestTimer]);
 
   const toggleRecording = useCallback(() => {

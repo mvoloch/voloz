@@ -42,19 +42,31 @@ class FakeServer:
         server = self
 
         class Handler(BaseHTTPRequestHandler):
-            def do_POST(self):
+            def _handle(self, send_body: bool = True):
                 length = int(self.headers.get("Content-Length") or 0)
                 raw = self.rfile.read(length)
                 # HTTP header names are case-insensitive; store them lower-cased.
                 headers = {k.lower(): v for k, v in self.headers.items()}
-                server.requests.append({"path": self.path, "headers": headers, "raw": raw})
+                server.requests.append(
+                    {"method": self.command, "path": self.path, "headers": headers, "raw": raw}
+                )
                 status, payload = server.script(self.path, self.headers, raw)
                 data = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
-                self.wfile.write(data)
+                if send_body:
+                    self.wfile.write(data)
+
+            def do_POST(self):
+                self._handle()
+
+            def do_GET(self):
+                self._handle()
+
+            def do_HEAD(self):
+                self._handle(send_body=False)
 
             def log_message(self, *args):
                 pass
@@ -429,3 +441,98 @@ async def test_refinement_records_claude_model_label():
             "é, oi", refinement.RefinementFlags(), model_size="0.6B"
         )
     assert (text, size) == ("Refinado.", "claude-haiku-5-5")
+
+
+# ── Warm-up of the dictation path ─────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_stt_warm_sends_head_and_upload_reuses_the_connection(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: (200, {"text": "ok"})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m", api_key="sk-or")
+        await backend.warm()
+        warmed_client = backend._client
+        await backend.transcribe(str(audio))
+    warm_req, upload_req = server.requests
+    assert (warm_req["method"], warm_req["path"]) == ("HEAD", "/v1/models")
+    assert warm_req["headers"]["authorization"] == "Bearer sk-or"
+    assert upload_req["method"] == "POST"
+    assert backend._client is warmed_client, "the upload must reuse the warmed pool"
+
+
+@pytest.mark.asyncio
+async def test_warm_never_raises_when_endpoints_are_down():
+    with FakeServer(lambda *_: (200, {})) as server:
+        dead_url = server.base_url
+    await OpenAICompatSTTBackend(endpoint=dead_url, model="m", timeout=2.0).warm()
+    await AnthropicLLMBackend(endpoint=dead_url, model="claude-haiku-5-5", api_key="k").warm()
+
+
+@pytest.mark.asyncio
+async def test_claude_warm_lists_one_model_without_messages():
+    listing = {"data": [], "has_more": False, "first_id": None, "last_id": None}
+    with FakeServer(lambda *_: (200, listing)) as server:
+        backend = AnthropicLLMBackend(endpoint=server.base_url, model="claude-haiku-5-5", api_key="k")
+        await backend.warm()
+    (req,) = server.requests
+    assert req["method"] == "GET"
+    assert req["path"].startswith("/v1/models")
+    assert "limit=1" in req["path"]
+
+
+def test_warm_audio_decoder_decodes_once_and_cleans_up(monkeypatch):
+    from backend.services import warmup
+    from backend.utils import audio as audio_utils
+
+    seen = []
+
+    def fake_load_audio(path, *args, **kwargs):
+        seen.append(path)
+        assert __import__("os").path.exists(path)
+        return None, 16_000
+
+    monkeypatch.setattr(audio_utils, "load_audio", fake_load_audio)
+    warmup.warm_audio_decoder()
+    assert len(seen) == 1
+    assert not __import__("os").path.exists(seen[0]), "temporary clip must be removed"
+
+
+@pytest.mark.asyncio
+async def test_warm_remote_backends_calls_only_remote_backends(monkeypatch):
+    from backend.services import warmup
+
+    calls = []
+
+    class Remote:
+        async def warm(self):
+            calls.append("remote")
+
+    class Local:  # no warm(): local backends are skipped
+        pass
+
+    monkeypatch.setattr("backend.backends.get_stt_backend", lambda: Remote())
+    monkeypatch.setattr("backend.backends.get_llm_backend", lambda: Local())
+    await warmup.warm_remote_backends()
+    assert calls == ["remote"]
+
+
+def test_capture_warmup_route_returns_202_immediately(monkeypatch):
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from backend.routes import captures as captures_routes
+    from backend.services import warmup
+
+    started = []
+
+    async def fake_warm():
+        started.append(True)
+
+    monkeypatch.setattr(warmup, "warm_remote_backends", fake_warm)
+    app = FastAPI()
+    app.include_router(captures_routes.router)
+    res = TestClient(app).post("/capture/warmup")
+    assert res.status_code == 202
+    assert res.json() == {"status": "warming"}

@@ -91,6 +91,22 @@ class OpenAICompatSTTBackend:
         """Return ``True`` unconditionally — the remote server owns model state."""
         return True
 
+    async def warm(self) -> None:
+        """Open the pooled connection ahead of an upload with a free request.
+
+        A ``HEAD {endpoint}/models`` is unbilled and carries no body (a full
+        ``GET`` on OpenRouter lists every model, ~1 MB), yet it pays the TCP +
+        TLS handshake and certificate loading while the user is still
+        speaking — any status code leaves a reusable connection in the pool.
+        Errors are swallowed: warming is best-effort and must never surface
+        to the dictation flow.
+        """
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            await self._get_client().head(f"{self.endpoint}/models", headers=headers, timeout=10.0)
+        except httpx.HTTPError as exc:
+            logger.debug("STT warm-up against %s failed (ignored): %s", self.endpoint, exc)
+
     def _is_model_cached(self, model_size: Optional[str] = None) -> bool:  # noqa: ARG002
         """Return ``True`` — there is nothing to download locally."""
         return True

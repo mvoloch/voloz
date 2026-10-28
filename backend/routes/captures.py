@@ -12,7 +12,9 @@ from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import captures as captures_service
 from ..services import settings as settings_service
+from ..services import warmup as warmup_service
 from ..services.refinement import RefinementFlags
+from ..services.task_queue import create_background_task
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +154,18 @@ async def refine_capture_endpoint(
     if not capture:
         raise HTTPException(status_code=404, detail="Capture not found")
     return capture
+
+
+@router.post("/capture/warmup", status_code=202)
+async def capture_warmup_endpoint():
+    """Pre-open remote STT / LLM connections; the app calls this when recording starts.
+
+    Returns at once — the warm-up runs in the background so starting a
+    recording never waits on the network, and the TLS handshake overlaps
+    the user's speech instead of following it.
+    """
+    create_background_task(warmup_service.warm_remote_backends())
+    return {"status": "warming"}
 
 
 @router.get("/capture/readiness", response_model=models.CaptureReadinessResponse)

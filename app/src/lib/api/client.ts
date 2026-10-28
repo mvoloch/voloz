@@ -505,6 +505,11 @@ class ApiClient {
     return this.request<CaptureReadinessResponse>('/capture/readiness');
   }
 
+  /** Ask the server to pre-open remote STT/LLM connections; fire-and-forget. */
+  async warmupCapture(): Promise<void> {
+    await this.request<{ status: string }>('/capture/warmup', { method: 'POST' });
+  }
+
   async updateCaptureSettings(patch: CaptureSettingsUpdate): Promise<CaptureSettings> {
     return this.request<CaptureSettings>('/settings/captures', {
       method: 'PUT',

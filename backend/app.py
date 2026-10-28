@@ -342,6 +342,12 @@ async def _run_startup(application: FastAPI) -> None:
     create_background_task(check_and_update_cuda_binary())
     create_background_task(check_and_update_rocm_binary())
 
+    # Pay the first-capture costs (audio-decoder loading, TLS to remote
+    # STT/LLM endpoints) now instead of on the user's first dictation.
+    from .services.warmup import warm_on_startup
+
+    create_background_task(warm_on_startup())
+
     try:
         progress_manager = get_progress_manager()
         progress_manager._set_main_loop(asyncio.get_running_loop())
