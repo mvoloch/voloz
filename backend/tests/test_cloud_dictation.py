@@ -443,6 +443,88 @@ async def test_refinement_records_claude_model_label():
     assert (text, size) == ("Refinado.", "claude-haiku-5-5")
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transcript", ["", "   ", "Obrigado. " * 8])
+async def test_refinement_skips_the_llm_when_nothing_is_left_to_refine(transcript):
+    """Silence (or Whisper's silence loop) must not reach the LLM: Claude
+    rejects an empty message and a local model would invent text."""
+    from backend.backends import _OPENAI_COMPAT_CACHE_KEY, _llm_backends
+    from backend.services import refinement
+
+    with FakeServer(lambda *_: _claude_reply("Inventado.")) as server:
+        set_llm_config(server.base_url, "claude-haiku-5-5", "k")
+        _llm_backends[_OPENAI_COMPAT_CACHE_KEY] = AnthropicLLMBackend(
+            endpoint=server.base_url, model="claude-haiku-5-5", api_key="k"
+        )
+        text, _size = await refinement.refine_transcript(transcript, refinement.RefinementFlags())
+    assert text == ""
+    assert server.requests == []
+
+
+@pytest.mark.asyncio
+async def test_claude_reply_cut_off_at_max_tokens_is_an_error():
+    """A truncated refinement must not be pasted as if it were complete."""
+    with FakeServer(lambda *_: _claude_reply("Texto cortado pela met", stop_reason="max_tokens")) as server:
+        backend = AnthropicLLMBackend(endpoint=server.base_url, model="claude-haiku-5-5", api_key="k")
+        with pytest.raises(RuntimeError, match="max_tokens"):
+            await backend.generate(prompt="x")
+
+
+def test_moving_an_endpoint_to_another_host_drops_its_stored_key(tmp_path):
+    """A key belongs to the host it was entered for; switching OpenRouter to
+    Groq without a new key must not send the OpenRouter key to Groq."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from backend.database.models import Base
+    from backend.services import settings as settings_service
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'settings.db'}")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    update = settings_service.update_capture_settings
+    try:
+        update(
+            db,
+            {
+                "custom_stt_endpoint": "https://openrouter.ai/api/v1",
+                "custom_stt_model": "openai/whisper-large-v3-turbo",
+                "custom_stt_api_key": "sk-or-old",
+                "custom_llm_endpoint": "https://api.anthropic.com/v1",
+                "custom_llm_model": "claude-haiku-5-5",
+                "custom_llm_api_key": "sk-ant-old",
+            },
+        )
+
+        # Same host, different path: the key stays.
+        row = update(db, {"custom_stt_endpoint": "https://openrouter.ai/api/v1/"})
+        assert row.custom_stt_api_key == "sk-or-old"
+
+        # Another host, no key in the same request: the key is dropped, and
+        # the live backend has none either.
+        row = update(db, {"custom_stt_endpoint": "https://api.groq.com/openai/v1"})
+        assert row.custom_stt_api_key is None
+        assert not get_stt_backend().api_key
+
+        # Endpoint and key together: the new key is kept.
+        row = update(
+            db, {"custom_stt_endpoint": "https://openrouter.ai/api/v1", "custom_stt_api_key": "sk-or-new"}
+        )
+        assert row.custom_stt_api_key == "sk-or-new"
+
+        # Same rule for the refinement endpoint; the other side is untouched.
+        row = update(db, {"custom_llm_endpoint": "https://openrouter.ai/api/v1"})
+        assert row.custom_llm_api_key is None
+        assert row.custom_stt_api_key == "sk-or-new"
+
+        # Clearing an endpoint (back to local) keeps the key.
+        update(db, {"custom_llm_api_key": "sk-or-llm"})
+        row = update(db, {"custom_llm_endpoint": None})
+        assert row.custom_llm_api_key == "sk-or-llm"
+    finally:
+        db.close()
+
+
 # ── Warm-up of the dictation path ─────────────────────────────────────────
 
 

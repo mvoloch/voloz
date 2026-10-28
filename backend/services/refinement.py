@@ -282,6 +282,10 @@ async def refine_transcript(
     # Pre-process before the LLM sees the text — the model shouldn't have
     # to reason about obvious STT garbage (see ``collapse_repetitive_artifacts``).
     cleaned_input = collapse_repetitive_artifacts(transcript)
+    if not cleaned_input.strip():
+        # Silence or a dropped silence loop. Claude rejects an empty message
+        # and a local model would make something up, so there is nothing to do.
+        return "", resolved_size
 
     system_prompt = build_refinement_prompt(flags)
     text = await backend.generate(

@@ -128,7 +128,8 @@ class AnthropicLLMBackend:
 
         Raises:
             RuntimeError: The API returned an error status, could not be
-                reached, or declined the request (``stop_reason: refusal``).
+                reached, declined the request (``stop_reason: refusal``), or
+                stopped at ``max_tokens`` before finishing the text.
             ValueError: The response carried no text block.
         """
         messages: list[dict] = []
@@ -160,6 +161,10 @@ class AnthropicLLMBackend:
 
         if response.stop_reason == "refusal":
             raise RuntimeError(f"Claude ({self.model}) declined to process this text")
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError(
+                f"Claude ({self.model}) stopped at max_tokens before finishing the text"
+            )
         text = "".join(block.text for block in response.content if block.type == "text").strip()
         if not text:
             raise ValueError(f"No text in Claude response (stop_reason={response.stop_reason})")

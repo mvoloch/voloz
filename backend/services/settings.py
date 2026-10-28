@@ -8,6 +8,7 @@ an ``update_*`` that accepts a partial payload.
 """
 
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
 
@@ -89,6 +90,21 @@ def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSett
     personality calls route to the new URL without needing a restart.
     """
     row = _get_or_create_capture_row(db)
+    # A key belongs to the host it was entered for. When an endpoint moves to
+    # another host and the same request brings no key, drop the old key
+    # instead of sending it to the new host.
+    for endpoint_field, key_field in (
+        ("custom_stt_endpoint", "custom_stt_api_key"),
+        ("custom_llm_endpoint", "custom_llm_api_key"),
+    ):
+        new_endpoint = patch.get(endpoint_field)
+        old_endpoint = getattr(row, endpoint_field)
+        if (
+            new_endpoint
+            and key_field not in patch
+            and urlparse(new_endpoint).hostname != urlparse(old_endpoint or "").hostname
+        ):
+            patch = {**patch, key_field: None}
     _apply_patch(row, patch)
     db.commit()
     db.refresh(row)
