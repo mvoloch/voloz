@@ -34,7 +34,8 @@ def _healthy(port: int) -> bool:
         return False
 
 
-def test_server_exits_when_parent_dies(tmp_path):
+def _start_server_with_parent(tmp_path):
+    """Start a stand-in parent and the real server watching it; wait until healthy."""
     parent = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
     port = _free_port()
     server = subprocess.Popen(
@@ -50,13 +51,25 @@ def test_server_exits_when_parent_dies(tmp_path):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    try:
-        deadline = time.monotonic() + 120
-        while not _healthy(port):
-            assert server.poll() is None, f"server exited early with code {server.returncode}"
-            assert time.monotonic() < deadline, "server did not become healthy within 120 s"
-            time.sleep(0.5)
+    deadline = time.monotonic() + 120
+    while not _healthy(port):
+        if server.poll() is not None or time.monotonic() > deadline:
+            _kill(server, parent)
+            raise AssertionError(f"server never became healthy (exit code {server.returncode})")
+        time.sleep(0.5)
+    return parent, server, port
 
+
+def _kill(*procs):
+    for proc in procs:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+
+
+def test_server_exits_when_parent_dies(tmp_path):
+    parent, server, _port = _start_server_with_parent(tmp_path)
+    try:
         log = tmp_path / "logs" / "watchdog.log"
         assert log.exists() and "Parent watchdog started" in log.read_text(), (
             "parent watchdog never started"
@@ -67,7 +80,20 @@ def test_server_exits_when_parent_dies(tmp_path):
         # The watchdog polls every 2 s and waits 1 s for a keep-running request.
         server.wait(timeout=20)
     finally:
-        for proc in (server, parent):
-            if proc.poll() is None:
-                proc.kill()
-                proc.wait()
+        _kill(server, parent)
+
+
+def test_watchdog_disable_keeps_the_server_running(tmp_path):
+    """POST /watchdog/disable is what "keep server running after close" sends."""
+    parent, server, port = _start_server_with_parent(tmp_path)
+    try:
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/watchdog/disable", method="POST")
+        urllib.request.urlopen(request, timeout=5).close()
+        parent.kill()
+        parent.wait()
+        # Twice the watchdog's 2 s poll plus its 1 s grace period.
+        time.sleep(6)
+        assert server.poll() is None, "server exited although keep-running was requested"
+        assert _healthy(port)
+    finally:
+        _kill(server, parent)

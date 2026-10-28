@@ -140,6 +140,13 @@ def disable_watchdog():
     """Disable the parent watchdog so the server keeps running after parent exits."""
     global _watchdog_disabled
     _watchdog_disabled = True
+    # The route imports this as ``backend.server``, a second copy of the module
+    # (the server runs this file as ``__main__``), so the flag above never
+    # reaches the watchdog thread. Leave the sentinel it checks instead.
+    try:
+        (config.get_data_dir() / ".keep-running").touch()
+    except OSError as e:
+        logger.warning(f"Could not write the .keep-running sentinel: {e}")
     # Ignore SIGHUP so the server survives when the parent Tauri process exits.
     # On Unix, child processes receive SIGHUP when the parent's session leader
     # exits, which would kill the server even though we want it to persist.
