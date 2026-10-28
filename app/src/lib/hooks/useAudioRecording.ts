@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import i18n from '@/i18n';
 import { usePlatform } from '@/platform/PlatformContext';
 import { convertToWav } from '@/lib/utils/audio';
+
+/** The user-facing message for a getUserMedia / recorder failure. */
+function microphoneErrorMessage(err: unknown): string {
+  if (err instanceof DOMException && err.name === 'NotAllowedError') {
+    return i18n.t('common.microphone.permissionDenied');
+  }
+  if (err instanceof DOMException && err.name === 'NotFoundError') {
+    return i18n.t('common.microphone.notFound');
+  }
+  return err instanceof Error ? err.message : i18n.t('common.microphone.accessFailed');
+}
 
 interface UseAudioRecordingOptions {
   maxDurationSeconds?: number;
@@ -60,8 +72,8 @@ export function useAudioRecording({
           });
 
           const errorMsg = platform.metadata.isTauri
-            ? 'Microphone access is not available. Please ensure:\n1. The app has microphone permissions in System Settings (macOS: System Settings > Privacy & Security > Microphone)\n2. You restart the app after granting permissions\n3. You are using Tauri v2 with a webview that supports getUserMedia'
-            : 'Microphone access is not available. Please ensure you are using a secure context (HTTPS or localhost) and that your browser has microphone permissions enabled.';
+            ? i18n.t('common.microphone.unavailableApp')
+            : i18n.t('common.microphone.unavailableBrowser');
           setError(errorMsg);
           throw new Error(errorMsg);
         }
@@ -129,7 +141,7 @@ export function useAudioRecording({
       };
 
       mediaRecorder.onerror = (event) => {
-        setError('Recording error occurred');
+        setError(i18n.t('common.microphone.recordingError'));
         console.error('MediaRecorder error:', event);
       };
 
@@ -176,11 +188,7 @@ export function useAudioRecording({
     } catch (err) {
       startingRef.current = false;
       stopRequestedRef.current = false;
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : 'Failed to access microphone. Please check permissions.';
-      setError(errorMessage);
+      setError(microphoneErrorMessage(err));
       setIsRecording(false);
     }
   }, [maxDurationSeconds, onRecordingComplete]);

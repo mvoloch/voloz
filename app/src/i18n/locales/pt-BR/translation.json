@@ -9,7 +9,15 @@
     "loading": "Carregando…",
     "error": "Erro",
     "unknown": "Desconhecido",
-    "unknownError": "Erro desconhecido"
+    "unknownError": "Erro desconhecido",
+    "microphone": {
+      "unavailableApp": "O microfone não está disponível. Verifique:\n1. Se o app tem permissão de microfone nas configurações do sistema (macOS: Ajustes do Sistema > Privacidade e Segurança > Microfone)\n2. Se você reiniciou o app depois de dar a permissão\n3. Se está usando o Tauri v2 com um webview que suporta getUserMedia",
+      "unavailableBrowser": "O microfone não está disponível. Use um contexto seguro (HTTPS ou localhost) e permita o microfone no navegador.",
+      "permissionDenied": "Permissão do microfone negada. Libere o acesso ao microfone nas configurações do sistema.",
+      "notFound": "Nenhum microfone encontrado.",
+      "accessFailed": "Não foi possível acessar o microfone. Verifique as permissões.",
+      "recordingError": "Ocorreu um erro na gravação"
+    }
   },
   "nav": {
     "home": "Início",
@@ -105,7 +113,10 @@
       "completed": "Concluído",
       "stopAria": "Parar gravação",
       "errorFallback": "Algo deu errado",
-      "errorCopyTooltip": "Clique para copiar o erro"
+      "errorCopyTooltip": "Clique para copiar o erro",
+      "tooShort": "Gravação muito curta, cancelada",
+      "refineFailed": "Falha no refinamento",
+      "uploadFailed": "Falha no envio"
     },
     "chord": {
       "capturing": "Capturando…",

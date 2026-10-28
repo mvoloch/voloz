@@ -9,7 +9,15 @@
     "loading": "Loading…",
     "error": "Error",
     "unknown": "Unknown",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "microphone": {
+      "unavailableApp": "Microphone access is not available. Please ensure:\n1. The app has microphone permissions in System Settings (macOS: System Settings > Privacy & Security > Microphone)\n2. You restart the app after granting permissions\n3. You are using Tauri v2 with a webview that supports getUserMedia",
+      "unavailableBrowser": "Microphone access is not available. Please ensure you are using a secure context (HTTPS or localhost) and that your browser has microphone permissions enabled.",
+      "permissionDenied": "Microphone permission denied. Allow microphone access in your system settings.",
+      "notFound": "No microphone found.",
+      "accessFailed": "Failed to access microphone. Please check permissions.",
+      "recordingError": "Recording error occurred"
+    }
   },
   "nav": {
     "home": "Home",
@@ -105,7 +113,10 @@
       "completed": "Done",
       "stopAria": "Stop recording",
       "errorFallback": "Something went wrong",
-      "errorCopyTooltip": "Click to copy error"
+      "errorCopyTooltip": "Click to copy error",
+      "tooShort": "Recording too short, canceled",
+      "refineFailed": "Refinement failed",
+      "uploadFailed": "Upload failed"
     },
     "chord": {
       "capturing": "Capturing…",
