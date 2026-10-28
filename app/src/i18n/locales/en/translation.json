@@ -1329,5 +1329,16 @@
       "migrationFailedGeneric": "Failed to migrate models",
       "migrationConnectionLost": "Lost connection during migration"
     }
+  },
+  "startup": {
+    "messages": {
+      "starting": "Starting Voloz…",
+      "transcriber": "Waking up the transcriber…",
+      "listening": "Getting ready to listen…",
+      "words": "Lining up your words…",
+      "almost": "Almost ready…"
+    },
+    "failed": "Server startup failed",
+    "retry": "Retry"
   }
 }

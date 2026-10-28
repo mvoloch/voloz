@@ -1295,5 +1295,16 @@
       "migrationFailedGeneric": "Falha ao migrar os modelos",
       "migrationConnectionLost": "Conexão perdida durante a migração"
     }
+  },
+  "startup": {
+    "messages": {
+      "starting": "Iniciando o Voloz…",
+      "transcriber": "Acordando a transcrição…",
+      "listening": "Preparando para ouvir…",
+      "words": "Alinhando suas palavras…",
+      "almost": "Quase pronto…"
+    },
+    "failed": "Falha ao iniciar o servidor",
+    "retry": "Tentar de novo"
   }
 }

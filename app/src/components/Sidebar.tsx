@@ -47,7 +47,7 @@ export function Sidebar({ isMacOS }: SidebarProps) {
     >
       {/* Logo */}
       <div className="mb-2">
-        <img src={volozLogo} alt="Voloz" className="sidebar-logo w-12 h-12 object-contain" />
+        <img src={volozLogo} alt="Voloz" className="w-12 h-12 object-contain" />
       </div>
 
       {/* Navigation Buttons */}
