@@ -132,8 +132,15 @@ pub(crate) const SERVER_PORT: u16 = 17493;
 /// responsible for checking port occupancy first (e.g. `TcpStream::connect_timeout`).
 /// Replaces the previous `netstat -ano` approach which failed on systems with
 /// corrupted system DLLs (see #277).
+/// Process creation flag that keeps a console tool (PowerShell, tasklist,
+/// taskkill, the server's `--version` probe) from flashing a console window
+/// out of this GUI app.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[cfg(windows)]
 fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
+    use std::os::windows::process::CommandExt;
     use std::process::Command;
 
     // Use PowerShell's Get-NetTCPConnection to find the PID listening on the port.
@@ -144,6 +151,7 @@ fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
     );
     if let Ok(output) = Command::new("powershell")
         .args(["-NoProfile", "-Command", &ps_script])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
     {
         let output_str = String::from_utf8_lossy(&output.stdout);
@@ -152,6 +160,7 @@ fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
                 // Verify this PID is a voicebox process
                 if let Ok(tasklist_output) = Command::new("tasklist")
                     .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .output()
                 {
                     let tasklist_str = String::from_utf8_lossy(&tasklist_output.stdout);
@@ -164,6 +173,49 @@ fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
     }
 
     None
+}
+
+/// Version the server on `port` reports at `/` (`{"message": "voicebox API",
+/// "version": ...}`), or `None` if nothing answers there with that shape.
+async fn running_server_version(port: u16) -> Option<String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .ok()?;
+    let body: serde_json::Value = client
+        .get(format!("http://127.0.0.1:{}/", port))
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    body.get("version")?.as_str().map(String::from)
+}
+
+/// Ask the server on `port` to shut down and wait (up to 10 s) for the port to free up.
+async fn stop_stale_server(port: u16) -> Result<(), String> {
+    if let Ok(client) = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+    {
+        let _ = client
+            .post(format!("http://127.0.0.1:{}/shutdown", port))
+            .send()
+            .await;
+    }
+    let addr: std::net::SocketAddr = format!("127.0.0.1:{}", port).parse().unwrap();
+    for _ in 0..50 {
+        if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(200)).is_err() {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+    Err(format!(
+        "A server from another Voloz version is still running on port {}. \
+         End voicebox-server in Task Manager and reopen Voloz.",
+        port
+    ))
 }
 
 /// Check if a Voicebox server is responding on the given port.
@@ -248,6 +300,8 @@ async fn probe_binary_version(exe: &std::path::Path, cwd: &std::path::Path) -> O
     cmd.arg("--version")
         .current_dir(cwd)
         .kill_on_drop(true);
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     match tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output()).await {
         Ok(Ok(output)) => {
@@ -283,6 +337,20 @@ async fn start_server(
     // Check if server is already running (managed by this app instance)
     if state.child.lock().unwrap().is_some() {
         return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
+    }
+
+    // An update replaces the app but can leave the previous version's server
+    // running, and the reuse checks below would keep using it (the new UI
+    // talking to the old API). Stop a server whose version isn't this app's.
+    if let Some(server_version) = running_server_version(SERVER_PORT).await {
+        let app_version = app.package_info().version.to_string();
+        if server_version != app_version {
+            println!(
+                "Server on port {} is version {}, this app is {}; stopping it",
+                SERVER_PORT, server_version, app_version
+            );
+            stop_stale_server(SERVER_PORT).await?;
+        }
     }
 
     // Check if a voicebox server is already running on our port (from previous session with keep_running=true,
@@ -398,8 +466,10 @@ async fn start_server(
         ).is_ok() {
             if let Some(pid) = find_voicebox_pid_on_port(LEGACY_PORT) {
                 println!("Found orphaned voicebox-server on legacy port {} (PID: {}), killing it...", LEGACY_PORT, pid);
+                use std::os::windows::process::CommandExt;
                 let _ = std::process::Command::new("taskkill")
                     .args(["/PID", &pid.to_string(), "/T", "/F"])
+                    .creation_flags(CREATE_NO_WINDOW)
                     .output();
             }
         }
@@ -713,6 +783,12 @@ async fn start_server(
                 }
             }
 
+            // Forget the child, or every later start_server (Retry, reopening
+            // from the tray) would report this dead server as running.
+            if let Some(child) = state.child.lock().unwrap().take() {
+                let _ = child.kill();
+            }
+            state.server_pid.lock().unwrap().take();
             return Err("Server startup timeout - check Console.app for detailed logs".to_string());
         }
 
@@ -789,6 +865,8 @@ async fn start_server(
                     eprintln!("Server process ended unexpectedly during startup!");
                     eprintln!("The server binary may have crashed or exited with an error.");
                     eprintln!("Check Console.app logs for more details (search for 'voicebox')");
+                    state.child.lock().unwrap().take();
+                    state.server_pid.lock().unwrap().take();
                     return Err("Server process ended unexpectedly".to_string());
                 }
             }
@@ -819,6 +897,18 @@ async fn start_server(
                         "stream": "stderr",
                         "line": line_str.trim_end(),
                     }));
+                }
+                tauri_plugin_shell::process::CommandEvent::Terminated(payload) => {
+                    eprintln!("Server process exited (code {:?})", payload.code);
+                    // Let the next start_server spawn a new server instead of
+                    // reporting this one as running. Only if it is still the
+                    // current one: a restart may already have replaced it.
+                    let state = app_handle.state::<ServerState>();
+                    let is_current = *state.server_pid.lock().unwrap() == Some(process_pid);
+                    if is_current {
+                        state.server_pid.lock().unwrap().take();
+                        state.child.lock().unwrap().take();
+                    }
                 }
                 _ => {}
             }
@@ -1670,6 +1760,21 @@ pub fn run() {
                         // this process exits. On Unix, also send SIGTERM for
                         // immediate cleanup.
                         println!("RunEvent::Exit - server will self-terminate via watchdog");
+
+                        // The watchdog takes ~3 s to notice, and a server this
+                        // app reused is not watching it at all; a relaunch in
+                        // that window would reuse a server about to exit. Ask
+                        // our server (one we know the PID of) to stop now.
+                        if has_pid {
+                            if let Ok(client) = reqwest::blocking::Client::builder()
+                                .timeout(std::time::Duration::from_secs(1))
+                                .build()
+                            {
+                                let _ = client
+                                    .post(format!("http://127.0.0.1:{}/shutdown", SERVER_PORT))
+                                    .send();
+                            }
+                        }
 
                         #[cfg(unix)]
                         {
