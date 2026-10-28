@@ -5,6 +5,27 @@
 
 # Changelog
 
+## [0.8.0] - 2026-10-27
+
+Windows only for now; the installer is not code-signed yet. Upgrading from 0.7.0 keeps your settings and keys.
+
+### Added
+
+- **New look:** lime accent instead of Voicebox gold, an animated Voloz wordmark on the startup screen, and dictation-themed startup and error messages.
+- **Dictation-first home:** Home (`/`) is now your dictation history: the shortcut to press, Dictate here / Import audio / Dictation settings, totals (words, dictations, minutes), search, and dictations grouped by day. Clicking one opens its details in a side panel.
+- **Faster first dictation:** at startup Voloz decodes a silent clip (loads the audio libraries) and opens the connections to the transcription and refinement endpoints; when you start recording it opens them again while you speak (`POST /capture/warmup`). Connections stay alive for 2 minutes.
+
+### Changed
+
+- Sidebar with labels: Home first, the voice studio grouped below (Generate, Stories, Voices, Effects, Models), Settings at the bottom. Generate moved to `/generate`; `/captures` redirects to Home.
+- The model line shows the transcription and refinement models actually in use (e.g. `whisper-large-v3-turbo · claude-haiku-5-5`) instead of always "Whisper · Qwen3".
+- Settings: the Captures tab is now Dictation and comes second.
+- Portuguese: Stories is now "Roteiros".
+
+### Fixed
+
+- `test_progress.py::test_hf_progress_tracker` simulated a download below the tracker's 1 MB reporting floor and always failed (also sent upstream: jamiepine/voicebox#1220).
+
 ## [0.7.0] - 2026-10-27
 
 **First release as Voloz** — a fork of [Voicebox](https://github.com/jamiepine/voicebox) by Jamie Pine, focused on dictation. Windows only for now; the installer is not code-signed yet.

@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-27. Update this file whenever state or decisions change._
+_Last updated: 2026-10-27 (0.8.0). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -69,7 +69,7 @@ Memory, app idle on Windows: 1.24 GB (WebView2 785 MB in 9 processes,
 Python server 362 MB — ~337 MB of it is PyTorch loaded at startup, Rust
 89 MB). Idle CPU ~0.
 
-### First-dictation latency (fixed in `200c026`, not yet in an installer)
+### First-dictation latency (fixed in `200c026`, shipped in 0.8.0)
 
 Installed 0.7.0 on the Dell: first dictation after launch 15.3 s, later
 ones 1.1–3.3 s. Measured in a fresh process: first audio decode 1.36 s
@@ -116,10 +116,12 @@ Release a Windows build: bump the version in the files listed in
 `.bumpversion.cfg`, commit on `wisprclone`, then push a `v<version>` tag to
 `origin`. The installer lands in a draft release.
 
-Test baseline on GB4 (2026-10-27, `wisprclone` at `f3e4f70`): pytest
-376 passed / 1 failed / 13 skipped in 42 s — the failure,
-`test_progress.py::test_hf_progress_tracker`, also fails on clean upstream;
-`tsc` clean; `cargo check` clean. On Windows the branch had the same 5–6
+Test baseline on GB4 (2026-10-27, `wisprclone` at 0.8.0): pytest
+383 passed / 0 failed / 13 skipped; `tsc` clean; `cargo check` clean.
+`biome check` has 8 pre-existing findings in files the fork touched
+(import order, formatting, two a11y rules) — none introduced by the fork.
+The old `test_hf_progress_tracker` failure was a stale test, fixed here
+and upstream (jamiepine/voicebox#1220). On Windows the branch had the same 5–6
 environment-only failures as clean upstream (ffmpeg/ROCm/HF cache/offline
 guard/progress).
 
