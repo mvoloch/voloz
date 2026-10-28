@@ -722,14 +722,13 @@ export function CapturesTab() {
             ) : filtered.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 {search ? (
-                  <p>{t('captures.empty.noMatches', { query: search })}</p>
+                  <p>{t('home.empty.noMatches', { query: search })}</p>
                 ) : (
                   <div className="space-y-2">
                     <Captions className="h-8 w-8 mx-auto opacity-40" />
-                    <p>{t('captures.empty.none')}</p>
-                    <p className="text-xs">
-                      {hasHotkey ? t('captures.empty.pressShortcut') : t('home.hero.noShortcutHint')}
-                    </p>
+                    <p>{t('home.empty.none')}</p>
+                    {/* Without a shortcut the hero above already shows this hint. */}
+                    {hasHotkey ? <p className="text-xs">{t('captures.empty.pressShortcut')}</p> : null}
                   </div>
                 )}
               </div>

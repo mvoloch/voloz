@@ -1313,6 +1313,10 @@
     "today": "Hoje",
     "yesterday": "Ontem",
     "details": "Detalhes do ditado",
+    "empty": {
+      "none": "Nenhum ditado ainda.",
+      "noMatches": "Nenhum ditado corresponde a \"{{query}}\""
+    },
     "hero": {
       "hold": "Segure",
       "speak": "e fale.",

@@ -1347,6 +1347,10 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "details": "Dictation details",
+    "empty": {
+      "none": "No dictations yet.",
+      "noMatches": "No dictations match \"{{query}}\""
+    },
     "hero": {
       "hold": "Hold",
       "speak": "and speak.",
