@@ -12,6 +12,8 @@
     "unknownError": "Unknown error"
   },
   "nav": {
+    "home": "Home",
+    "studio": "Studio",
     "generate": "Generate",
     "stories": "Stories",
     "captures": "Captures",
@@ -40,7 +42,7 @@
     "transcript": {
       "refined": "Refined",
       "raw": "Raw",
-      "refinedHint": "Refined with Qwen3 · {{model}}",
+      "refinedHint": "Refined with {{model}}",
       "rawHint": "Transcribed with Whisper {{model}}"
     },
     "actions": {
@@ -759,7 +761,7 @@
     "tabs": {
       "general": "General",
       "generation": "Generation",
-      "captures": "Captures",
+      "captures": "Dictation",
       "mcp": "MCP",
       "gpu": "GPU",
       "logs": "Logs",
@@ -1340,5 +1342,29 @@
     },
     "failed": "Server startup failed",
     "retry": "Retry"
+  },
+  "home": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "details": "Dictation details",
+    "hero": {
+      "hold": "Hold",
+      "speak": "and speak.",
+      "holdHint": "Release the keys and Voloz types it where your cursor is.",
+      "toggleBefore": "Or press",
+      "toggleAfter": "to talk hands-free.",
+      "noShortcut": "Dictate in any app.",
+      "noShortcutHint": "Turn on the global shortcut in dictation settings, or use Dictate here."
+    },
+    "actions": {
+      "dictate": "Dictate here",
+      "import": "Import audio",
+      "configure": "Dictation settings"
+    },
+    "stats": {
+      "words": "words dictated",
+      "captures": "dictations",
+      "minutes": "minutes of speech"
+    }
   }
 }

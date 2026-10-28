@@ -43,7 +43,7 @@ function RootLayout() {
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <Sidebar isMacOS={isMacOS()} />
 
-        <main className="flex-1 ml-20 overflow-hidden flex flex-col">
+        <main className="flex-1 ml-[14.5rem] overflow-hidden flex flex-col">
           <div className="container mx-auto px-8 max-w-[1800px] h-full overflow-hidden flex flex-col">
             <Outlet />
           </div>
@@ -92,10 +92,17 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Index route (main/generate)
+// Index route: dictation home (capture history)
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  component: CapturesTab,
+});
+
+// Generate route (voice studio)
+const generateRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/generate',
   component: MainEditor,
 });
 
@@ -113,11 +120,13 @@ const voicesRoute = createRoute({
   component: VoicesTab,
 });
 
-// Captures route (prototype — will replace AudioTab once the new flow is ready)
+// Old captures path: the capture history is now the home screen
 const capturesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/captures',
-  component: CapturesTab,
+  beforeLoad: () => {
+    throw redirect({ to: '/' });
+  },
 });
 
 // Effects route
@@ -202,6 +211,7 @@ const serverRedirectRoute = createRoute({
 // Route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  generateRoute,
   storiesRoute,
   capturesRoute,
   voicesRoute,

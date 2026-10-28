@@ -27,7 +27,7 @@ function getDateLocale() {
 
 // Backend timestamps are naive UTC — append `Z` so JS doesn't parse a
 // timezone-less date-time string as local time.
-function parseServerDate(date: string | Date): Date {
+export function parseServerDate(date: string | Date): Date {
   if (typeof date !== 'string') {
     return date;
   }
