@@ -15,6 +15,9 @@ Rules:
 - Keep `feat/*` branches upstream-clean (they may become PRs to
   jamiepine/voicebox). Fork-only config (updater, release workflow, branding)
   belongs on `wisprclone`.
+- Every fix or improvement that is not Voloz-specific gets a row in
+  @UPSTREAM.md. Do not open PRs on jamiepine/voicebox without the owner's go;
+  the list is how we give the work back later.
 - Match the surrounding code: docstrings, error messages that name the
   endpoint, `Optional[...]` in Python files that already use it.
 - Record a test baseline before changing code and report the delta
