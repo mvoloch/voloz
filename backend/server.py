@@ -311,14 +311,6 @@ if __name__ == "__main__":
 
         logger.info(f"Backend variant: {os.environ.get('VOICEBOX_BACKEND_VARIANT', 'cpu').upper()}")
 
-        # Register parent watchdog to start after server is fully ready
-        if args.parent_pid is not None:
-            _parent_pid = args.parent_pid
-            _data_dir = args.data_dir
-            @app.on_event("startup")
-            async def _on_startup():
-                _start_parent_watchdog(_parent_pid, _data_dir)
-
         logger.info(f"Parsed arguments: host={args.host}, port={args.port}, data_dir={args.data_dir}")
 
         # Set data directory if provided
@@ -330,6 +322,12 @@ if __name__ == "__main__":
         logger.info("Initializing database...")
         database.init_db()
         logger.info("Database initialized successfully")
+
+        # Start the parent watchdog here rather than in an
+        # @app.on_event("startup") hook: the app is built with a lifespan,
+        # and FastAPI ignores on_event handlers when one is set.
+        if args.parent_pid is not None:
+            _start_parent_watchdog(args.parent_pid, args.data_dir)
 
         logger.info(f"Starting uvicorn server on {args.host}:{args.port}...")
         uvicorn.run(
