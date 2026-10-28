@@ -24,6 +24,7 @@ import numpy as np
 
 from . import TTSBackend
 from .base import (
+    serialize_model_load,
     get_torch_device,
     combine_voice_prompts as _combine_voice_prompts,
     model_load_progress,
@@ -158,6 +159,7 @@ class KokoroTTSBackend:
             required_files=["config.json", "kokoro-v1_0.pth"],
         )
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "default") -> None:
         """Load the Kokoro model."""
         if self._model is not None:

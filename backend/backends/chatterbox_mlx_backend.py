@@ -22,6 +22,7 @@ import numpy as np
 
 from . import CHATTERBOX_MLX_S3_TOKENIZER_REPO
 from .base import (
+    serialize_model_load,
     combine_voice_prompts as _combine_voice_prompts,
     is_model_cached,
     model_load_progress,
@@ -60,6 +61,7 @@ class ChatterboxMLXTTSBackend:
         tokenizer_cached = is_model_cached(S3_TOKENIZER_HF_REPO, required_files=_S3_TOKENIZER_FILES)
         return model_cached and tokenizer_cached
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "default") -> None:
         """Load the Chatterbox multilingual MLX model."""
         if self.model is not None:

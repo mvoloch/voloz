@@ -5,6 +5,8 @@ Eliminates duplication of cache checking, device detection,
 voice prompt combination, and model loading progress tracking.
 """
 
+import asyncio
+import functools
 import logging
 import os
 import platform
@@ -289,6 +291,25 @@ async def combine_voice_prompts(
     combined_text = " ".join(reference_texts)
 
     return mixed, combined_text
+
+
+def serialize_model_load(load):
+    """Run one model load at a time per backend instance.
+
+    A load checks whether the model is already loaded and then awaits the
+    load in a worker thread, so two requests that arrive while the model is
+    unloaded (two quick dictations, a generation during a manual load) both
+    loaded it and held two copies in memory. Under this lock the second
+    caller waits, then finds the model loaded.
+    """
+
+    @functools.wraps(load)
+    async def wrapper(self, *args, **kwargs):
+        lock = self.__dict__.setdefault("_model_load_lock", asyncio.Lock())
+        async with lock:
+            return await load(self, *args, **kwargs)
+
+    return wrapper
 
 
 @contextmanager

@@ -22,6 +22,7 @@ import numpy as np
 
 from . import TTSBackend
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     empty_device_cache,
@@ -92,6 +93,7 @@ class HumeTadaBackend:
         tokenizer_cached = is_model_cached(TADA_TOKENIZER_REPO, required_files=_TADA_TOKENIZER_FILES)
         return model_cached and codec_cached and tokenizer_cached
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "1B") -> None:
         """Load the TADA model and encoder."""
         if self.model is not None and self.model_size == model_size:

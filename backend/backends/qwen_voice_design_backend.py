@@ -24,6 +24,7 @@ import torch
 
 from . import TTSBackend, LANGUAGE_CODE_TO_NAME
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     combine_voice_prompts as _combine_voice_prompts,
@@ -72,6 +73,7 @@ class QwenVoiceDesignBackend:
         size = model_size or self.model_size
         return is_model_cached(self._get_model_path(size))
 
+    @serialize_model_load
     async def load_model_async(self, model_size: Optional[str] = None) -> None:
         if model_size is None:
             model_size = self.model_size

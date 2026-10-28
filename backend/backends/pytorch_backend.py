@@ -16,6 +16,7 @@ WHISPER_WINDOW_SAMPLES = 30 * WHISPER_SAMPLE_RATE
 
 from . import TTSBackend, STTBackend, LANGUAGE_CODE_TO_NAME, WHISPER_HF_REPOS
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     empty_device_cache,
@@ -67,6 +68,7 @@ class PyTorchTTSBackend:
     def _is_model_cached(self, model_size: str) -> bool:
         return is_model_cached(self._get_model_path(model_size))
 
+    @serialize_model_load
     async def load_model_async(self, model_size: Optional[str] = None):
         """
         Lazy load the TTS model with automatic downloading from HuggingFace Hub.
@@ -271,6 +273,7 @@ class PyTorchSTTBackend:
         hf_repo = WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}")
         return is_model_cached(hf_repo)
 
+    @serialize_model_load
     async def load_model_async(self, model_size: Optional[str] = None):
         """
         Lazy load the Whisper model.

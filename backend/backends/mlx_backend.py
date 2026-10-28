@@ -34,6 +34,7 @@ ensure_original_qwen_config_cached()
 
 from . import TTSBackend, STTBackend, LANGUAGE_CODE_TO_NAME, WHISPER_HF_REPOS  # noqa: E402
 from .base import (  # noqa: E402
+    serialize_model_load,
     is_model_cached,
     combine_voice_prompts as _combine_voice_prompts,
     model_load_progress,
@@ -87,6 +88,7 @@ class MLXTTSBackend:
             weight_extensions=(".safetensors", ".bin", ".npz"),
         )
 
+    @serialize_model_load
     async def load_model_async(self, model_size: Optional[str] = None):
         """
         Lazy load the MLX TTS model.
@@ -360,6 +362,7 @@ class MLXSTTBackend:
         hf_repo = WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}")
         return is_model_cached(hf_repo, weight_extensions=(".safetensors", ".bin", ".npz"))
 
+    @serialize_model_load
     async def load_model_async(self, model_size: Optional[str] = None):
         """
         Lazy load the MLX Whisper model.

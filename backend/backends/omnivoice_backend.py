@@ -36,6 +36,7 @@ from typing import Any, Optional, Tuple
 import numpy as np
 
 from .base import (
+    serialize_model_load,
     combine_voice_prompts as _combine_voice_prompts,
     empty_device_cache,
     get_torch_device,
@@ -130,6 +131,7 @@ class OmniVoiceBackend:
     def _is_model_cached(self, model_size: str = "default") -> bool:
         return is_model_cached(OMNIVOICE_HF_REPO)
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "default") -> None:
         if self.model is not None:
             return

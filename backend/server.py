@@ -43,6 +43,11 @@ class _PipeSafeStream:
     def write(self, s):
         try:
             return self._stream.write(s)
+        except UnicodeEncodeError:
+            # A character the pipe's codepage can't encode (cp1252 on
+            # Windows: "→", emoji) is not a dead pipe; write it replaced.
+            encoding = getattr(self._stream, 'encoding', None) or 'utf-8'
+            return self.write(s.encode(encoding, 'replace').decode(encoding))
         except (OSError, ValueError):
             self._stream = open(os.devnull, 'w')
             return len(s)
@@ -124,8 +129,6 @@ try:
     # Import the FastAPI app from the backend package
     logger.info("Importing backend.config...")
     from backend import config
-    logger.info("Importing backend.database...")
-    from backend import database
     logger.info("Importing backend.main (this may take a while due to torch/transformers)...")
     from backend.main import app
     logger.info("Backend imports successful")
@@ -325,10 +328,8 @@ if __name__ == "__main__":
             logger.info(f"Setting data directory to: {args.data_dir}")
             config.set_data_dir(args.data_dir)
 
-        # Initialize database after data directory is set
-        logger.info("Initializing database...")
-        database.init_db()
-        logger.info("Database initialized successfully")
+        # The database is initialised by the app's lifespan (backend/app.py),
+        # which runs after the data directory set above.
 
         # Start the parent watchdog here rather than in an
         # @app.on_event("startup") hook: the app is built with a lifespan,

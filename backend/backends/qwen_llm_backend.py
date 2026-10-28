@@ -13,6 +13,7 @@ from typing import Optional
 
 from . import LLMBackend, DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     empty_device_cache,
@@ -81,6 +82,7 @@ class PyTorchQwenLLMBackend:
     def _is_model_cached(self, model_size: str) -> bool:
         return is_model_cached(self._get_model_path(model_size))
 
+    @serialize_model_load
     async def load_model(self, model_size: Optional[str] = None) -> None:
         if model_size is None:
             model_size = self.model_size
@@ -209,6 +211,7 @@ class MLXQwenLLMBackend:
             weight_extensions=(".safetensors", ".bin", ".npz"),
         )
 
+    @serialize_model_load
     async def load_model(self, model_size: Optional[str] = None) -> None:
         if model_size is None:
             model_size = self.model_size

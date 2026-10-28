@@ -13,6 +13,7 @@ import numpy as np
 
 from . import TTSBackend
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     empty_device_cache,
@@ -57,6 +58,7 @@ class LuxTTSBackend:
             weight_extensions=(".pt", ".safetensors", ".onnx", ".bin"),
         )
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "default") -> None:
         """Load the LuxTTS model."""
         if self.model is not None:

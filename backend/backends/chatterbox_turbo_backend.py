@@ -16,6 +16,7 @@ import numpy as np
 
 from . import TTSBackend
 from .base import (
+    serialize_model_load,
     is_model_cached,
     get_torch_device,
     empty_device_cache,
@@ -69,6 +70,7 @@ class ChatterboxTurboTTSBackend:
     def _is_model_cached(self, model_size: str = "default") -> bool:
         return is_model_cached(CHATTERBOX_TURBO_HF_REPO, required_files=_TURBO_WEIGHT_FILES)
 
+    @serialize_model_load
     async def load_model(self, model_size: str = "default") -> None:
         """Load the Chatterbox Turbo model."""
         if self.model is not None:

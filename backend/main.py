@@ -8,7 +8,7 @@ import argparse
 import uvicorn
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
-from . import config, database
+from . import config
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="voicebox backend server")
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     if args.data_dir:
         config.set_data_dir(args.data_dir)
 
-    database.init_db()
+    # The database is initialised by the app's lifespan (backend/app.py).
 
     uvicorn.run(
         "backend.main:app",
