@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PillState } from '@/components/CapturePill/CapturePill';
 import { apiClient } from '@/lib/api/client';
 import type {
+  CaptureCreateResponse,
   CaptureListResponse,
   CaptureResponse,
   CaptureSource,
@@ -53,6 +54,12 @@ const SHORT_RECORDING_MESSAGE = 'Recording too short, canceled';
 
 export type CapturePillState = PillState | 'hidden';
 
+/** A refine chained automatically after a new capture. */
+interface AutoRefine {
+  capture: CaptureCreateResponse;
+  context: unknown;
+}
+
 export interface UseCaptureRecordingSessionOptions {
   /**
    * Fired after a capture row is created on the server. Callers can use this
@@ -61,17 +68,22 @@ export interface UseCaptureRecordingSessionOptions {
   onCaptureCreated?: (capture: CaptureResponse) => void;
   /**
    * Fired with the final delivered text — refined if ``auto_refine`` was on
-   * for this capture, raw transcript otherwise. Used by the floating
-   * dictate window to hand the text off to the Rust auto-paste pipeline.
+   * for this capture, raw transcript otherwise (also when the automatic
+   * refine fails, so a dictation is never lost to a refinement error). Used
+   * by the floating dictate window to hand the text off to the Rust
+   * auto-paste pipeline.
    *
-   * ``allowAutoPaste`` snapshots the setting at chord-start so a refine that
-   * lands after the user flips the toggle still uses the value the capture
-   * was created under.
+   * ``allowAutoPaste`` is the setting the capture was created under, so a
+   * refine that lands after the user flips the toggle still uses it.
+   * ``context`` is whatever was passed to ``startRecording`` for this
+   * recording; dictations can overlap (a new chord while the previous one
+   * is still refining), so each result carries its own.
    */
   onFinalText?: (
     text: string,
     capture: CaptureResponse,
     allowAutoPaste: boolean,
+    context: unknown,
   ) => void;
 }
 
@@ -82,7 +94,7 @@ export interface UseCaptureRecordingSessionResult {
   isRecording: boolean;
   isUploading: boolean;
   isRefining: boolean;
-  startRecording: () => void;
+  startRecording: (context?: unknown) => void;
   stopRecording: () => void;
   toggleRecording: () => void;
   dismissError: () => void;
@@ -123,10 +135,9 @@ export function useCaptureRecordingSession(
   const onFinalTextRef = useRef(options.onFinalText);
   onFinalTextRef.current = options.onFinalText;
 
-  // Snapshot of ``allow_auto_paste`` from the capture-create response —
-  // held so the refine onSuccess (which only sees the plain CaptureResponse)
-  // can still pass the original setting through to onFinalText.
-  const allowAutoPasteRef = useRef<boolean>(true);
+  // Context of the recording in progress; moved into the upload's variables
+  // when it stops, so it follows that capture through transcribe and refine.
+  const contextRef = useRef<unknown>(undefined);
 
   const clearRestTimer = useCallback(() => {
     if (restTimerRef.current !== null) {
@@ -187,25 +198,51 @@ export function useCaptureRecordingSession(
 
   const refineMutation = useMutation({
     // Empty body — backend resolves flags and model from capture_settings.
-    mutationFn: async (captureId: string) => apiClient.refineCapture(captureId, {}),
-    onSuccess: (data, captureId) => {
+    // ``auto`` is set when the refine follows a new capture automatically;
+    // a manual refine from the captures list leaves it out.
+    mutationFn: async ({ captureId }: { captureId: string; auto?: AutoRefine }) =>
+      apiClient.refineCapture(captureId, {}),
+    onSuccess: (data, { captureId, auto }) => {
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastUpdated(captureId);
       if (pillStateRef.current === 'refining') scheduleHidePill();
       const finalText = data.transcript_refined ?? data.transcript_raw;
       if (finalText) {
-        onFinalTextRef.current?.(finalText, data, allowAutoPasteRef.current);
+        // A manual refine has no capture-time setting and never pastes.
+        onFinalTextRef.current?.(
+          finalText,
+          data,
+          auto?.capture.allow_auto_paste ?? false,
+          auto?.context,
+        );
       }
     },
-    onError: (err: Error) => {
+    onError: (err: Error, { auto }) => {
+      // Deliver the raw transcript rather than lose the dictation.
+      if (auto?.capture.transcript_raw?.trim()) {
+        onFinalTextRef.current?.(
+          auto.capture.transcript_raw,
+          auto.capture,
+          auto.capture.allow_auto_paste,
+          auto.context,
+        );
+      }
+      // A newer recording owns the pill; don't paint an old error over it.
+      if (pillStateRef.current === 'recording') return;
       showError(err.message || 'Refinement failed');
     },
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async ({ file, source }: { file: File; source: CaptureSource }) =>
-      apiClient.createCapture(file, { source }),
-    onSuccess: (capture) => {
+    mutationFn: async ({
+      file,
+      source,
+    }: {
+      file: File;
+      source: CaptureSource;
+      context?: unknown;
+    }) => apiClient.createCapture(file, { source }),
+    onSuccess: (capture, { context }) => {
       queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
         if (!prev) return prev;
         if (prev.items.some((c) => c.id === capture.id)) return prev;
@@ -214,10 +251,10 @@ export function useCaptureRecordingSession(
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastCreated(capture);
       onCaptureCreatedRef.current?.(capture);
-      allowAutoPasteRef.current = capture.allow_auto_paste;
-      if (capture.auto_refine) {
-        setPillState('refining');
-        refineMutation.mutate(capture.id);
+      // Nothing heard: skip the refine — there is nothing to polish or paste.
+      if (capture.auto_refine && capture.transcript_raw?.trim()) {
+        if (pillStateRef.current !== 'recording') setPillState('refining');
+        refineMutation.mutate({ captureId: capture.id, auto: { capture, context } });
       } else {
         if (pillStateRef.current === 'transcribing') scheduleHidePill();
         if (capture.transcript_raw) {
@@ -225,11 +262,14 @@ export function useCaptureRecordingSession(
             capture.transcript_raw,
             capture,
             capture.allow_auto_paste,
+            context,
           );
         }
       }
     },
     onError: (err: Error) => {
+      // A newer recording owns the pill; don't paint an old error over it.
+      if (pillStateRef.current === 'recording') return;
       // Backend's librosa-audioread fallback returns a 400 with this shape
       // for tiny/corrupt webm blobs that slip past the client guard —
       // translate it to the same friendly message so the user sees one
@@ -251,6 +291,8 @@ export function useCaptureRecordingSession(
     error: recordError,
   } = useAudioRecording({
     onRecordingComplete: (blob, recordedDuration) => {
+      const context = contextRef.current;
+      contextRef.current = undefined;
       // Trigger-happy tap — MediaRecorder hasn't emitted a usable chunk yet
       // so the blob is empty or unparseable. Surface it as a transient pill
       // so the user sees their recording was recognised and canceled.
@@ -268,7 +310,7 @@ export function useCaptureRecordingSession(
       const file = new File([blob], `dictation-${Date.now()}.${extension}`, {
         type: blob.type,
       });
-      uploadMutation.mutate({ file, source: 'dictation' });
+      uploadMutation.mutate({ file, source: 'dictation', context });
     },
   });
 
@@ -278,16 +320,20 @@ export function useCaptureRecordingSession(
     }
   }, [recordError, showError]);
 
-  const startRecording = useCallback(() => {
-    if (isRecording) return;
-    clearRestTimer();
-    setFrozenElapsedMs(0);
-    setPillState('recording');
-    beginAudioRecording();
-    // Open the remote STT/LLM connections while the user is still speaking,
-    // so the upload after release doesn't pay the TLS handshake. Never awaited.
-    apiClient.warmupCapture().catch(() => {});
-  }, [isRecording, beginAudioRecording, clearRestTimer]);
+  const startRecording = useCallback(
+    (context?: unknown) => {
+      if (isRecording) return;
+      contextRef.current = context;
+      clearRestTimer();
+      setFrozenElapsedMs(0);
+      setPillState('recording');
+      beginAudioRecording();
+      // Open the remote STT/LLM connections while the user is still speaking,
+      // so the upload after release doesn't pay the TLS handshake. Never awaited.
+      apiClient.warmupCapture().catch(() => {});
+    },
+    [isRecording, beginAudioRecording, clearRestTimer],
+  );
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
@@ -306,7 +352,7 @@ export function useCaptureRecordingSession(
 
   const refine = useCallback(
     (captureId: string) => {
-      refineMutation.mutate(captureId);
+      refineMutation.mutate({ captureId });
     },
     [refineMutation],
   );

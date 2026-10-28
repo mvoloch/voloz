@@ -35,19 +35,14 @@ export function DictateWindow() {
     };
   }, []);
 
-  // Snapshot of the focused UI element at chord-start, shipped over from
-  // Rust on the ``dictate:start`` payload. Held in a ref so it survives
-  // the 1–2 s transcribe + refine window — the paste only fires once the
-  // final text comes back.
-  const focusRef = useRef<FocusSnapshot | null>(null);
-
+  // The snapshot of the focused UI element at chord-start, shipped over from
+  // Rust on the ``dictate:start`` payload, rides along with that recording
+  // as its context and comes back with its final text. A chord pressed
+  // while the previous dictation is still refining has its own snapshot,
+  // so each text is pasted where it was dictated.
   const session = useCaptureRecordingSession({
-    onFinalText: async (text, _capture, allowAutoPaste) => {
-      const focus = focusRef.current;
-      // Consume-once: a second chord before this fires would overwrite
-      // focusRef, but nulling it here guards against the late-arriving
-      // refine-result firing a paste after the user has moved on.
-      focusRef.current = null;
+    onFinalText: async (text, _capture, allowAutoPaste, context) => {
+      const focus = (context as FocusSnapshot | null | undefined) ?? null;
       if (!allowAutoPaste) return;
       if (!focus || !text.trim()) return;
       try {
@@ -75,13 +70,14 @@ export function DictateWindow() {
     const unlistens: Promise<UnlistenFn>[] = [];
     unlistens.push(
       listen<{ focus: FocusSnapshot | null }>('dictate:start', (event) => {
-        focusRef.current = event.payload?.focus ?? null;
-        sessionRef.current.startRecording();
+        sessionRef.current.startRecording(event.payload?.focus ?? null);
       }),
     );
     unlistens.push(
       listen('dictate:stop', () => {
-        if (sessionRef.current.isRecording) sessionRef.current.stopRecording();
+        // Always forward: a release that lands while the mic is still
+        // opening is held and applied once recording starts.
+        sessionRef.current.stopRecording();
       }),
     );
     return () => {

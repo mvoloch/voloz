@@ -21,8 +21,17 @@ export function useAudioRecording({
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const cancelledRef = useRef<boolean>(false);
+  // getUserMedia can take a while, and a hotkey tap is shorter than that.
+  // Track the wait so a second start is ignored and a stop that arrives
+  // before the recorder exists is applied as soon as it does.
+  const startingRef = useRef<boolean>(false);
+  const stopRequestedRef = useRef<boolean>(false);
 
   const startRecording = useCallback(async () => {
+    if (startingRef.current) return;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') return;
+    startingRef.current = true;
+    stopRequestedRef.current = false;
     try {
       setError(null);
       chunksRef.current = [];
@@ -131,6 +140,16 @@ export function useAudioRecording({
       mediaRecorder.start();
       setIsRecording(true);
       startTimeRef.current = Date.now();
+      startingRef.current = false;
+
+      if (stopRequestedRef.current) {
+        // Released before the mic opened: stop now. The near-empty
+        // recording is reported as too short by the caller.
+        stopRequestedRef.current = false;
+        mediaRecorder.stop();
+        setIsRecording(false);
+        return;
+      }
 
       // Start timer
       timerRef.current = window.setInterval(() => {
@@ -155,6 +174,8 @@ export function useAudioRecording({
         }
       }, 100);
     } catch (err) {
+      startingRef.current = false;
+      stopRequestedRef.current = false;
       const errorMessage =
         err instanceof Error
           ? err.message
@@ -165,6 +186,10 @@ export function useAudioRecording({
   }, [maxDurationSeconds, onRecordingComplete]);
 
   const stopRecording = useCallback(() => {
+    if (startingRef.current) {
+      stopRequestedRef.current = true;
+      return;
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -177,6 +202,11 @@ export function useAudioRecording({
   }, [isRecording]);
 
   const cancelRecording = useCallback(() => {
+    if (startingRef.current) {
+      cancelledRef.current = true;
+      stopRequestedRef.current = true;
+      return;
+    }
     if (mediaRecorderRef.current) {
       cancelledRef.current = true; // Must be set before stop() triggers onstop
       chunksRef.current = [];
