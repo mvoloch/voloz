@@ -402,6 +402,17 @@ class CaptureSettingsUpdate(BaseModel):
         return normalize_snippets(value)
 
 
+class QuickSetupRequest(BaseModel):
+    """``POST /settings/captures/quick-setup``: the lite first-run keys.
+
+    The Groq key covers transcription and, without an Anthropic key,
+    refinement too.
+    """
+
+    groq_api_key: str = Field(..., min_length=1, max_length=500)
+    anthropic_api_key: Optional[str] = Field(default=None, max_length=500)
+
+
 class GenerationSettingsResponse(BaseModel):
     """Server-persisted defaults for the generation flow."""
 

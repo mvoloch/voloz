@@ -94,7 +94,12 @@ class ApiClient {
       const error = await response.json().catch(() => ({
         detail: response.statusText,
       }));
-      throw new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`));
+      // ``status`` and the raw ``detail`` let callers tell e.g. a provider
+      // rate limit (429) from other failures without parsing the message.
+      throw Object.assign(
+        new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`)),
+        { status: response.status, detail: error.detail },
+      );
     }
 
     return response.json();
@@ -526,6 +531,19 @@ class ApiClient {
     return this.request<CaptureSettings>('/settings/captures', {
       method: 'PUT',
       body: JSON.stringify(patch),
+    });
+  }
+
+  /**
+   * First-run setup: a Groq key for transcription (and refinement), plus an
+   * optional Anthropic key that moves refinement to Claude. Rejects with
+   * ``status`` 400 for a refused key, 503 when the provider can't be
+   * reached; ``detail.field`` names the key at fault.
+   */
+  async quickSetup(groqApiKey: string, anthropicApiKey: string | null): Promise<CaptureSettings> {
+    return this.request<CaptureSettings>('/settings/captures/quick-setup', {
+      method: 'POST',
+      body: JSON.stringify({ groq_api_key: groqApiKey, anthropic_api_key: anthropicApiKey }),
     });
   }
 

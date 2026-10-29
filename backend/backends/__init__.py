@@ -21,6 +21,15 @@ import numpy as np
 DEFAULT_LLM_MAX_TOKENS = 512
 DEFAULT_LLM_TEMPERATURE = 0.7
 
+
+class LLMRateLimitError(RuntimeError):
+    """A remote LLM answered HTTP 429 (e.g. Groq's free-tier tokens per minute).
+
+    Raised by the remote LLM backends so callers can tell "try again in a
+    minute" from a broken endpoint; the message names the endpoint like
+    any other backend error.
+    """
+
 from ..utils.platform_detect import get_backend_type
 
 LANGUAGE_CODE_TO_NAME = {

@@ -127,6 +127,7 @@
       "errorCopyTooltip": "Click to copy error",
       "tooShort": "Recording too short, canceled",
       "refineFailed": "Refinement failed",
+      "refineRateLimited": "Refinement skipped (rate limit), raw text pasted",
       "uploadFailed": "Upload failed"
     },
     "chord": {
@@ -1454,6 +1455,33 @@
     },
     "failed": "Server startup failed",
     "retry": "Retry"
+  },
+  "setup": {
+    "quick": {
+      "title": "Set up Voloz",
+      "intro": "Voloz turns your speech into text and tidies it up, in the cloud. By default one free Groq key does both.",
+      "groqStep": "Create a free key on Groq. It takes a minute and needs no card.",
+      "groqCreate": "Create a free key on Groq",
+      "groqPaste": "Paste the Groq key here:",
+      "claudeTitle": "Recommended: refine with Claude",
+      "optional": "(optional)",
+      "claudeWhy": "With an Anthropic key, refinement uses Claude Haiku, which stays closer to your words; the free Groq model sometimes rewrites a sentence or translates a noisy one. It costs a few cents a month. Transcription stays on Groq.",
+      "claudeCreate": "Get an Anthropic key",
+      "claudePaste": "Anthropic key",
+      "submit": "Test and save",
+      "testing": "Testing the keys…",
+      "noteGroq": "Groq's free tier allows about six refinements a minute. Past that, Voloz pastes the raw transcript.",
+      "noteClaude": "Transcription on Groq (free), refinement on Claude Haiku (paid by use).",
+      "manual": "Set up manually",
+      "errors": {
+        "invalidKey": {
+          "groq": "Groq didn't accept this key. Copy it again from console.groq.com/keys.",
+          "anthropic": "Anthropic didn't accept this key. Copy it again from console.anthropic.com."
+        },
+        "network": "Couldn't reach the provider. Check the internet connection and try again.",
+        "other": "Couldn't finish the setup: {{detail}}"
+      }
+    }
   },
   "home": {
     "today": "Today",

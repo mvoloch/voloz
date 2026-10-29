@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, edition, models
-from ..backends import get_llm_model_configs, get_stt_model_configs
+from ..backends import LLMRateLimitError, get_llm_model_configs, get_stt_model_configs
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import audio_retention
@@ -165,6 +165,14 @@ async def refine_capture_endpoint(
             db=db,
             vocabulary=saved.vocabulary,
             snippets=saved.snippets,
+        )
+    except LLMRateLimitError as e:
+        # Expected on free tiers (Groq: tokens per minute). A distinct status
+        # lets the app paste the raw transcript with a short note instead of
+        # showing the provider's error body.
+        logger.warning("Refinement rate-limited for capture %s: %s", capture_id, e)
+        raise HTTPException(
+            status_code=429, detail="Refinement skipped: the LLM provider's rate limit was reached"
         )
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)

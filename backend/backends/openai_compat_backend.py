@@ -18,7 +18,7 @@ from typing import Optional
 
 import httpx
 
-from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE
+from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,7 @@ class OpenAICompatLLMBackend:
         remote model selection is pinned at construction time.
 
         Raises:
+            LLMRateLimitError: The remote returned HTTP 429.
             RuntimeError: The remote returned a non-2xx status, could not be
                 reached (timeout, DNS, TLS), or sent a non-JSON body. The
                 message names the endpoint so the settings UI and the
@@ -134,7 +135,8 @@ class OpenAICompatLLMBackend:
                     exc.response.status_code,
                     body_preview,
                 )
-                raise RuntimeError(
+                error_cls = LLMRateLimitError if exc.response.status_code == 429 else RuntimeError
+                raise error_cls(
                     f"Custom LLM endpoint {url} returned HTTP {exc.response.status_code}: "
                     f"{body_preview[:200] or exc.response.reason_phrase}"
                 ) from exc
