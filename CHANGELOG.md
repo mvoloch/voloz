@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.5] - 2026-10-29
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- Each time Voloz closed, about 0.24 GB of the server's unpacked files stayed in the Windows temporary folder. The server now unpacks into Voloz's own folder, which is cleaned the next time Voloz starts. Your temporary folder is not touched.
+
 ## [0.8.4] - 2026-10-29
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.

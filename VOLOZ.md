@@ -528,6 +528,15 @@ unrecoverable is.
   exit by itself (so it can clean `%TEMP%`) and writes a line to
   `dictation.log` if it had to be ended. "Keep server running" lifts
   kill-on-close before exiting. Compiled for Windows only, not run.
+  Checked on the owner's PC with 0.8.4 (2026-10-29): Quit from the tray
+  left no process, but the server's `%TEMP%\_MEI…` folder (0.24 GB, all
+  735 files) stayed — the bootloader was ended before it cleaned up, and
+  older crashes had left 7.2 GB of such folders. 0.8.5
+  (`prepare_server_temp_dir` in `main.rs`): the sidecar runs with
+  TMP/TEMP set to `%LOCALAPPDATA%\io.github.mvoloch.voloz\server-temp`,
+  emptied before each start (only once no server is on the port, so a
+  "Keep server running" server is never touched). The user's TEMP is
+  never cleaned.
 - **Hands-free shows on the pill.** A second "stuck" recording was
   hands-free entered by accident (Shift brushed while holding Ctrl+Win;
   pressing Ctrl+Shift+Win again stopped it): the pill looked the same in
