@@ -512,6 +512,22 @@ unrecoverable is.
   requests and what they did, upload/refine results with sizes and HTTP
   status, paste result. No transcript text, keys or window titles. Read
   it first the next time a dictation misbehaves.
+- **Orphan server after Quit (Windows).** The Windows server is a
+  PyInstaller onefile exe: the process the app spawns is the bootloader,
+  which unpacks to `%TEMP%\_MEI…`, runs the real server as its child,
+  waits for it and then deletes the folder. Quitting only reached the
+  child (`/shutdown` and the parent-PID watchdog both run inside it);
+  nothing on Windows ever ended the bootloader (Unix kills the process
+  group), so one that did not exit by itself was left behind. Why it did
+  not exit on the owner's PC is not confirmed — most likely still
+  removing its unpacked folder (files held by Defender) or blocked on
+  it; it needs a look at the live process next time. Fix
+  (`server_job.rs`): the spawned server goes into a job object with
+  kill-on-close (and breakaway allowed), so it ends when the app process
+  ends, crash included; a normal quit first waits up to 5 s for it to
+  exit by itself (so it can clean `%TEMP%`) and writes a line to
+  `dictation.log` if it had to be ended. "Keep server running" lifts
+  kill-on-close before exiting. Compiled for Windows only, not run.
 
 ## Developing on GB4
 

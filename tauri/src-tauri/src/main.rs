@@ -15,6 +15,8 @@ mod input_monitoring;
 #[cfg(desktop)]
 mod key_codes;
 mod keyboard_layout;
+#[cfg(windows)]
+mod server_job;
 mod speak_monitor;
 #[cfg(desktop)]
 mod tray;
@@ -755,6 +757,9 @@ async fn start_server(
 
     // Store child process and PID
     let process_pid = child.pid();
+    // Windows: end the onefile bootloader with the app (server_job.rs).
+    #[cfg(windows)]
+    server_job::adopt(process_pid);
     *state.server_pid.lock().unwrap() = Some(process_pid);
     *state.child.lock().unwrap() = Some(child);
 
@@ -1942,6 +1947,8 @@ pub fn run() {
                             .app_data_dir()
                             .unwrap_or_default();
                         let sentinel = data_dir.join(".keep-running");
+                        #[cfg(windows)]
+                        server_job::release();
                         if let Err(e) = std::fs::write(&sentinel, b"1") {
                             eprintln!("Failed to write keep-running sentinel: {}", e);
                         } else {
@@ -1977,6 +1984,21 @@ pub fn run() {
                                 let _ = client
                                     .post(format!("http://127.0.0.1:{}/shutdown", SERVER_PORT))
                                     .send();
+                            }
+                        }
+
+                        // Windows: give the server a moment to exit by itself,
+                        // so the onefile bootloader can delete its unpacked
+                        // folder once its child is gone. Whatever is still
+                        // running when this process ends is ended by the job
+                        // (server_job.rs).
+                        #[cfg(windows)]
+                        if let Some(pid) = *state.server_pid.lock().unwrap() {
+                            if !server_job::wait_for_exit(pid, std::time::Duration::from_secs(5)) {
+                                eprintln!("Server process {} still running after 5 s; the job ends it", pid);
+                                dictation_log::log(&format!(
+                                    "[rust] quit: server process {pid} still running 5 s after /shutdown; ended with the app"
+                                ));
                             }
                         }
 
