@@ -110,6 +110,30 @@ def save_audio(
         raise OSError(f"Failed to save audio to {path}: {e}") from e
 
 
+def has_speech(
+    audio: np.ndarray,
+    sample_rate: int,
+    frame_ms: int = 20,
+    silence_threshold_db: float = -40.0,
+    min_speech_ms: int = 150,
+) -> bool:
+    """Whether ``audio`` holds at least ``min_speech_ms`` of non-silent frames.
+
+    A frame is non-silent when its RMS reaches ``silence_threshold_db``
+    (dBFS), the test :func:`has_tts_runaway` uses. Counting frames rather
+    than taking one peak keeps a click or a bump on the mic from passing
+    for speech; a single short word is still several times longer.
+    """
+    frame_len = int(sample_rate * frame_ms / 1000)
+    if frame_len == 0 or len(audio) < frame_len:
+        return False
+    n_frames = len(audio) // frame_len
+    frames = np.asarray(audio[: n_frames * frame_len], dtype=np.float32).reshape(n_frames, frame_len)
+    rms = np.sqrt(np.mean(frames**2, axis=1))
+    loud = int(np.count_nonzero(rms >= 10 ** (silence_threshold_db / 20)))
+    return loud * frame_ms >= min_speech_ms
+
+
 def has_tts_runaway(
     audio: np.ndarray,
     sample_rate: int = 24000,

@@ -2,10 +2,14 @@
 STT (Speech-to-Text) module - delegates to backend abstraction layer.
 """
 
+import logging
 import re
 from typing import Iterable, Optional
 from ..backends import get_stt_backend, STTBackend
+from ..utils.audio import has_speech, load_audio
 from .vocabulary import build_stt_prompt
+
+logger = logging.getLogger(__name__)
 
 
 def get_whisper_model() -> STTBackend:
@@ -50,15 +54,26 @@ async def transcribe_with_vocabulary(
     On silence Whisper tends to return its prompt verbatim (Groq, 3 of 3
     runs on a silent clip with the prompt "Voloz"), which would be pasted
     as if dictated. A transcript that is nothing but the prompt is
-    returned as empty.
+    returned as empty when the audio is (near) silent; with speech in it,
+    the user said the word ("Voloz" alone) and it is kept.
     """
     prompt = build_stt_prompt(vocabulary) if is_remote(backend) else None
     if not prompt:
         return await backend.transcribe(audio_path, language, model_size)
     text = await backend.transcribe(audio_path, language, model_size, prompt=prompt)
-    if is_prompt_echo(text, prompt):
+    if is_prompt_echo(text, prompt) and not _audio_has_speech(audio_path):
         return ""
     return text
+
+
+def _audio_has_speech(audio_path: str) -> bool:
+    """:func:`has_speech` for a file; ``False`` when it can't be decoded."""
+    try:
+        audio, sr = load_audio(audio_path, sample_rate=16000)
+    except Exception as exc:
+        logger.warning("Could not read %s to check for speech: %r", audio_path, exc)
+        return False
+    return has_speech(audio, sr)
 
 
 def is_prompt_echo(text: str, prompt: str) -> bool:

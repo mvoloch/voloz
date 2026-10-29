@@ -7,9 +7,12 @@ HTTP calls go to the in-process ``FakeServer`` from
 ``test_cloud_dictation.py`` (no network, no keys).
 """
 
+import io
 import json
 
+import numpy as np
 import pytest
+import soundfile as sf
 
 from backend import models
 from backend.backends import reset_backends
@@ -28,6 +31,7 @@ from backend.services.vocabulary import (
     suggest_replacements,
 )
 from backend.tests.test_cloud_dictation import FakeServer, _claude_reply, _wav_bytes
+from backend.utils.audio import has_speech
 
 
 @pytest.fixture(autouse=True)
@@ -152,6 +156,46 @@ async def test_a_transcript_that_only_repeats_the_prompt_is_dropped(tmp_path, vo
     with FakeServer(lambda *_: (200, {"text": reply})) as server:
         backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m")
         assert await transcribe_with_vocabulary(backend, str(audio), "pt", None, vocab) == expected
+
+
+RATE = 16_000
+
+
+def _tone(seconds: float, amplitude: float = 0.1) -> np.ndarray:
+    t = np.arange(int(seconds * RATE), dtype=np.float32) / RATE
+    return (amplitude * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+
+
+def _speech_level_wav(seconds: float = 0.5) -> bytes:
+    """A 220 Hz tone at about -23 dBFS RMS, the level of normal speech."""
+    buf = io.BytesIO()
+    sf.write(buf, _tone(seconds), RATE, format="WAV", subtype="PCM_16")
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_a_dictated_vocabulary_word_is_kept(tmp_path):
+    """The same reply on audio with speech in it is the word the user said."""
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_speech_level_wav())
+    with FakeServer(lambda *_: (200, {"text": "Voloz."})) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="m")
+        assert await transcribe_with_vocabulary(backend, str(audio), "pt", None, ["Voloz"]) == "Voloz."
+
+
+def test_has_speech_needs_more_than_a_click():
+    silence = np.zeros(RATE, dtype=np.float32)
+    assert not has_speech(silence, RATE)
+    # A loud 40 ms click in a second of silence is not speech...
+    click = silence.copy()
+    click[RATE // 2 : RATE // 2 + 640] = 0.5
+    assert not has_speech(click, RATE)
+    # ...a word-length sound at speech level is, and so is quiet speech.
+    assert has_speech(np.concatenate([silence, _tone(0.3)]), RATE)
+    assert has_speech(_tone(0.5, amplitude=0.02), RATE)
+    # Background hiss well under the threshold is silence.
+    hiss = np.random.default_rng(0).normal(0, 0.002, RATE).astype(np.float32)
+    assert not has_speech(hiss, RATE)
 
 
 @pytest.mark.asyncio

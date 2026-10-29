@@ -440,6 +440,14 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   just written (no row would point at it), so nothing can be
   retranscribed later. A recovery path (keep the file, row without a
   transcript, retry) is not built.
+- **Dictating only a vocabulary word returned nothing.** A transcript
+  equal to the Whisper prompt was always dropped (Groq echoes the prompt
+  on silence), so saying just "Voloz" pasted nothing. The echo is now
+  dropped only when the audio has no speech: `utils/audio.has_speech`
+  needs 150 ms of 20 ms frames at or above -40 dBFS RMS (the frame test
+  the TTS trimming already uses), so a click doesn't count. Checked on
+  synthetic audio only; the level of a real silent dictation (the webview
+  records with auto gain and noise suppression on) was not measured.
 
 ## Developing on GB4
 
