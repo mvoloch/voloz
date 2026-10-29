@@ -680,6 +680,60 @@ so the first words were not recorded.
   Compiled and clippy-checked for Windows; the polling and the release
   timing are not run on Windows yet. Knobs: `RELEASE_POLL` /
   `RELEASE_GRACE` in `hotkey_monitor.rs`.
+- **The first words are kept.** The recorder was MediaRecorder (WebM/Opus)
+  decoded to WAV after the stop; speech before its `onstart` was lost, and
+  `onstart` took 0.58–1.48 s on the owner's PC after the headset change
+  (on top of 0.1–1.24 s of `getUserMedia`). Now `micCapture.ts` takes PCM
+  straight from the stream: one AudioContext at the microphone's rate
+  (`sinkId: none` where Chromium supports it, so no speaker is opened),
+  source → AudioWorklet tap posting mono blocks of 2048 samples, and
+  source → the pill's level analyser (no second AudioContext). A
+  recording keeps every block from the first one the stream delivers; on
+  stop the tap hands over its partial block. The WAV is mono 16 kHz,
+  resampled by the same `convertToWav(…, { monoSampleRate })` imported
+  files use; if that fails or takes 10 s, the device-rate WAV is sent (the
+  server resamples). Before, the dictation WAV was at the decode
+  context's rate (usually 48 kHz) and the server resampled it, so the STT
+  still gets 16 kHz mono but the upload is a third of the size.
+  `recorderLifecycle.ts` is unchanged: stop always ends a recording, a
+  track ending ends it and delivers what was recorded, the 10 min cap and
+  "too short" as before. Voice-profile recordings (studio) use the same
+  path at the device rate, closed right after. No AudioWorklet in the
+  webview → `ScriptProcessorNode` (logged).
+- **Warm microphone.** The dictate pill keeps the stream and graph open
+  `MIC_WARM_MS` (3 min, `micCapture.ts`) after a dictation, feeding a
+  ring of the last `PREROLL_MS` (300 ms). A chord inside that window
+  starts recording at once and begins 300 ms before the press. After
+  3 min idle the stream closes (the Windows microphone indicator goes
+  off); it closes at once when its track ends or on `devicechange` (during
+  a recording: when that recording ends), so a warm stream never records
+  from a device that stopped being the default. The main window's
+  Captures tab doesn't keep it warm. Log lines: `microphone open: <device>
+  (<rate> Hz, audio graph <state>)`, `first sample at +N ms from the start
+  (cold mic)` / `at -300 ms (warm mic)`, `mic warm: kept open`, `mic warm:
+  reused (pre-roll N ms)`, `mic warm: closed after 3 min idle` /
+  `(audio devices changed)` / `(microphone ended)`.
+
+Measured on GB4 in headless Chrome 156 with a fake microphone playing a
+dictation (`v87-harness`; not WebView2, not Windows, not a real device):
+first sample 13–20 ms after the start cold (old path on the same fake
+device: `getUserMedia` 2–125 ms then `onstart` 51–54 ms, all lost), 0 ms warm
+with 300 ms of pre-roll; a 4 s take held 3.99 s of samples and a 3 s warm
+one 3.29 s (pre-roll included); a press while the previous take was still
+flushing reused the microphone; a short warm window closed by itself. The
+browser's 16 kHz conversion vs soxr HQ (the server's resampler) on the
+same captured 48 kHz samples: 74.5 dB apart below 4 kHz (99.5 % of the
+energy), the differences in 4–8 kHz (likely a sub-sample timing offset
+between the two; the test clip has nothing above 8 kHz, so aliasing isn't
+exercised). `pcmToWav` writes the same bytes as the old decode-to-WAV
+writer for the same samples (`app/tests/pcm.test.ts`). CPU while warm and
+idle, all Chrome processes, Core Ultra 7 155H: about 6–6.5 % of one core
+(stream alone with echo cancellation/noise suppression/AGC ~2.8 %, the
+graph about as much again; 0.15–0.25 % with the microphone closed). Not
+measured on Windows; expect the same order there, for 3 min after each
+dictation. Cheaper option if it matters: suspend the graph while idle
+(about half the cost, no pre-roll). Untested on Windows: everything in
+this item.
 
 ## Developing on GB4
 

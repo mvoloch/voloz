@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import i18n from '@/i18n';
 import { usePlatform } from '@/platform/PlatformContext';
-import { convertToWav } from '@/lib/utils/audio';
-import { RecordingLifecycle, type RecordingEndReason } from '@/lib/hooks/recorderLifecycle';
+import { type MicTake, startMicTake, takeToWav } from '@/lib/hooks/micCapture';
+import {
+  RecordingLifecycle,
+  type RecordingEndReason,
+  type StoppableRecorder,
+} from '@/lib/hooks/recorderLifecycle';
+import { concatPcm, pcmToWav } from '@/lib/utils/pcm';
 
 export type { RecordingEndReason } from '@/lib/hooks/recorderLifecycle';
 
@@ -17,8 +22,8 @@ function microphoneErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : i18n.t('common.microphone.accessFailed');
 }
 
-// Decoding the WebM to WAV normally takes well under a second. If it hangs
-// (an AudioContext that never decodes), send the WebM rather than nothing.
+// Resampling the recording normally takes well under a second. If it hangs
+// (an AudioContext that never decodes), send it at the device's rate.
 const WAV_CONVERSION_TIMEOUT_MS = 10_000;
 // A stop that arrives while the microphone is still opening is applied once
 // it opens. If it never opens, give up on that start after this long so the
@@ -41,10 +46,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-/** One recording: its data, its stream and whether it was cancelled. */
+/** One recording: its samples and whether it was cancelled. */
 interface Take {
-  chunks: Blob[];
-  stream: MediaStream | null;
+  mic: MicTake | null;
   startedAt: number | null;
   duration?: number;
   cancelled: boolean;
@@ -52,6 +56,17 @@ interface Take {
 
 interface UseAudioRecordingOptions {
   maxDurationSeconds?: number;
+  /**
+   * Rate of the WAV handed over (mono either way). Unset: the microphone's
+   * own rate. Dictation asks for 16 kHz, what speech-to-text works at.
+   */
+  wavSampleRate?: number;
+  /**
+   * Keep the microphone open this long after a recording, so the next one
+   * starts at once with a little audio from before it (``micCapture.ts``).
+   * 0 (default): close it when the recording ends.
+   */
+  keepMicWarmMs?: number;
   /**
    * The recorded audio. ``reason`` says how the recording ended: ``stopped``
    * by a request, or by itself (``device-ended``: the microphone went away;
@@ -69,6 +84,8 @@ interface UseAudioRecordingOptions {
 
 export function useAudioRecording({
   maxDurationSeconds,
+  wavSampleRate,
+  keepMicWarmMs = 0,
   onRecordingComplete,
   onRecordingEnded,
   log,
@@ -77,8 +94,8 @@ export function useAudioRecording({
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  // The microphone stream while recording, for a level meter.
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  // The microphone's level analyser while recording, for a level meter.
+  const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
   const takeRef = useRef<Take | null>(null);
   const lifecycleRef = useRef<RecordingLifecycle | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -117,12 +134,13 @@ export function useAudioRecording({
   }, []);
 
   const startRecording = useCallback(async () => {
+    const requestedAt = performance.now();
     if (startingRef.current) return;
     if (lifecycleRef.current && !lifecycleRef.current.ended) return;
     startingRef.current = true;
     stopRequestedRef.current = false;
     const startId = ++startIdRef.current;
-    const take: Take = { chunks: [], stream: null, startedAt: null, cancelled: false };
+    const take: Take = { mic: null, startedAt: null, cancelled: false };
     takeRef.current = take;
     try {
       setError(null);
@@ -157,117 +175,73 @@ export function useAudioRecording({
         }
       }
 
-      // Request microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      // The open microphone when it is warm (with audio from before the
+      // press), else open it. Samples are kept from the first block the
+      // stream delivers; there is no encoder to wait for.
+      const mic = await startMicTake(writeLog, requestedAt);
 
       if (startId !== startIdRef.current) {
         // This start was given up while the microphone was opening.
-        stream.getTracks().forEach((track) => {
-          track.stop();
-        });
+        mic.release(0);
         writeLog('microphone opened after its start was given up: closed');
         return;
       }
       clearGiveUpTimer();
-      take.stream = stream;
+      take.mic = mic;
 
-      // Create MediaRecorder with preferred MIME type
-      const options: MediaRecorderOptions = {
-        mimeType: 'audio/webm;codecs=opus',
+      // What the lifecycle stops: the take, whose last block arrives a
+      // moment after the stop (the recorder's ``stop`` event).
+      const recorder: { state: StoppableRecorder['state']; stop(): void } = {
+        state: 'recording',
+        stop() {
+          if (recorder.state === 'inactive') return;
+          recorder.state = 'inactive';
+          void mic.stop().then(() => lifecycle.recorderStopped());
+        },
       };
 
-      // Fallback to default if webm not supported
-      if (!MediaRecorder.isTypeSupported(options.mimeType!)) {
-        delete options.mimeType;
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, options);
-
-      const releaseStream = () => {
-        stream.getTracks().forEach((track) => {
-          track.stop();
-        });
-        take.stream = null;
-      };
-
-      const lifecycle = new RecordingLifecycle(mediaRecorder, {
+      const lifecycle = new RecordingLifecycle(recorder, {
         onLeave: (reason) => {
           clearTimer();
           setIsRecording(false);
-          setStream(null);
+          setAnalyser(null);
           take.duration = take.startedAt ? (Date.now() - take.startedAt) / 1000 : undefined;
           writeLog(`recording ended (${reason}) after ${(take.duration ?? 0).toFixed(1)} s`);
           onEndedRef.current?.(reason, take.duration);
         },
         onFinish: async (reason) => {
-          const webmBlob = new Blob(take.chunks, { type: 'audio/webm' });
-          // Stop all tracks now that we have the data
-          releaseStream();
+          // A microphone that ended or failed is closed; otherwise it stays
+          // open for the next recording when the caller asked for that.
+          mic.release(take.cancelled || reason !== 'stopped' ? 0 : keepMicWarmMs);
 
           // Don't fire completion callback if the recording was cancelled
           if (take.cancelled) return;
 
-          // Convert to WAV format to avoid needing ffmpeg on backend
           try {
-            const wavBlob = await withTimeout(convertToWav(webmBlob), WAV_CONVERSION_TIMEOUT_MS);
+            const wavBlob = await withTimeout(
+              takeToWav(mic, wavSampleRate),
+              WAV_CONVERSION_TIMEOUT_MS,
+            );
             onCompleteRef.current?.(wavBlob, take.duration, reason);
           } catch (err) {
             console.error('Error converting audio to WAV:', err);
-            writeLog(`wav conversion failed (${err instanceof Error ? err.message : 'error'}): sending webm`);
-            // Fallback to original blob if conversion fails
-            onCompleteRef.current?.(webmBlob, take.duration, reason);
+            writeLog(
+              `wav resampling failed (${err instanceof Error ? err.message : 'error'}): sending ${mic.sampleRate} Hz`,
+            );
+            const wavBlob = pcmToWav(concatPcm(mic.blocks), mic.sampleRate);
+            onCompleteRef.current?.(wavBlob, take.duration, reason);
           }
         },
         log: writeLog,
       });
       lifecycleRef.current = lifecycle;
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          take.chunks.push(event.data);
-        }
-      };
-      mediaRecorder.onstart = () => writeLog('recorder state: recording');
-      mediaRecorder.onpause = () => writeLog('recorder state: paused');
-      mediaRecorder.onresume = () => writeLog('recorder state: recording (resumed)');
-      mediaRecorder.onstop = () => {
-        writeLog('recorder state: inactive (stop event)');
-        lifecycle.recorderStopped();
-      };
-      mediaRecorder.onerror = (event) => {
-        setError(i18n.t('common.microphone.recordingError'));
-        console.error('MediaRecorder error:', event);
-        const name = (event as Event & { error?: DOMException }).error?.name ?? 'unknown';
-        writeLog(`recorder error: ${name}`);
-        lifecycle.end('error');
-      };
+      // The track may end (device removed, Bluetooth profile switch): end
+      // the recording and deliver what was recorded.
+      mic.onTrackEnded = () => lifecycle.end('device-ended');
 
-      // The recorder may or may not stop by itself when its input goes away
-      // (device removed, Bluetooth profile switch); end the recording either
-      // way so nothing waits on a stop that already happened.
-      for (const track of stream.getAudioTracks()) {
-        track.addEventListener('ended', () => {
-          writeLog('microphone track ended');
-          lifecycle.end('device-ended');
-        });
-        track.addEventListener('mute', () => writeLog('microphone track muted'));
-        track.addEventListener('unmute', () => writeLog('microphone track unmuted'));
-      }
-      writeLog(`microphone open: ${stream.getAudioTracks()[0]?.label || 'unnamed device'}`);
-
-      // WebKit's MediaRecorder drops the WebM EBML header from chunks when
-      // started with a timeslice, so concatenated blobs fail to parse in
-      // both AudioContext and ffmpeg. Starting with no timeslice produces
-      // exactly one dataavailable on stop() with a valid container.
-      mediaRecorder.start();
       setIsRecording(true);
-      setStream(stream);
+      setAnalyser(mic.analyser);
       take.startedAt = Date.now();
       startingRef.current = false;
 
@@ -296,10 +270,8 @@ export function useAudioRecording({
         }
       }, 100);
     } catch (err) {
-      take.stream?.getTracks().forEach((track) => {
-        track.stop();
-      });
-      take.stream = null;
+      take.mic?.release(0);
+      take.mic = null;
       if (startId === startIdRef.current) {
         startingRef.current = false;
         stopRequestedRef.current = false;
@@ -309,7 +281,15 @@ export function useAudioRecording({
       }
       writeLog(`microphone failed to open: ${err instanceof Error ? err.name : 'error'}`);
     }
-  }, [maxDurationSeconds, platform.metadata.isTauri, clearTimer, clearGiveUpTimer, writeLog]);
+  }, [
+    maxDurationSeconds,
+    wavSampleRate,
+    keepMicWarmMs,
+    platform.metadata.isTauri,
+    clearTimer,
+    clearGiveUpTimer,
+    writeLog,
+  ]);
 
   const stopRecording = useCallback(() => {
     if (startingRef.current) {
@@ -348,7 +328,6 @@ export function useAudioRecording({
     const take = takeRef.current;
     if (take) {
       take.cancelled = true; // Must be set before the recording finishes
-      take.chunks = [];
     }
     if (startingRef.current) {
       stopRequestedRef.current = true;
@@ -357,25 +336,21 @@ export function useAudioRecording({
     const lifecycle = lifecycleRef.current;
     if (lifecycle && !lifecycle.ended) lifecycle.end('stopped');
     setIsRecording(false);
-    setStream(null);
+    setAnalyser(null);
     setDuration(0);
     clearTimer();
 
-    // Stop all tracks
-    take?.stream?.getTracks().forEach((track) => {
-      track.stop();
-    });
-    if (take) take.stream = null;
+    // Close the microphone
+    take?.mic?.release(0);
   }, [clearTimer]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount: this hook's recording only; a warm microphone
+  // closes on its own timer.
   useEffect(() => {
     return () => {
       clearTimer();
       clearGiveUpTimer();
-      takeRef.current?.stream?.getTracks().forEach((track) => {
-        track.stop();
-      });
+      takeRef.current?.mic?.release(0);
     };
   }, [clearTimer, clearGiveUpTimer]);
 
@@ -383,7 +358,7 @@ export function useAudioRecording({
     isRecording,
     duration,
     error,
-    stream,
+    analyser,
     startRecording,
     stopRecording,
     cancelRecording,

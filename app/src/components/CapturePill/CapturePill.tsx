@@ -69,16 +69,16 @@ export function PillAudioBars({ mode }: { mode: 'generating' | 'playing' | 'idle
 
 /**
  * The recording's level meter: the same five bars, driven by the
- * microphone's actual level (Web Audio ``AnalyserNode``, RMS per animation
- * frame). Flat in silence, moving only with sound. Heights are written to
- * the DOM directly so the meter doesn't re-render React 60 times a second.
- * The AudioContext is closed when the stream goes away (recording ended)
- * or the pill unmounts, so nothing carries over to the next dictation.
+ * microphone's actual level (RMS per animation frame of the recording
+ * graph's ``AnalyserNode``, so no second AudioContext). Flat in silence,
+ * moving only with sound. Heights are written to the DOM directly so the
+ * meter doesn't re-render React 60 times a second. It stops reading when
+ * the analyser goes away (recording ended) or the pill unmounts.
  */
 /** One per entry of ``BAR_WEIGHTS``, as stable React keys. */
 const LEVEL_BAR_IDS = ['outer-left', 'left', 'center', 'right', 'outer-right'] as const;
 
-export function PillLevelBars({ stream }: { stream: MediaStream | null }) {
+export function PillLevelBars({ analyser }: { analyser: AnalyserNode | null }) {
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
@@ -89,20 +89,7 @@ export function PillLevelBars({ stream }: { stream: MediaStream | null }) {
       });
     };
     paint(0);
-    if (!stream || stream.getAudioTracks().length === 0) return;
-
-    let context: AudioContext;
-    try {
-      context = new AudioContext();
-    } catch {
-      return; // no Web Audio: the bars stay flat
-    }
-    const source = context.createMediaStreamSource(stream);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 1024;
-    source.connect(analyser);
-    // Not connected to the destination: nothing is played back.
-    context.resume().catch(() => {});
+    if (!analyser) return;
 
     const samples = new Float32Array(analyser.fftSize);
     let level = 0;
@@ -115,11 +102,8 @@ export function PillLevelBars({ stream }: { stream: MediaStream | null }) {
 
     return () => {
       cancelAnimationFrame(frame);
-      source.disconnect();
-      analyser.disconnect();
-      context.close().catch(() => {});
     };
-  }, [stream]);
+  }, [analyser]);
 
   return (
     <div className="flex items-center gap-[2px] h-5 shrink-0">
@@ -179,7 +163,7 @@ export function CapturePill({
   onStop,
   stopTitle,
   handsFree,
-  levelStream,
+  levelSource,
   errorMessage,
   onDismiss,
   className,
@@ -192,10 +176,11 @@ export function CapturePill({
   /** A hands-free recording: labelled so, since only the chord or stop ends it. */
   handsFree?: boolean;
   /**
-   * The recording's microphone stream. When given (null while the mic is
-   * opening), the recording bars are a level meter instead of an animation.
+   * The recording microphone's level analyser. When given (null while the
+   * mic is opening), the recording bars are a level meter instead of an
+   * animation.
    */
-  levelStream?: MediaStream | null;
+  levelSource?: AnalyserNode | null;
   errorMessage?: string | null;
   onDismiss?: () => void;
   className?: string;
@@ -261,8 +246,8 @@ export function CapturePill({
       <span className="text-sm font-medium shrink-0" style={{ minWidth: '104px' }}>
         {labelText}
       </span>
-      {state === 'recording' && levelStream !== undefined ? (
-        <PillLevelBars stream={levelStream} />
+      {state === 'recording' && levelSource !== undefined ? (
+        <PillLevelBars analyser={levelSource} />
       ) : (
         <PillAudioBars mode={barMode} />
       )}

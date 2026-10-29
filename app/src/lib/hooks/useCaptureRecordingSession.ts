@@ -12,6 +12,7 @@ import type {
 } from '@/lib/api/types';
 import { IS_LITE } from '@/lib/edition';
 import { useAudioRecording } from '@/lib/hooks/useAudioRecording';
+import { MIC_WARM_MS } from '@/lib/hooks/micCapture';
 import { convertToWav, SPEECH_SAMPLE_RATE } from '@/lib/utils/audio';
 import { dictationLog } from '@/lib/utils/dictationLog';
 
@@ -63,11 +64,8 @@ const ERROR_PILL_VISIBLE_MS = 6000;
 const BRIEF_NOTICE_MS = 2000;
 // A provider rate-limit notice — one line, a little longer to read.
 const RATE_LIMIT_NOTICE_MS = 3500;
-// MediaRecorder.start(100) emits its first chunk ~100ms in, but the webm
-// container header isn't guaranteed to be finalised that quickly — anything
-// under half a second tends to produce a blob neither AudioContext.decode
-// nor ffmpeg will accept. Caught client-side and surfaced as a friendly
-// "Recording too short, canceled" pill instead of bubbling up a 400.
+// A tap shorter than half a second holds no words — surfaced as a friendly
+// "Recording too short, canceled" pill instead of an empty transcript.
 const MIN_RECORDING_DURATION_S = 0.5;
 // A dictation whose stop never arrives (a lost hotkey release, a hands-free
 // toggle the user didn't notice) would otherwise record until the next press.
@@ -129,6 +127,13 @@ export interface UseCaptureRecordingSessionOptions {
    * ``context``. Empty drafts new text from the instruction.
    */
   getCommandSelection?: (context: unknown) => Promise<string>;
+  /**
+   * Keep the microphone open for ``MIC_WARM_MS`` after each dictation, so
+   * the next starts at once and with ``PREROLL_MS`` of audio from before
+   * the press. The dictate pill sets it; the OS shows the microphone in
+   * use meanwhile.
+   */
+  warmMicrophone?: boolean;
 }
 
 export interface UseCaptureRecordingSessionResult {
@@ -136,8 +141,8 @@ export interface UseCaptureRecordingSessionResult {
   pillElapsedMs: number;
   errorMessage: string | null;
   isRecording: boolean;
-  /** The microphone stream while recording (for the pill's level meter). */
-  recordingStream: MediaStream | null;
+  /** The microphone's level analyser while recording (for the pill's level meter). */
+  recordingLevel: AnalyserNode | null;
   isUploading: boolean;
   isRefining: boolean;
   startRecording: (context?: unknown, options?: RecordingOptions) => void;
@@ -395,8 +400,8 @@ export function useCaptureRecordingSession(
         showError(pillT('captures.pill.transcribeRateLimited'), RATE_LIMIT_NOTICE_MS);
         return;
       }
-      // The lite server can't read the format (a dictation whose WAV
-      // conversion failed and went as webm).
+      // The lite server can't read the format (dictations are always WAV
+      // now; kept for any other upload).
       if ((err as { status?: number }).status === 415) {
         showError(pillT('captures.pill.unsupportedAudio'), BRIEF_NOTICE_MS);
         return;
@@ -420,9 +425,12 @@ export function useCaptureRecordingSession(
     startRecording: beginAudioRecording,
     stopRecording,
     error: recordError,
-    stream: recordingStream,
+    analyser: recordingLevel,
   } = useAudioRecording({
     maxDurationSeconds: MAX_RECORDING_DURATION_S,
+    // Speech-to-text works at 16 kHz; the server resampled to it anyway.
+    wavSampleRate: SPEECH_SAMPLE_RATE,
+    keepMicWarmMs: options.warmMicrophone ? MIC_WARM_MS : 0,
     log: dictationLog,
     onRecordingEnded: (_reason, recordedDuration) => {
       // Leave "Recording" as soon as the recorder stops: the audio still has
@@ -441,9 +449,9 @@ export function useCaptureRecordingSession(
       contextRef.current = undefined;
       recordingOptionsRef.current = {};
       const stoppedByItself = reason !== 'stopped';
-      // Trigger-happy tap — MediaRecorder hasn't emitted a usable chunk yet
-      // so the blob is empty or unparseable. Surface it as a transient pill
-      // so the user sees their recording was recognised and canceled.
+      // Trigger-happy tap: nothing worth transcribing. Surface it as a
+      // transient pill so the user sees their recording was recognised and
+      // canceled.
       if (!blob.size || (recordedDuration ?? 0) < MIN_RECORDING_DURATION_S) {
         showError(
           stoppedByItself ? pillT('captures.pill.micStoppedEmpty') : shortRecordingMessage(),
@@ -537,7 +545,7 @@ export function useCaptureRecordingSession(
     pillElapsedMs,
     errorMessage,
     isRecording,
-    recordingStream,
+    recordingLevel,
     isUploading: uploadMutation.isPending,
     isRefining: refineMutation.isPending || commandMutation.isPending,
     startRecording,

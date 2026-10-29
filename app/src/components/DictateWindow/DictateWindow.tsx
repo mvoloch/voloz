@@ -106,6 +106,8 @@ export function DictateWindow() {
   // A voice command's result is pasted the same way: the target app still
   // has the text selected, so the paste replaces it.
   const session = useCaptureRecordingSession({
+    // Chord dictations come in bursts: keep the microphone open in between.
+    warmMicrophone: true,
     getCommandSelection: (context) => commandSelection(context as DictationContext),
     onFinalText: async (text, _capture, allowAutoPaste, context) => {
       const focus = (context as DictationContext | null | undefined)?.focus ?? null;
@@ -428,7 +430,7 @@ export function DictateWindow() {
           onStop={session.isRecording ? session.stopRecording : undefined}
           stopTitle={pillT('captures.pill.stopEscTitle')}
           handsFree={handsFree}
-          levelStream={session.recordingStream}
+          levelSource={session.recordingLevel}
         />
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 /**
- * How one MediaRecorder recording ends. Kept free of React and the DOM so
+ * How one recording ends (the microphone take in `useAudioRecording`; it
+ * was a MediaRecorder before, hence the recorder's vocabulary). Kept free of React and the DOM so
  * the rules can be unit-tested (`app/tests/recorderLifecycle.test.ts`).
  *
  * Whatever ends a recording — a stop request (hotkey, the pill's button,
@@ -13,7 +14,7 @@
 
 export type RecordingEndReason = 'stopped' | 'device-ended' | 'error';
 
-/** The part of a MediaRecorder this drives. */
+/** The part of a recorder this drives. */
 export interface StoppableRecorder {
   readonly state: 'inactive' | 'recording' | 'paused';
   stop(): void;
