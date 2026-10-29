@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-29 (style per target app, voice commands, text shortcuts, audio retention and lite first-run setup, all merged into `light`). Update this file whenever state or decisions change._
+_Last updated: 2026-10-29 (lighter Lite on `feat/lite-086`: no librosa, no main window at login, clipboard restore; not merged). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -572,6 +572,76 @@ unrecoverable is.
   bars stay next to the timer. The pill is about 34 px wider while
   recording (14 px symbol slot instead of the 8 px dot, plus the stop
   button); height, shape and colours unchanged.
+
+## Lighter Lite (`feat/lite-086`, 2026-10-29)
+
+Why: on the owner's PC Lite 0.8.5 used 1,073 MB 12 min after start
+(server 694 MB, WebView2 355 MB in 9 processes, the largest renderer
+159 MB), and the first dictation after start took 11.9 s because the
+warm-up was still importing librosa.
+
+- **Server without librosa.** `utils/audio.load_audio` decodes with
+  soundfile and resamples with soxr at `soxr_hq` — librosa.load's own
+  steps, same samples bit for bit (checked on `valois.wav` and a 48 kHz
+  stereo copy, at 16/24/44.1 kHz and native). Formats soundfile can't
+  read go through librosa when it is installed (studio); without it
+  (lite) `UnsupportedAudioError`, and `/captures` and `/transcribe`
+  answer 415. A WAV capture's duration comes from its header.
+  `requirements-lite.txt` has soxr and no librosa/numba; the lite build
+  excludes librosa, numba, llvmlite, scipy, sklearn, joblib, audioread,
+  resampy, pooch, msgpack; CI fails if librosa is importable.
+- **Imported files become WAV in the app (lite).** Upload decodes the
+  file in the webview (`convertToWav(file, { monoSampleRate: 16000 })`)
+  and sends 16 kHz mono WAV; a format the webview can't decode shows
+  "Couldn't read this audio format". Studio unchanged.
+- **No main window at login (lite).** `tauri.lite.conf.json` repeats the
+  main window with `"create": false` (merge-patch replaces the array, so
+  keep it in step with `tauri.conf.json`). `show_main_window` builds it
+  for a normal launch, the tray and a second launch; a launch at login
+  leaves it unbuilt. The dictate window then does what the main window's
+  shell did for dictation (`BootWithoutMainWindow`): keep-running flag to
+  Rust, `start_server`, and once settings and readiness load, one
+  `enable_hotkey`/`disable_hotkey` (`hotkeyCommand`, shared with
+  `useChordSync`). `start_server` is single-flight (`start_lock`), so the
+  main window opened during that start waits and gets the running server.
+  Closing to the tray already destroyed the window (`0b6ecc7`). Left in
+  the main window on purpose: update check (lite has no channel), server
+  log view, captures-list sync events, the macOS accessibility prompt
+  (`system:accessibility-missing` has no listener while the window is
+  closed, as before). Studio still creates the window hidden at login.
+- **Clipboard after a paste.** The restore used to be skipped whenever
+  the clipboard sequence number moved, so a clipboard monitor
+  (QuickTextPaste, Plaud, Grammarly) re-writing the dictation left it on
+  the clipboard. Now it is restored when the clipboard still holds
+  exactly the text Voloz wrote (`clipboard::restore_decision`) and kept
+  only when it holds something else; each outcome goes to
+  `dictation.log` with the process that owns the clipboard (no
+  contents). Voloz's writes (the staged text and the restored clipboard)
+  carry `ExcludeClipboardContentFromMonitorProcessing`,
+  `CanIncludeInClipboardHistory` = 0 and `CanUploadToCloudClipboard` = 0.
+  Clippy-checked only; which monitor rewrote it on the owner's PC is for
+  the log to tell.
+
+Measured on GB4 (Linux, frozen lite server, 3 launches each; a 2 s
+48 kHz dictation posted as soon as `/health` answered):
+
+| | 0.8.5 | now |
+| --- | --- | --- |
+| Binary | 158 MB | 63 MB |
+| Unpacked (`_MEI`) | 390 MB | 141 MB |
+| Launch to healthy | 2.2 s | 1.3–1.9 s |
+| RSS after warm-up (bootloader + server) | 320–339 MB | 150 MB |
+| First capture, local fake STT | 6.9 / 2.0 / 1.9 s | 0.77 / 0.08 / 0.10 s |
+| First capture, Groq | 2.26–2.32 s | 0.43–0.52 s |
+| Second capture, Groq | 0.34–0.39 s | 0.32–0.40 s |
+
+The release lite app run under Xvfb with `--autostart`: one WebKit
+renderer (175 MB RSS), the server started by the dictate window and the
+hotkey armed (`dictation.log`); a second launch built the main window (a
+second renderer, 224 MB) on the same server. A normal launch builds
+both windows and the dictate window doesn't boot. Windows (WebView2
+memory, MSI/NSIS, the first dictation after login on the Dell) is not
+measured yet.
 
 ## Developing on GB4
 
