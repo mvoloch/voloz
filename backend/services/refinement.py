@@ -312,6 +312,14 @@ _KEEP_LANGUAGE_INSTRUCTION = (
 )
 
 
+# Added only when the transcript holds text-shortcut placeholders
+# (``snippets.protect_snippets``), so other prompts stay as they were.
+_PLACEHOLDER_INSTRUCTION = (
+    "Copy each of these placeholders exactly once, unchanged, where it stands in the "
+    "sentence: {tokens}. Each stands for text inserted later."
+)
+
+
 def _wants_tagged_output(backend) -> bool:
     from ..backends.anthropic_backend import AnthropicLLMBackend
 
@@ -330,11 +338,14 @@ async def refine_transcript(
     model_size: str | None = None,
     vocabulary: Optional[Iterable[str]] = None,
     app_style: Optional[str] = None,
+    placeholders: Iterable[str] = (),
 ) -> tuple[str, str]:
     """Run the transcript through the LLM with the built system prompt.
 
     ``vocabulary`` is the user's list of spellings for names and jargon and
     ``app_style`` the target app's style; see :func:`build_refinement_prompt`.
+    ``placeholders`` are tokens in ``transcript`` the model must copy
+    unchanged (text shortcuts, see ``services/snippets.py``).
 
     Returns:
         (refined_text, llm_model_size) — so callers can persist which model
@@ -352,6 +363,11 @@ async def refine_transcript(
         return "", resolved_size
 
     system_prompt = build_refinement_prompt(flags, vocabulary, app_style)
+    tokens = list(placeholders)
+    if tokens:
+        system_prompt = (
+            f"{system_prompt}\n\n{_PLACEHOLDER_INSTRUCTION.format(tokens=', '.join(tokens))}"
+        )
     examples = REFINEMENT_EXAMPLES
     tagged = _wants_tagged_output(backend)
     if tagged:

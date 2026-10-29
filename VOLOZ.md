@@ -360,7 +360,9 @@ Cut from `light` at `a6d149c`, not merged. All three work in lite.
   a longer dictation is expanded *after* refinement, on the LLM's output,
   so the model never sees the saved text (checked live: a 30 s Portuguese
   dictation refined by Qwen and by Haiku kept a two-line shortcut
-  byte-for-byte). With refinement off it is expanded in the raw text. On
+  byte-for-byte; since `fix/audit` the trigger itself goes to the model
+  as a placeholder, see below). With refinement off it is expanded in the
+  raw text. On
   Windows the pill converts line breaks to CRLF before the paste (classic
   edit controls drop a bare LF); the Rust paste code is unchanged.
 - **Keep dictation audio** (Settings → Dictation → Storage): Always (the
@@ -405,6 +407,17 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   429, say) pasted it: "meu endereço" instead of the address. `POST
   /captures` now also returns `fallback_text` (raw transcript, shortcuts
   expanded; not stored) and the pill pastes that when the refine fails.
+- **Shortcut missed when the LLM respelled the trigger.** Triggers were
+  matched on the LLM's output, so "meu email" refined to "meu e-mail"
+  was never expanded. Each trigger now goes to the model as a placeholder
+  (`[[S1]]`, `[[S2]]`…) with one prompt line telling it to copy them
+  (added only when there are placeholders; every other prompt is
+  byte-identical), and the placeholders become the shortcut texts after
+  refinement. A placeholder missing, repeated or renamed in the output is
+  not guessed: the unrefined text with shortcuts expanded is stored
+  (labelled as a shortcut) and a warning logged. Live, 5 Portuguese
+  dictations with 1–2 triggers × 2 runs: Claude Haiku kept 14/14
+  placeholders, Groq `openai/gpt-oss-120b` 14/14; no fallback.
 
 ## Developing on GB4
 

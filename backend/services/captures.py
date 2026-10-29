@@ -23,7 +23,13 @@ from ..models import CaptureResponse, CaptureTranscriptUpdateResponse, Refinemen
 from ..utils.audio import load_audio
 from .app_context import style_for_app
 from .refinement import RefinementFlags, refine_transcript
-from .snippets import SNIPPET_LABEL, expand_snippets, match_whole_snippet
+from .snippets import (
+    SNIPPET_LABEL,
+    expand_snippets,
+    match_whole_snippet,
+    protect_snippets,
+    restore_snippets,
+)
 from .transcribe import get_whisper_model, resolve_stt_model, transcribe_with_vocabulary
 from .vocabulary import apply_replacements, normalize_replacements, suggest_replacements
 from .voice_commands import run_command
@@ -90,7 +96,8 @@ def _snippet_text(
     A transcript that is only a trigger always becomes its text. Triggers
     inside a longer transcript are expanded only when ``expand_inline`` —
     i.e. when no refinement follows; otherwise :func:`refine_capture`
-    expands them in the LLM's output, so the model never rewrites them.
+    passes them through the LLM as placeholders, so the model never
+    rewrites them.
     """
     whole = match_whole_snippet(transcript, snippets)
     if whole is not None:
@@ -105,7 +112,8 @@ def _snippet_text(
 def unrefined_text(transcript: str, snippets: Optional[list[dict]]) -> str:
     """``transcript`` as delivered without refinement: shortcuts expanded.
 
-    What the app pastes when the refinement that follows a capture fails.
+    What the app pastes when the refinement that follows a capture fails,
+    and what :func:`refine_capture` stores when the LLM loses a shortcut.
     """
     return expand_snippets(transcript, snippets)
 
@@ -271,14 +279,18 @@ async def refine_capture(
     """Refine a capture's raw transcript and store the result.
 
     A transcript that is only a shortcut trigger gets the shortcut's text
-    without calling the LLM. Otherwise triggers are expanded in the LLM's
-    output, after refinement, so the saved text is pasted verbatim.
+    without calling the LLM. Otherwise each trigger goes to the LLM as a
+    placeholder it must keep, which becomes the shortcut's text after
+    refinement, so the saved text is pasted verbatim. When a placeholder
+    is lost or repeated, the unrefined text with shortcuts expanded is
+    stored instead, labelled like a shortcut.
     """
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
         return None
 
-    whole = match_whole_snippet(row.transcript_raw or "", snippets)
+    raw = row.transcript_raw or ""
+    whole = match_whole_snippet(raw, snippets)
     if whole is not None:
         row.transcript_refined = whole
         row.llm_model = SNIPPET_LABEL
@@ -287,17 +299,32 @@ async def refine_capture(
         db.refresh(row)
         return _to_response(row)
 
+    protected, tokens = protect_snippets(raw, snippets)
     refined, llm_size = await refine_transcript(
-        row.transcript_raw or "",
+        protected,
         flags,
         model_size=model_size,
         vocabulary=vocabulary,
         app_style=app_style(row, adapt_to_app),
+        placeholders=tokens,
     )
 
-    row.transcript_refined = expand_snippets(refined, snippets)
-    row.llm_model = llm_size
-    row.refinement_flags = json.dumps(flags.to_dict())
+    restored = restore_snippets(refined, tokens)
+    if restored is None:
+        # Guessing where a lost shortcut belonged could paste it in the
+        # wrong place; the unrefined text holds every one where it was said.
+        logger.warning(
+            "Refinement of capture %s lost or repeated a shortcut placeholder; "
+            "storing the unrefined text",
+            capture_id,
+        )
+        row.transcript_refined = unrefined_text(raw, snippets)
+        row.llm_model = SNIPPET_LABEL
+        row.refinement_flags = None
+    else:
+        row.transcript_refined = restored
+        row.llm_model = llm_size
+        row.refinement_flags = json.dumps(flags.to_dict())
     db.commit()
     db.refresh(row)
     return _to_response(row)

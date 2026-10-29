@@ -1,8 +1,8 @@
 """
 Tests for text shortcuts (snippets): validation, whole-dictation and
 inline matching, and the capture flow — a dictation that is only the
-trigger skips refinement, a trigger inside a longer one is expanded after
-refinement so the LLM never sees the saved text.
+trigger skips refinement, a trigger inside a longer one goes through
+refinement as a placeholder, so the LLM never sees or respells it.
 
 HTTP calls go to the in-process ``FakeServer`` from
 ``test_cloud_dictation.py`` (no network, no keys).
@@ -21,6 +21,8 @@ from backend.services.snippets import (
     expand_snippets,
     match_whole_snippet,
     normalize_snippets,
+    protect_snippets,
+    restore_snippets,
 )
 from backend.tests.test_cloud_dictation import FakeServer, _wav_bytes
 from backend.tests.test_vocabulary import api  # noqa: F401 — fixture
@@ -123,6 +125,27 @@ def test_inline_expansion_maps_folded_characters_back_to_the_original():
     assert expand_snippets("Die Straße, bitte.", snippets) == "Die Street, bitte."
 
 
+def test_placeholders_stand_for_each_trigger_and_restore_to_its_text():
+    text = "Meu endereço e a assinatura; de novo meu endereco."
+    protected, tokens = protect_snippets(text, SNIPPETS)
+    assert protected == "[[S1]] e a [[S2]]; de novo [[S3]]."
+    assert tokens == {"[[S1]]": ADDRESS, "[[S2]]": SIGNATURE, "[[S3]]": ADDRESS}
+    # A refinement may move and punctuate them; each comes back once.
+    refined = "[[S1]], e a [[S2]]. De novo: [[S3]]."
+    assert restore_snippets(refined, tokens) == f"{ADDRESS}, e a {SIGNATURE}. De novo: {ADDRESS}."
+    assert protect_snippets("nada aqui", SNIPPETS) == ("nada aqui", {})
+    assert restore_snippets("Nada aqui.", {}) == "Nada aqui."
+
+
+@pytest.mark.parametrize(
+    "refined",
+    ["[[S1]] e a.", "[[S1]] e a [[S2]] [[S2]].", "[[S1]] e a [[S3]].", "[[S1]] e a [[S2]] [[S9]]."],
+)
+def test_a_missing_repeated_or_unknown_placeholder_is_not_restored(refined):
+    _, tokens = protect_snippets("meu endereço e a assinatura", SNIPPETS)
+    assert restore_snippets(refined, tokens) is None
+
+
 # ── Storage and the capture flow ──────────────────────────────────────────
 
 
@@ -188,10 +211,23 @@ def test_a_dictation_that_is_only_the_trigger_pastes_the_text_without_refining(a
         assert llm.requests == []
 
 
+def _model(rewrite):
+    """A chat endpoint that answers ``rewrite(transcript)``, as a model would."""
+
+    def script(_path, _headers, raw):
+        return _chat_reply(rewrite(json.loads(raw)["messages"][-1]["content"]))
+
+    return script
+
+
+def _system_prompt(llm) -> str:
+    return json.loads(llm.requests[-1]["raw"])["messages"][0]["content"]
+
+
 def test_a_trigger_inside_a_dictation_is_expanded_after_refinement(api):
     with (
         FakeServer(lambda *_: (200, {"text": "manda pra meu endereço por favor"})) as stt,
-        FakeServer(lambda *_: _chat_reply("Manda pra meu endereço, por favor.")) as llm,
+        FakeServer(_model(lambda t: "M" + t[1:].replace(" por favor", ", por favor."))) as llm,
     ):
         _configure(api, stt.base_url, llm.base_url)
         capture = _dictate(api)
@@ -203,9 +239,67 @@ def test_a_trigger_inside_a_dictation_is_expanded_after_refinement(api):
         assert res.status_code == 200, res.text
         assert res.json()["transcript_refined"] == f"Manda pra {ADDRESS}, por favor."
         assert res.json()["llm_model"] == "qwen/test"
-        # The LLM saw the trigger, never the saved text.
+        # The LLM saw a placeholder, never the trigger or the saved text.
         sent = json.loads(llm.requests[-1]["raw"])
+        assert sent["messages"][-1]["content"] == "manda pra [[S1]] por favor"
         assert "Rua das Flores" not in json.dumps(sent)
+        assert "[[S1]]" in _system_prompt(llm)
+
+
+def test_a_trigger_the_model_would_respell_is_still_expanded(api):
+    email = "marcus@example.com"
+    shortcuts = [*SNIPPETS, {"trigger": "meu email", "text": email}]
+    with (
+        FakeServer(lambda *_: (200, {"text": "me manda no meu email amanhã"})) as stt,
+        # Models write "e-mail"; a trigger matched on their output was lost.
+        FakeServer(_model(lambda t: "Me" + t[2:].replace("email", "e-mail") + ".")) as llm,
+    ):
+        _configure(api, stt.base_url, llm.base_url)
+        api.put("/settings/captures", json={"snippets": shortcuts})
+        capture = _dictate(api)
+        res = api.post(f"/captures/{capture['id']}/refine", json={})
+
+    assert res.status_code == 200, res.text
+    assert res.json()["transcript_refined"] == f"Me manda no {email} amanhã."
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Manda pra meu endereço, por favor.",  # placeholder dropped
+        "Manda pra [[S1]], por favor. [[S1]]",  # repeated
+        "Manda pra [[S2]], por favor.",  # renamed
+        "Manda pra [[s1]], por favor.",  # case changed
+    ],
+)
+def test_a_lost_placeholder_stores_the_unrefined_text_with_shortcuts(api, caplog, reply):
+    with (
+        FakeServer(lambda *_: (200, {"text": "manda pra meu endereço por favor"})) as stt,
+        FakeServer(lambda *_: _chat_reply(reply)) as llm,
+    ):
+        _configure(api, stt.base_url, llm.base_url)
+        capture = _dictate(api)
+        res = api.post(f"/captures/{capture['id']}/refine", json={})
+
+    assert res.status_code == 200, res.text
+    assert res.json()["transcript_refined"] == capture["fallback_text"]
+    assert capture["fallback_text"] == f"manda pra {ADDRESS} por favor"
+    assert res.json()["llm_model"] == SNIPPET_LABEL
+    assert res.json()["refinement_flags"] is None
+    assert "placeholder" in caplog.text
+
+
+def test_without_a_trigger_the_prompt_has_no_placeholder_line(api):
+    with (
+        FakeServer(lambda *_: (200, {"text": "bom dia a todos"})) as stt,
+        FakeServer(lambda *_: _chat_reply("Bom dia a todos.")) as llm,
+    ):
+        _configure(api, stt.base_url, llm.base_url)
+        capture = _dictate(api)
+        res = api.post(f"/captures/{capture['id']}/refine", json={})
+
+    assert res.json()["transcript_refined"] == "Bom dia a todos."
+    assert "placeholder" not in _system_prompt(llm)
 
 
 def test_a_failed_refinement_has_a_fallback_with_the_shortcut_expanded(api):

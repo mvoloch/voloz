@@ -7,9 +7,13 @@ multi-line signature.
   around it allowed) becomes the saved text verbatim and is not refined
   (:func:`match_whole_snippet`).
 - A trigger inside a longer dictation is expanded in place
-  (:func:`expand_snippets`). With refinement on, this runs on the LLM's
-  output, so the model never sees the saved text and cannot rewrite it;
-  with refinement off it runs on the raw transcript.
+  (:func:`expand_snippets`). With refinement on, each trigger is first
+  swapped for a placeholder token that the LLM is told to keep
+  (:func:`protect_snippets`) and the token becomes the saved text after
+  refinement (:func:`restore_snippets`): the model never sees the saved
+  text, and can't respell the trigger so it no longer matches ("meu
+  email" → "meu e-mail"). With refinement off the raw transcript is
+  expanded.
 
 Matching ignores case, accents and the punctuation between words, so
 "Meu endereço", "meu endereco" and "meu, endereço" all match the trigger
@@ -29,6 +33,11 @@ MAX_SNIPPET_TEXT_CHARS = 4000
 # ``llm_model`` label of a capture whose delivered text came from a shortcut
 # rather than from the LLM, so the UI can say so.
 SNIPPET_LABEL = "snippet"
+
+# Stands for a trigger while the LLM refines the text around it: brackets
+# and a short id, which models copy unchanged and nobody dictates.
+PLACEHOLDER_FORMAT = "[[S{}]]"
+_PLACEHOLDER_RE = re.compile(r"\[\[S\d+\]\]")
 
 # Words allowed around a trigger when the whole dictation is the shortcut
 # ("é... meu endereço", "um, signature"). Compared after folding, so "então"
@@ -163,6 +172,42 @@ def expand_snippets(text: str, snippets: Optional[Iterable[Any]]) -> str:
     over shorter ones inside them, and an inserted text is never searched
     again.
     """
+    return _replace_triggers(text, snippets, lambda expansion: expansion)
+
+
+def protect_snippets(text: str, snippets: Optional[Iterable[Any]]) -> tuple[str, dict[str, str]]:
+    """Replace every trigger inside ``text`` with a placeholder token.
+
+    Matching is the same as :func:`expand_snippets`. Each occurrence gets
+    its own token (``[[S1]]``, ``[[S2]]``…). Returns the text and a map
+    from token to shortcut text, for :func:`restore_snippets`; the map is
+    empty when ``text`` has no trigger.
+    """
+    tokens: dict[str, str] = {}
+
+    def to_token(expansion: str) -> str:
+        token = PLACEHOLDER_FORMAT.format(len(tokens) + 1)
+        tokens[token] = expansion
+        return token
+
+    return _replace_triggers(text, snippets, to_token), tokens
+
+
+def restore_snippets(text: str, tokens: dict[str, str]) -> Optional[str]:
+    """Put each shortcut text back in place of its token.
+
+    Returns ``None`` when a token is missing, appears more than once, or an
+    unknown one appears — the text can't be trusted to hold each shortcut
+    exactly where the speaker said it.
+    """
+    found = _PLACEHOLDER_RE.findall(text)
+    if sorted(found) != sorted(tokens):
+        return None
+    return _PLACEHOLDER_RE.sub(lambda m: tokens[m.group(0)], text)
+
+
+def _replace_triggers(text: str, snippets: Optional[Iterable[Any]], replace) -> str:
+    """Replace every trigger inside ``text`` with ``replace(shortcut text)``."""
     if not text:
         return text
     cleaned = _clean_snippets(snippets)
@@ -184,7 +229,7 @@ def expand_snippets(text: str, snippets: Optional[Iterable[Any]]) -> str:
         if start < last:
             continue
         parts.append(text[last:start])
-        parts.append(cleaned[int(match.lastgroup[1:])]["text"])
+        parts.append(replace(cleaned[int(match.lastgroup[1:])]["text"]))
         last = end
     if not parts:
         return text
