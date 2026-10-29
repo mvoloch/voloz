@@ -15,6 +15,13 @@ interface DictateStartPayload {
   mode?: 'dictation' | 'command';
   /** Command only: the selection UIAutomation read; null when it couldn't. */
   selection?: string | null;
+  /** Started by the hands-free (toggle) chord. */
+  hands_free?: boolean;
+}
+
+/** Rust's ``dictate:restart`` payload: push-to-talk upgraded to another chord. */
+interface DictateRestartPayload {
+  hands_free?: boolean;
 }
 
 /** Rust's ``dictate:stop`` payload: null from a chord, ``escape`` from Esc. */
@@ -149,6 +156,11 @@ export function DictateWindow() {
   // selection while the audio uploads.
   const currentContextRef = useRef<DictationContext | null>(null);
 
+  // Hands-free (the toggle chord, or push-to-talk upgraded into it) runs
+  // until the chord is pressed again; the pill says so, or an accidental
+  // upgrade looks like a recording that won't stop.
+  const [handsFree, setHandsFree] = useState(false);
+
   useEffect(() => {
     const unlistens: Promise<UnlistenFn>[] = [];
     unlistens.push(
@@ -156,6 +168,7 @@ export function DictateWindow() {
         dictationLog(`dictate:start received (${event.payload?.mode ?? 'dictation'})`);
         chordStoppedRef.current = false;
         if (sessionRef.current.isRecording) return;
+        setHandsFree(event.payload?.hands_free === true);
         const focus = event.payload?.focus ?? null;
         const command = event.payload?.mode === 'command';
         const uiaSelection = event.payload?.selection;
@@ -190,6 +203,14 @@ export function DictateWindow() {
         // Always forward: a release that lands while the mic is still
         // opening is held and applied once recording starts.
         sessionRef.current.stopRecording();
+      }),
+    );
+    unlistens.push(
+      listen<DictateRestartPayload | null>('dictate:restart', (event) => {
+        // The recording goes on; only its mode changes.
+        const next = event.payload?.hands_free === true;
+        dictationLog(`dictate:restart received: mode ${next ? 'hands-free' : 'push-to-talk'}`);
+        setHandsFree(next);
       }),
     );
     return () => {
@@ -400,6 +421,7 @@ export function DictateWindow() {
           onDismiss={session.dismissError}
           onStop={session.isRecording ? session.stopRecording : undefined}
           stopTitle={t('captures.pill.stopEscTitle')}
+          handsFree={handsFree}
         />
       ) : null}
     </div>

@@ -119,6 +119,7 @@
     },
     "pill": {
       "recording": "Gravando",
+      "handsFree": "Hands Free",
       "transcribing": "Transcrevendo",
       "refining": "Refinando",
       "speaking": "Falando",

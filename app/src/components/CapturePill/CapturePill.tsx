@@ -78,6 +78,7 @@ export function CapturePill({
   elapsedMs,
   onStop,
   stopTitle,
+  handsFree,
   errorMessage,
   onDismiss,
   className,
@@ -87,6 +88,8 @@ export function CapturePill({
   onStop?: () => void;
   /** Tooltip of the stop button; defaults to its aria label. */
   stopTitle?: string;
+  /** A hands-free recording: labelled so, since only the chord or stop ends it. */
+  handsFree?: boolean;
   errorMessage?: string | null;
   onDismiss?: () => void;
   className?: string;
@@ -104,7 +107,13 @@ export function CapturePill({
   }
 
   const visible = state !== 'rest';
-  const labelText = t(state === 'rest' ? PILL_LABEL_KEYS.recording : PILL_LABEL_KEYS[state]);
+  const labelText = t(
+    state === 'recording' && handsFree
+      ? 'captures.pill.handsFree'
+      : state === 'rest'
+        ? PILL_LABEL_KEYS.recording
+        : PILL_LABEL_KEYS[state],
+  );
   const barMode = barModeFor(state);
 
   const dot = (

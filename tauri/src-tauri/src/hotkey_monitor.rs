@@ -402,6 +402,8 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
                     "focus": focus,
                     "mode": if command { "command" } else { "dictation" },
                     "selection": selection,
+                    // Started by the hands-free (toggle) chord: the pill says so.
+                    "hands_free": action == ChordAction::ToggleToTalk,
                 });
                 let _ = window.emit("dictate:start", payload);
                 dictation_log::log(&format!("[rust] chord start ({action:?}): dictate:start sent"));
@@ -417,7 +419,13 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
         }
         Effect::RestartRecording(action) => {
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
-                let _ = window.emit("dictate:restart", ());
+                // Holding push-to-talk and adding the rest of the hands-free
+                // chord upgrades the recording in progress; the pill shows
+                // the mode, since it now runs until the chord is pressed again.
+                let payload = serde_json::json!({
+                    "hands_free": action == ChordAction::ToggleToTalk,
+                });
+                let _ = window.emit("dictate:restart", payload);
                 dictation_log::log(&format!("[rust] chord restart ({action:?}): dictate:restart sent"));
             }
         }

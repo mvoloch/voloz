@@ -528,6 +528,15 @@ unrecoverable is.
   exit by itself (so it can clean `%TEMP%`) and writes a line to
   `dictation.log` if it had to be ended. "Keep server running" lifts
   kill-on-close before exiting. Compiled for Windows only, not run.
+- **Hands-free shows on the pill.** A second "stuck" recording was
+  hands-free entered by accident (Shift brushed while holding Ctrl+Win;
+  pressing Ctrl+Shift+Win again stopped it): the pill looked the same in
+  both modes. Rust now says the mode: `dictate:start` carries
+  `hands_free` (started by the toggle chord) and `dictate:restart` (the
+  push-to-talk → hands-free upgrade, which the pill used to ignore)
+  carries it too. The pill reads "Hands Free" (in every language, the
+  owner's call: the name of the mode, like a brand term) instead of
+  "Recording", timer and stop button unchanged; the switch is logged.
 
 ## Developing on GB4
 
