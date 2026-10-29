@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-28 (0.8.2: dictation fixes from testing 0.8.1). Update this file whenever state or decisions change._
+_Last updated: 2026-10-29 (vocabulary and learning from corrections on `feat/vocabulary`). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -113,9 +113,25 @@ keep-alive). Still to confirm in an installed build.
 2. Lite edition: build flag that hides Studio routes in the frontend and a
    torch-free backend (lazy PyTorch: `backend/app.py`, `routes/health.py`,
    `utils/hf_offline_patch.py` import it at startup today).
-3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Still to do: a
-   vocabulary/prompt setting for names and jargon (Whisper `prompt`; Groq
-   honours it, OpenRouter ignored it).
+3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Vocabulary
+   phase 1 is on `feat/vocabulary` (`32f35cb` backend, `31a4dc8` app; not
+   merged): Settings → Dictation → Vocabulary holds words/names and
+   "heard as → write as" rules. Words go to a remote STT endpoint as the
+   Whisper `prompt` and to refinement; rules run on the raw transcript
+   right after STT (so they also cover OpenRouter, which ignored the prompt,
+   and refinement off). The capture transcript is editable; saving a
+   correction offers "Learn: Valois → Voloz?". Local Whisper gets no prompt
+   yet (`services/transcribe.py`). Measured on Groq, 30 s Portuguese
+   dictation, 3 runs each: no prompt "Valois" 3/3; prompt "Voloz" "Voloz"
+   3/3; prompt "Voloz, Log-In, Pascoal" "Voloz" 3/3. On 3 s of silence
+   the prompt "Voloz" came back as the transcript 3/3, so a transcript that
+   is only the prompt is dropped; other silence hallucinations ("E aí",
+   "Legenda por …") remain, as before. Merging: one-line conflict with
+   `fix/refine-single-output` in `refine_transcript` (keep the tagged block,
+   call `build_refinement_prompt(flags, vocabulary)`), and the toast keys
+   in en/pt-BR `translation.json` conflict with `feat/lite-edition`
+   (keep both). Checked on a throwaway merge of all three: pytest 428
+   passed / 13 skipped, lite `test_edition.py` 6 passed, tsc clean.
 4. Streaming STT + incremental refinement to approach Wispr's ~0.7 s.
 5. Linux build and test on GB4; then Android.
 6. Studio: cloud TTS/cloning engine (ElevenLabs/Cartesia/Fish Audio).
