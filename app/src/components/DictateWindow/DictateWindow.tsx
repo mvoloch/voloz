@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef, useState } from 'react';
 import { CapturePill } from '@/components/CapturePill/CapturePill';
+import { BootWithoutMainWindow } from '@/components/DictateWindow/BootWithoutMainWindow';
 import { pillT } from '@/i18n';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
@@ -412,6 +413,7 @@ export function DictateWindow() {
       className="h-screen w-screen flex items-center justify-center px-3"
       style={{ background: 'transparent' }}
     >
+      <BootWithoutMainWindow />
       {effectiveState !== 'hidden' ? (
         <CapturePill
           state={effectiveState}

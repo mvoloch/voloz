@@ -35,6 +35,9 @@ pub fn should_hide_on_close(window_label: &str) -> bool {
 /// the separate dictate window and the hotkey in Rust, so nothing the user
 /// relies on while the window is closed lives in the main webview — and
 /// destroying it returns its renderer process (~100-250 MB) to the OS.
+/// What the main window sets up at launch (server, keep-running flag,
+/// hotkey bindings) stays in Rust after it is gone; when there was no main
+/// window at launch, the dictate window sets it up instead.
 /// `show_main_window` rebuilds it from the app config. Destroy runs off the
 /// event handler to avoid tearing the window down mid-dispatch.
 pub fn release_main_window<R: Runtime>(window: &Window<R>) {

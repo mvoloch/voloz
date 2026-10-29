@@ -1,8 +1,38 @@
 import { invoke } from '@tauri-apps/api/core';
 import { useEffect } from 'react';
+import type { CaptureSettings } from '@/lib/api/types';
 import { useDictationReadiness } from '@/lib/hooks/useDictationReadiness';
 import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { usePlatform } from '@/platform/PlatformContext';
+
+export interface HotkeyCommand {
+  command: 'enable_hotkey' | 'disable_hotkey';
+  args: Record<string, unknown>;
+}
+
+/**
+ * The Rust command that matches the saved chords and readiness, or null
+ * while the settings haven't loaded. Shared by `useChordSync` and the
+ * dictate window's boot without a main window.
+ */
+export function hotkeyCommand(
+  settings: CaptureSettings | undefined,
+  canRecord: boolean,
+): HotkeyCommand | null {
+  const pushKeys = settings?.chord_push_to_talk_keys;
+  const toggleKeys = settings?.chord_toggle_to_talk_keys;
+  if (settings?.hotkey_enabled === undefined || !pushKeys || !toggleKeys) return null;
+  return settings.hotkey_enabled && canRecord
+    ? {
+        command: 'enable_hotkey',
+        args: {
+          pushToTalk: pushKeys,
+          toggleToTalk: toggleKeys,
+          command: settings.chord_command_keys ?? [],
+        },
+      }
+    : { command: 'disable_hotkey', args: {} };
+}
 
 /**
  * Spawn (or quiet) the global hotkey monitor based on the saved
@@ -36,15 +66,13 @@ export function useChordSync() {
 
   useEffect(() => {
     if (!platform.metadata.isTauri) return;
-    if (enabled === undefined || !pushKeys || !toggleKeys) return;
-    const shouldArm = enabled && canRecord;
-    const command = shouldArm ? 'enable_hotkey' : 'disable_hotkey';
-    const args = shouldArm
-      ? { pushToTalk: pushKeys, toggleToTalk: toggleKeys, command: commandKeys ?? [] }
-      : {};
-    invoke(command, args).catch((err) => {
-      console.warn(`[chord-sync] ${command} failed:`, err);
+    const sync = hotkeyCommand(settings, canRecord);
+    if (!sync) return;
+    invoke(sync.command, sync.args).catch((err) => {
+      console.warn(`[chord-sync] ${sync.command} failed:`, err);
     });
+    // settings is read through the keys below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     platform.metadata.isTauri,
     enabled,

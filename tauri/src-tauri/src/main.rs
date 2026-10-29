@@ -273,6 +273,12 @@ struct ServerState {
     /// default (ROCm preferred, then CUDA). Persisted to disk so the choice
     /// survives an app restart.
     backend_override: Mutex<Option<String>>,
+    /// Held for the whole of `start_server`. Two windows can ask for the
+    /// server at once (the dictate window's boot when there is no main
+    /// window, then the main window opened from the tray); the second call
+    /// waits for the first and then returns the running server, instead of
+    /// seeing a child that is spawned but not yet listening.
+    start_lock: tokio::sync::Mutex<()>,
 }
 
 fn backend_override_file(data_dir: &std::path::Path) -> std::path::PathBuf {
@@ -363,6 +369,7 @@ async fn start_server(
     remote: Option<bool>,
     models_dir: Option<String>,
 ) -> Result<String, String> {
+    let _starting = state.start_lock.lock().await;
     // Store models_dir for use on restart (empty string means reset to default)
     if let Some(ref dir) = models_dir {
         if dir.is_empty() {
@@ -1048,6 +1055,14 @@ async fn restart_server(
     // Start server again (will auto-detect GPU binary and use stored models_dir)
     println!("restart_server: starting server...");
     start_server(app, state.clone(), None, None).await
+}
+
+/// Whether the main window exists. The dictate window asks when it loads:
+/// without a main window (a lite launch at login) it starts the server and
+/// arms the hotkey itself, which the main window's shell otherwise does.
+#[command]
+fn main_window_open(app: tauri::AppHandle) -> bool {
+    app.get_webview_window("main").is_some()
 }
 
 #[command]
@@ -1762,6 +1777,7 @@ pub fn run() {
             keep_running_on_close: Mutex::new(false),
             models_dir: Mutex::new(None),
             backend_override: Mutex::new(None),
+            start_lock: tokio::sync::Mutex::new(()),
         })
         .manage(audio_capture::AudioCaptureState::new())
         .manage(audio_output::AudioOutputState::new())
@@ -1854,7 +1870,12 @@ pub fn run() {
 
             // The main window is created hidden (tauri.conf.json) so a
             // launch at login can stay in the tray; any other launch shows
-            // it now that it is set up.
+            // it now that it is set up. Lite doesn't create it at all
+            // (`"create": false` in tauri.lite.conf.json): this builds it
+            // from that config, and a launch at login leaves it unbuilt —
+            // no main webview until the user opens Voloz from the tray. The
+            // dictate window then starts the server and arms the hotkey
+            // (`useBootWithoutMainWindow`).
             #[cfg(desktop)]
             if !autostart::launched_at_login() {
                 tray::show_main_window(app.handle());
@@ -1889,7 +1910,8 @@ pub fn run() {
             update_chord_bindings,
             reset_hotkey_state,
             set_dictation_recording,
-            dictation_log
+            dictation_log,
+            main_window_open
         ])
         .on_window_event({
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
