@@ -64,14 +64,20 @@ def to_storage_path(path: str | Path) -> str:
     """Convert a filesystem path to a DB-safe path relative to the data dir."""
     resolved_path = Path(path).resolve()
 
+    # The configured data dir first: the "any data dir" fallback matches the
+    # first path component named "data", so a data dir under e.g. /mnt/data
+    # stored "dev/.../captures/x.wav", which resolve_storage_path() then
+    # joined onto the data dir — a path that doesn't exist.
+    try:
+        return str(resolved_path.relative_to(_data_dir))
+    except ValueError:
+        pass
+
     relative_to_any_data_dir = _path_relative_to_any_data_dir(resolved_path)
     if relative_to_any_data_dir is not None:
         return str(relative_to_any_data_dir)
 
-    try:
-        return str(resolved_path.relative_to(_data_dir))
-    except ValueError:
-        return str(resolved_path)
+    return str(resolved_path)
 
 
 def resolve_storage_path(path: str | Path | None) -> Path | None:
