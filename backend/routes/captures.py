@@ -10,6 +10,7 @@ from .. import config, edition, models
 from ..backends import get_llm_model_configs, get_stt_model_configs
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
+from ..services import audio_retention
 from ..services import captures as captures_service
 from ..services import settings as settings_service
 from ..services import warmup as warmup_service
@@ -66,6 +67,15 @@ async def create_capture_endpoint(
     except Exception as e:
         logger.exception("Failed to create capture")
         raise HTTPException(status_code=500, detail=str(e))
+
+    # The transcript is stored and refinement only needs the text, so the
+    # audio-retention setting can apply now ("never" deletes this capture's
+    # audio too). A failure here must not fail the dictation.
+    try:
+        if audio_retention.purge_expired_audio(db, saved.audio_retention):
+            capture = captures_service.get_capture(capture.id, db) or capture
+    except Exception:
+        logger.exception("Audio retention failed after capture %s", capture.id)
 
     return models.CaptureCreateResponse(
         **capture.model_dump(),

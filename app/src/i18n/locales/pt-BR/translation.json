@@ -199,6 +199,10 @@
       "rule": "Aprender: {{from}} → {{to}}?",
       "confirm": "Aprender",
       "dismiss": "Dispensar"
+    },
+    "audioNotKept": {
+      "title": "Áudio não guardado",
+      "description": "Apagado pela opção “Guardar o áudio dos ditados”. A transcrição fica; não dá para ouvir nem transcrever de novo."
     }
   },
   "voicesTab": {
@@ -1137,6 +1141,20 @@
           "d90": "90 dias",
           "d30": "30 dias",
           "d7": "7 dias"
+        },
+        "audioRetention": {
+          "title": "Guardar o áudio dos ditados",
+          "description": "As transcrições ficam sempre. Áudio mais antigo que isso é apagado da pasta de capturas.",
+          "options": {
+            "always": "Sempre",
+            "30d": "30 dias",
+            "7d": "7 dias",
+            "never": "Nunca"
+          },
+          "confirmTitle": "Apagar o áudio antigo?",
+          "confirmOlder": "O áudio dos ditados com mais de {{period}} será apagado agora e daqui em diante. As transcrições ficam. Não dá para desfazer.",
+          "confirmNever": "O áudio de todos os ditados será apagado agora, e os próximos ditados guardarão só o texto. Não dá para desfazer.",
+          "confirm": "Apagar áudio"
         },
         "folder": {
           "title": "Pasta de capturas",

@@ -271,6 +271,13 @@ def _migrate_capture_settings(engine, inspector, tables: set[str]) -> None:
     for column in ("vocabulary", "replacements", "snippets"):
         if column not in columns:
             _add_column(engine, "capture_settings", f"{column} TEXT NOT NULL DEFAULT '[]'", column)
+    if "audio_retention" not in columns:
+        _add_column(
+            engine,
+            "capture_settings",
+            "audio_retention VARCHAR NOT NULL DEFAULT 'always'",
+            "audio_retention",
+        )
 
 
 def _migrate_mcp_bindings(engine, inspector, tables: set[str]) -> None:

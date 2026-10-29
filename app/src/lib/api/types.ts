@@ -175,6 +175,8 @@ export interface CaptureResponse {
   llm_model?: string | null;
   refinement_flags?: RefinementFlags | null;
   created_at: string;
+  /** False once the audio was deleted by the retention setting or is missing on disk. */
+  audio_available?: boolean;
 }
 
 export interface CaptureListResponse {
@@ -288,7 +290,12 @@ export interface CaptureSettings {
   replacements: ReplacementRule[];
   /** Text shortcuts. A write replaces the whole list. */
   snippets: Snippet[];
+  /** How long captures keep their audio; transcripts are always kept. */
+  audio_retention: AudioRetention;
 }
+
+/** ``never`` deletes a dictation's audio once its transcript is stored. */
+export type AudioRetention = 'always' | '7d' | '30d' | 'never';
 
 export type CaptureSettingsUpdate = Partial<
   Omit<CaptureSettings, 'custom_llm_api_key_configured' | 'custom_stt_api_key_configured'>

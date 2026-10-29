@@ -3,9 +3,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+import logging
+
 from .. import models
 from ..database import get_db
+from ..services import audio_retention
 from ..services import settings as settings_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -20,7 +25,14 @@ async def update_capture_settings_endpoint(
     patch: models.CaptureSettingsUpdate,
     db: Session = Depends(get_db),
 ):
-    return settings_service.update_capture_settings(db, patch.model_dump(exclude_unset=True))
+    row = settings_service.update_capture_settings(db, patch.model_dump(exclude_unset=True))
+    if patch.audio_retention is not None:
+        # A shorter retention applies at once, not at the next capture.
+        try:
+            audio_retention.purge_expired_audio(db, row.audio_retention)
+        except Exception:
+            logger.exception("Audio retention failed after a settings change")
+    return row
 
 
 @router.get("/generation", response_model=models.GenerationSettingsResponse)

@@ -242,6 +242,9 @@ class CaptureSettings(Base):
     # dictation that is only the trigger pastes the text; a trigger inside a
     # longer one is expanded in place. See ``services/snippets.py``.
     snippets = Column(JSON, nullable=False, default=list)
+    # How long captures keep their audio: "always", "7d", "30d" or "never".
+    # See ``services/audio_retention.py``.
+    audio_retention = Column(String, nullable=False, default="always", server_default="always")
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

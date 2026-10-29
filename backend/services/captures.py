@@ -44,9 +44,11 @@ def _to_response(row: DBCapture) -> CaptureResponse:
         except (ValueError, TypeError):
             flags_model = None
 
+    audio = config.resolve_storage_path(row.audio_path)
     return CaptureResponse(
         id=row.id,
         audio_path=row.audio_path,
+        audio_available=audio is not None and audio.exists(),
         source=row.source,
         language=row.language,
         duration_ms=row.duration_ms,

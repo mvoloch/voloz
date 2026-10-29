@@ -14,6 +14,7 @@ import {
   FileText,
   Loader2,
   Mic,
+  MicOff,
   Settings2,
   Sparkles,
   Square,
@@ -874,10 +875,21 @@ export function CapturesTab() {
 
             {/* Audio player card */}
             <div className="rounded-xl border border-border bg-muted/20 p-4 mb-6">
-              <CaptureInlinePlayer
-                audioUrl={apiClient.getCaptureAudioUrl(selected.id)}
-                fallbackDurationMs={selected.duration_ms}
-              />
+              {selected.audio_available === false ? (
+                // Deleted by the audio-retention setting: the text stays.
+                <div className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                  <MicOff className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium text-foreground">{t('captures.audioNotKept.title')}</p>
+                    <p className="text-xs mt-0.5">{t('captures.audioNotKept.description')}</p>
+                  </div>
+                </div>
+              ) : (
+                <CaptureInlinePlayer
+                  audioUrl={apiClient.getCaptureAudioUrl(selected.id)}
+                  fallbackDurationMs={selected.duration_ms}
+                />
+              )}
             </div>
 
             {/* Transcript header */}
@@ -1123,7 +1135,10 @@ export function CapturesTab() {
                     {t('captures.actions.exportDropdownLabel')}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleExportAudio}>
+                  <DropdownMenuItem
+                    onClick={handleExportAudio}
+                    disabled={selected.audio_available === false}
+                  >
                     <FileAudio className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                     {t('captures.actions.exportAudio')}
                   </DropdownMenuItem>

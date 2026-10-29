@@ -206,6 +206,9 @@ class CaptureResponse(BaseModel):
     llm_model: Optional[str] = None
     refinement_flags: Optional[RefinementFlagsModel] = None
     created_at: datetime
+    # False once the audio file is gone (deleted by the audio-retention
+    # setting, or missing on disk): the transcript stays, nothing to play.
+    audio_available: bool = True
 
     class Config:
         from_attributes = True
@@ -304,6 +307,8 @@ class CaptureSettingsResponse(BaseModel):
     replacements: List[Dict[str, str]] = Field(default_factory=list)
     # Text shortcuts, ``{"trigger", "text"}`` (see ``services/snippets.py``).
     snippets: List[Dict[str, str]] = Field(default_factory=list)
+    # How long captures keep their audio (see ``services/audio_retention.py``).
+    audio_retention: str = "always"
 
     @model_validator(mode="before")
     @classmethod
@@ -365,6 +370,7 @@ class CaptureSettingsUpdate(BaseModel):
     # Replaces the stored list whole; triggers are trimmed and deduplicated
     # ignoring case and accents, a text keeps its line breaks.
     snippets: Optional[List[Dict[str, str]]] = None
+    audio_retention: Optional[str] = Field(default=None, pattern="^(always|7d|30d|never)$")
 
     @field_validator("vocabulary")
     @classmethod

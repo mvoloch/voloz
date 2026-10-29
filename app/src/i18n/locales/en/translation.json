@@ -199,6 +199,10 @@
       "rule": "Learn: {{from}} → {{to}}?",
       "confirm": "Learn",
       "dismiss": "Dismiss"
+    },
+    "audioNotKept": {
+      "title": "Audio not kept",
+      "description": "Deleted by the “Keep dictation audio” setting. The transcript stays; it can't be played or transcribed again."
     }
   },
   "voicesTab": {
@@ -1138,6 +1142,20 @@
           "d90": "90 days",
           "d30": "30 days",
           "d7": "7 days"
+        },
+        "audioRetention": {
+          "title": "Keep dictation audio",
+          "description": "Transcripts are always kept. Audio older than this is deleted from the captures folder.",
+          "options": {
+            "always": "Always",
+            "30d": "30 days",
+            "7d": "7 days",
+            "never": "Never"
+          },
+          "confirmTitle": "Delete older audio?",
+          "confirmOlder": "Audio of dictations older than {{period}} will be deleted now and from then on. Transcripts stay. This can't be undone.",
+          "confirmNever": "The audio of every dictation will be deleted now, and new dictations will keep only their text. This can't be undone.",
+          "confirm": "Delete audio"
         },
         "folder": {
           "title": "Captures folder",

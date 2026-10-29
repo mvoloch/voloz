@@ -64,6 +64,10 @@ export function useCaptureSettings() {
       ) {
         queryClient.invalidateQueries({ queryKey: ['capture-readiness'] });
       }
+      // A shorter audio retention deletes audio on the server right away.
+      if (patch.audio_retention !== undefined) {
+        queryClient.invalidateQueries({ queryKey: ['captures'] });
+      }
     },
   });
 

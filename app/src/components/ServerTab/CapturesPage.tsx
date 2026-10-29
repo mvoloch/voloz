@@ -34,6 +34,7 @@ import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
 import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
+import { AudioRetentionRow } from './AudioRetentionRow';
 import { CustomSttEndpointRow } from './CustomSttEndpointRow';
 import { SettingRow, SettingSection } from './SettingRow';
 import { SnippetsSection } from './SnippetsSection';
@@ -715,6 +716,7 @@ export function CapturesPage() {
             </Button>
           }
         />
+        <AudioRetentionRow value={settings?.audio_retention ?? 'always'} update={update} />
       </SettingSection>
       </div>
 
