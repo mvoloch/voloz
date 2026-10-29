@@ -1,6 +1,7 @@
 import { Link, Outlet, useMatchRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { BOTTOM_SAFE_AREA_PADDING } from '@/lib/constants/ui';
+import { IS_LITE } from '@/lib/edition';
 import { cn } from '@/lib/utils/cn';
 import { usePlatform } from '@/platform/PlatformContext';
 import { usePlayerStore } from '@/stores/playerStore';
@@ -18,14 +19,16 @@ interface SettingsTab {
     | '/settings/changelog'
     | '/settings/about';
   tauriOnly?: boolean;
+  /** Voice studio settings; the lite edition (dictation only) leaves them out. */
+  studioOnly?: boolean;
 }
 
 const tabs: SettingsTab[] = [
   { labelKey: 'settings.tabs.general', path: '/settings' },
   { labelKey: 'settings.tabs.captures', path: '/settings/captures' },
-  { labelKey: 'settings.tabs.generation', path: '/settings/generation' },
-  { labelKey: 'settings.tabs.mcp', path: '/settings/mcp' },
-  { labelKey: 'settings.tabs.gpu', path: '/settings/gpu', tauriOnly: true },
+  { labelKey: 'settings.tabs.generation', path: '/settings/generation', studioOnly: true },
+  { labelKey: 'settings.tabs.mcp', path: '/settings/mcp', studioOnly: true },
+  { labelKey: 'settings.tabs.gpu', path: '/settings/gpu', tauriOnly: true, studioOnly: true },
   { labelKey: 'settings.tabs.logs', path: '/settings/logs', tauriOnly: true },
   { labelKey: 'settings.tabs.changelog', path: '/settings/changelog' },
   { labelKey: 'settings.tabs.about', path: '/settings/about' },
@@ -42,6 +45,7 @@ export function SettingsLayout() {
       <nav className="flex gap-1 border-b shrink-0">
         {tabs.map((tab) => {
           if (tab.tauriOnly && !platform.metadata.isTauri) return null;
+          if (tab.studioOnly && IS_LITE) return null;
 
           const isActive =
             tab.path === '/settings'

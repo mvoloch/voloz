@@ -3,10 +3,11 @@ import { apiClient } from '@/lib/api/client';
 import type { VoiceProfileCreate } from '@/lib/api/types';
 import { usePlatform } from '@/platform/PlatformContext';
 
-export function useProfiles() {
+export function useProfiles({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['profiles'],
     queryFn: () => apiClient.listProfiles(),
+    enabled,
   });
 }
 

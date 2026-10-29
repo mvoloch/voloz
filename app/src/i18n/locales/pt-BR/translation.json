@@ -103,7 +103,9 @@
       "exportEmpty": "Nada para exportar",
       "shortcutNotArmed": "Atalho ligado, mas ainda não armado",
       "shortcutNotArmedDescription_one": "{{names}} ainda precisa ser baixado. Abra a aba Capturas para começar.",
-      "shortcutNotArmedDescription_other": "{{names}} ainda precisam ser baixados. Abra a aba Capturas para começar."
+      "shortcutNotArmedDescription_other": "{{names}} ainda precisam ser baixados. Abra a aba Capturas para começar.",
+      "shortcutNotArmedDescriptionLite_one": "{{names}} ainda não está configurado. Configure abaixo.",
+      "shortcutNotArmedDescriptionLite_other": "{{names}} ainda não estão configurados. Configure abaixo."
     },
     "pill": {
       "recording": "Gravando",
@@ -134,17 +136,23 @@
       "downloadStarted": "Download iniciado",
       "downloadStartedDescription": "{{name}} está baixando. O atalho vai se armar sozinho quando terminar.",
       "downloadFailed": "Falha no download",
+      "configureButton": "Configurar endpoint",
+      "endpointReady": "Endpoint configurado.",
       "stt": {
         "label": "{{name}} (fala para texto)",
         "ready": "Modelo baixado.",
         "missing": "Necessário para transcrever seu áudio",
-        "missingWithSize": "Necessário para transcrever seu áudio · {{size}}"
+        "missingWithSize": "Necessário para transcrever seu áudio · {{size}}",
+        "labelLite": "Endpoint de transcrição",
+        "missingLite": "Defina o endpoint, o modelo e a chave de API (Groq, OpenAI…) que transcrevem seu áudio."
       },
       "llm": {
         "label": "{{name}} (refinamento)",
         "ready": "Modelo baixado.",
         "missing": "Limpa a transcrição bruta antes de colar",
-        "missingWithSize": "Limpa a transcrição bruta antes de colar · {{size}}"
+        "missingWithSize": "Limpa a transcrição bruta antes de colar · {{size}}",
+        "labelLite": "Endpoint de refinamento",
+        "missingLite": "Defina o endpoint, o modelo e a chave de API (Claude, OpenAI…) que limpam a transcrição, ou desligue o refinamento automático."
       },
       "inputMonitoring": {
         "label": "Permissão de Monitoramento de Entrada",
@@ -983,6 +991,8 @@
         "customEndpoint": {
           "title": "Endpoint de transcrição personalizado (avançado)",
           "description": "Envia as capturas para qualquer servidor /audio/transcriptions compatível com OpenAI — OpenRouter, Groq, OpenAI ou um Whisper próprio. Deixe em branco para usar o Whisper embutido.",
+          "titleLite": "Endpoint de transcrição",
+          "descriptionLite": "O Voloz Lite transcreve num servidor /audio/transcriptions remoto compatível com OpenAI, como Groq ou OpenAI. A maioria dos provedores também pede uma chave de API.",
           "endpointLabel": "URL do endpoint",
           "endpointPlaceholder": "https://openrouter.ai/api/v1",
           "modelLabel": "Nome do modelo",
@@ -993,7 +1003,8 @@
           "apiKeyConfigured": "Salva",
           "apiKeyClear": "Limpar",
           "statusBuiltin": "Usando o modelo Whisper embutido selecionado acima.",
-          "statusRemote": "Enviando cada captura para {{endpoint}} para transcrição."
+          "statusRemote": "Enviando cada captura para {{endpoint}} para transcrição.",
+          "statusUnset": "Não configurado: o ditado fica desligado até o endpoint e o modelo serem preenchidos."
         },
         "archive": {
           "title": "Arquivar áudio",
@@ -1003,6 +1014,7 @@
       "refinement": {
         "title": "Refinamento",
         "description": "Opcionalmente, rode um LLM local sobre as transcrições para limpar palavras de preenchimento, pontuação e autocorreções.",
+        "descriptionLite": "Opcionalmente, rode um LLM sobre as transcrições para limpar palavras de preenchimento, pontuação e autocorreções.",
         "auto": {
           "title": "Refinar transcrições automaticamente",
           "description": "Roda após cada captura. Você ainda pode alternar entre bruta e refinada na aba Capturas."
@@ -1034,6 +1046,8 @@
         "customEndpoint": {
           "title": "Endpoint de LLM personalizado (avançado)",
           "description": "Delega o polimento e as reescritas de personalidade para qualquer servidor compatível com OpenAI — llama.cpp, vLLM, LM Studio, LocalAI, Ollama ou a própria API da OpenAI — ou para a API do Claude (https://api.anthropic.com/v1). Deixe em branco para usar o Qwen3 embutido.",
+          "titleLite": "Endpoint de refinamento",
+          "descriptionLite": "A API do Claude (https://api.anthropic.com/v1) ou qualquer servidor compatível com OpenAI. Necessário enquanto o refinamento automático estiver ligado.",
           "endpointLabel": "URL do endpoint",
           "endpointPlaceholder": "http://localhost:8090/v1",
           "modelLabel": "Nome do modelo",
@@ -1044,7 +1058,8 @@
           "apiKeyConfigured": "Salva",
           "apiKeyClear": "Limpar",
           "statusBuiltin": "Usando o modelo Qwen3 embutido selecionado acima.",
-          "statusRemote": "Enviando todo polimento e reescrita de personalidade para {{endpoint}}."
+          "statusRemote": "Enviando todo polimento e reescrita de personalidade para {{endpoint}}.",
+          "statusUnset": "Não configurado: com o refinamento automático ligado, o ditado fica desligado até o endpoint e o modelo serem preenchidos."
         }
       },
       "playback": {
@@ -1078,6 +1093,7 @@
       "sidebar": {
         "aboutTitle": "Sobre as Capturas",
         "aboutBody": "Segure um atalho em qualquer lugar da sua máquina, fale, e o Voloz transforma sua voz em texto. Reproduza-o em qualquer voz clonada, cole-o em qualquer app ou envie-o ao seu agente de programação.",
+        "aboutBodyLite": "Segure um atalho em qualquer lugar da sua máquina, fale, e o Voloz transforma sua voz em texto. Cole-o em qualquer app ou envie-o ao seu agente de programação.",
         "differencesTitle": "O que muda",
         "local": {
           "title": "Totalmente local.",
@@ -1094,6 +1110,10 @@
         "cloud": {
           "title": "Transcrição e refinamento rodam remotamente.",
           "body": "O áudio gravado é enviado para {{stt}} para ser transcrito, e o texto para {{llm}} para ser refinado. Gravações e transcrições ficam guardadas pelo Voloz nesta máquina."
+        },
+        "lite": {
+          "title": "Remoto por natureza.",
+          "body": "O Voloz Lite não tem modelos locais: o áudio gravado vai para o endpoint de transcrição que você definir, e o texto para o endpoint de refinamento. Gravações e transcrições ficam guardadas pelo Voloz nesta máquina."
         },
         "playAs": {
           "title": "Reproduza como qualquer voz.",

@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VolozWordmark } from '@/components/VolozWordmark';
+import { IS_LITE } from '@/lib/edition';
 import { cn } from '@/lib/utils/cn';
 import { usePlatform } from '@/platform/PlatformContext';
 import type { UpdateStatus } from '@/platform/types';
@@ -98,14 +99,19 @@ export function Sidebar({ isMacOS }: SidebarProps) {
         <NavItem tab={homeTab} />
       </nav>
 
-      <div className="px-3 mt-6 mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
-        {t('nav.studio')}
-      </div>
-      <nav className="flex flex-col gap-1">
-        {studioTabs.map((tab) => (
-          <NavItem key={tab.id} tab={tab} />
-        ))}
-      </nav>
+      {/* The lite edition is dictation only: no voice studio */}
+      {!IS_LITE && (
+        <>
+          <div className="px-3 mt-6 mb-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+            {t('nav.studio')}
+          </div>
+          <nav className="flex flex-col gap-1">
+            {studioTabs.map((tab) => (
+              <NavItem key={tab.id} tab={tab} />
+            ))}
+          </nav>
+        </>
+      )}
 
       <div
         className="mt-auto flex flex-col gap-2 transition-all duration-300"

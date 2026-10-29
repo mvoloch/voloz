@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import type { CaptureSettings, CaptureSettingsUpdate } from '@/lib/api/types';
+import { IS_LITE } from '@/lib/edition';
 import { SettingRow } from './SettingRow';
 
 interface CustomSttEndpointRowProps {
@@ -13,6 +14,7 @@ interface CustomSttEndpointRowProps {
  * Settings row for the optional OpenAI-compatible transcription endpoint —
  * the STT twin of the custom LLM endpoint row on the refinement section.
  * Same contract: drafts persist on blur, and the API key is write-only.
+ * In the lite edition there is no built-in Whisper, so this endpoint is required.
  */
 export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowProps) {
   const { t } = useTranslation();
@@ -58,8 +60,16 @@ export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowP
 
   return (
     <SettingRow
-      title={t('settings.captures.transcription.customEndpoint.title')}
-      description={t('settings.captures.transcription.customEndpoint.description')}
+      title={t(
+        IS_LITE
+          ? 'settings.captures.transcription.customEndpoint.titleLite'
+          : 'settings.captures.transcription.customEndpoint.title',
+      )}
+      description={t(
+        IS_LITE
+          ? 'settings.captures.transcription.customEndpoint.descriptionLite'
+          : 'settings.captures.transcription.customEndpoint.description',
+      )}
     >
       <div className="space-y-2 max-w-lg">
         <label htmlFor="customSttEndpoint" className="block text-xs font-medium text-muted-foreground">
@@ -133,7 +143,11 @@ export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowP
             ? t('settings.captures.transcription.customEndpoint.statusRemote', {
                 endpoint: endpointSaved,
               })
-            : t('settings.captures.transcription.customEndpoint.statusBuiltin')}
+            : t(
+                IS_LITE
+                  ? 'settings.captures.transcription.customEndpoint.statusUnset'
+                  : 'settings.captures.transcription.customEndpoint.statusBuiltin',
+              )}
         </p>
       </div>
     </SettingRow>

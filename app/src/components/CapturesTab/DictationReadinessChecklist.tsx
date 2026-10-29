@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import {
   Accessibility,
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   Keyboard,
   Loader2,
+  Settings2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type { ActiveDownloadTask } from '@/lib/api/types';
+import { IS_LITE } from '@/lib/edition';
 import type { DictationReadiness, ReadinessGate } from '@/lib/hooks/useDictationReadiness';
 import { cn } from '@/lib/utils/cn';
 
@@ -101,6 +104,8 @@ export function DictationReadinessChecklist({
       const hasActive = data?.downloads.some((d) => d.status === 'downloading');
       return hasActive ? 1000 : 5000;
     },
+    // Lite has no local models, so there are no downloads to follow
+    enabled: !IS_LITE,
   });
 
   // Memo so the Map identity is stable across renders that don't change
@@ -193,6 +198,20 @@ export function DictationReadinessChecklist({
     );
   }
 
+  // Lite has no local models: an unmet gate means its endpoint isn't set yet,
+  // so the row names the endpoint and links to its settings instead of a download.
+  function gateAction(gate: 'stt' | 'llm', modelName: string, ready: boolean): React.ReactNode {
+    if (!IS_LITE) return modelDownloadButton(gate, modelName, ready);
+    return (
+      <Button size="sm" asChild className="gap-1.5">
+        <Link to="/settings/captures">
+          <Settings2 className="h-3.5 w-3.5" />
+          {t('captures.readiness.configureButton')}
+        </Link>
+      </Button>
+    );
+  }
+
   return (
     <div className={cn('w-full space-y-2.5', !compact && 'max-w-md mx-auto')}>
       {!compact && (
@@ -209,32 +228,44 @@ export function DictationReadinessChecklist({
       {readiness.stt && (
         <ChecklistRow
           icon={<Cpu className="h-3.5 w-3.5" />}
-          title={t('captures.readiness.stt.label', { name: readiness.stt.display_name })}
+          title={
+            IS_LITE && !readiness.stt.ready
+              ? t('captures.readiness.stt.labelLite')
+              : t('captures.readiness.stt.label', { name: readiness.stt.display_name })
+          }
           description={
             readiness.stt.ready
-              ? t('captures.readiness.stt.ready')
-              : sttSize
-                ? t('captures.readiness.stt.missingWithSize', { size: sttSize })
-                : t('captures.readiness.stt.missing')
+              ? t(IS_LITE ? 'captures.readiness.endpointReady' : 'captures.readiness.stt.ready')
+              : IS_LITE
+                ? t('captures.readiness.stt.missingLite')
+                : sttSize
+                  ? t('captures.readiness.stt.missingWithSize', { size: sttSize })
+                  : t('captures.readiness.stt.missing')
           }
           ready={readiness.stt.ready}
-          action={modelDownloadButton('stt', readiness.stt.model_name, readiness.stt.ready)}
+          action={gateAction('stt', readiness.stt.model_name, readiness.stt.ready)}
         />
       )}
 
       {readiness.autoRefine && readiness.llm && (
         <ChecklistRow
           icon={<Cpu className="h-3.5 w-3.5" />}
-          title={t('captures.readiness.llm.label', { name: readiness.llm.display_name })}
+          title={
+            IS_LITE && !readiness.llm.ready
+              ? t('captures.readiness.llm.labelLite')
+              : t('captures.readiness.llm.label', { name: readiness.llm.display_name })
+          }
           description={
             readiness.llm.ready
-              ? t('captures.readiness.llm.ready')
-              : llmSize
-                ? t('captures.readiness.llm.missingWithSize', { size: llmSize })
-                : t('captures.readiness.llm.missing')
+              ? t(IS_LITE ? 'captures.readiness.endpointReady' : 'captures.readiness.llm.ready')
+              : IS_LITE
+                ? t('captures.readiness.llm.missingLite')
+                : llmSize
+                  ? t('captures.readiness.llm.missingWithSize', { size: llmSize })
+                  : t('captures.readiness.llm.missing')
           }
           ready={readiness.llm.ready}
-          action={modelDownloadButton('llm', readiness.llm.model_name, readiness.llm.ready)}
+          action={gateAction('llm', readiness.llm.model_name, readiness.llm.ready)}
         />
       )}
 
