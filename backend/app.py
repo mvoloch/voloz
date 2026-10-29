@@ -102,11 +102,10 @@ if not os.environ.get("HSA_OVERRIDE_GFX_VERSION") and Path("/dev/kfd").exists():
 if not os.environ.get("MIOPEN_LOG_LEVEL"):
     os.environ["MIOPEN_LOG_LEVEL"] = "4"
 
-import torch
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import __version__, config, database
+from . import __version__, config, database, edition
 from .services import tts, transcribe, llm
 from .database import get_db
 from .utils.platform_detect import get_backend_type
@@ -119,14 +118,16 @@ from .routes import register_routers
 
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application."""
-    from .mcp_server.server import build_mcp_server, compose_lifespan
-    from .mcp_server.context import ClientIdMiddleware
+    # The lite edition has no voices to speak with, so no MCP server either.
+    mcp_app = None
+    if not edition.is_lite():
+        from .mcp_server.server import build_mcp_server
 
-    # Build the MCP app up-front so we can wire its lifespan into FastAPI's —
-    # FastMCP's Streamable HTTP transport only works if its session manager
-    # runs inside the parent ASGI lifespan.
-    mcp = build_mcp_server()
-    mcp_app = mcp.http_app(path="/", transport="http")
+        # Build the MCP app up-front so we can wire its lifespan into FastAPI's —
+        # FastMCP's Streamable HTTP transport only works if its session manager
+        # runs inside the parent ASGI lifespan.
+        mcp = build_mcp_server()
+        mcp_app = mcp.http_app(path="/", transport="http")
 
     @asynccontextmanager
     async def voicebox_lifespan(app: FastAPI):
@@ -145,7 +146,12 @@ def create_app() -> FastAPI:
     # __aexit__ cancels in-flight session tasks, and we want that to
     # happen *before* _run_shutdown yanks the TTS / Whisper / LLM
     # models out from under any MCP request that was still generating.
-    lifespan = compose_lifespan(voicebox_lifespan, mcp_app.router.lifespan_context)
+    if mcp_app is not None:
+        from .mcp_server.server import compose_lifespan
+
+        lifespan = compose_lifespan(voicebox_lifespan, mcp_app.router.lifespan_context)
+    else:
+        lifespan = voicebox_lifespan
 
     application = FastAPI(
         title="voicebox API",
@@ -155,10 +161,13 @@ def create_app() -> FastAPI:
     )
 
     _configure_cors(application)
-    application.add_middleware(ClientIdMiddleware)
     register_routers(application)
-    application.mount("/mcp", mcp_app)
-    logger.info("MCP: mounted at /mcp")
+    if mcp_app is not None:
+        from .mcp_server.context import ClientIdMiddleware
+
+        application.add_middleware(ClientIdMiddleware)
+        application.mount("/mcp", mcp_app)
+        logger.info("MCP: mounted at /mcp")
     _mount_frontend(application)
 
     return application
@@ -226,6 +235,10 @@ def _mount_frontend(application: FastAPI) -> None:
 
 def _get_gpu_status() -> str:
     """Return a human-readable string describing GPU availability."""
+    if edition.is_lite():
+        return "None (lite edition: cloud transcription and refinement)"
+    import torch
+
     backend_type = get_backend_type()
     if torch.cuda.is_available():
         from .backends.base import check_cuda_compatibility
@@ -266,7 +279,7 @@ async def _run_startup(application: FastAPI) -> None:
     import platform
     import sys
 
-    logger.info("Voicebox v%s starting up", __version__)
+    logger.info("Voicebox v%s starting up (%s edition)", __version__, edition.get_edition())
     logger.info(
         "Python %s on %s %s (%s)",
         sys.version.split()[0],
@@ -330,17 +343,18 @@ async def _run_startup(application: FastAPI) -> None:
     logger.info("Backend: %s", backend_type.upper())
     logger.info("GPU: %s", _get_gpu_status())
 
-    from .backends.base import check_cuda_compatibility
+    if not edition.is_lite():
+        from .backends.base import check_cuda_compatibility
 
-    _compatible, _cuda_warning = check_cuda_compatibility()
-    if not _compatible:
-        logger.warning("GPU COMPATIBILITY: %s", _cuda_warning)
+        _compatible, _cuda_warning = check_cuda_compatibility()
+        if not _compatible:
+            logger.warning("GPU COMPATIBILITY: %s", _cuda_warning)
 
-    from .services.cuda import check_and_update_cuda_binary
-    from .services.rocm import check_and_update_rocm_binary
+        from .services.cuda import check_and_update_cuda_binary
+        from .services.rocm import check_and_update_rocm_binary
 
-    create_background_task(check_and_update_cuda_binary())
-    create_background_task(check_and_update_rocm_binary())
+        create_background_task(check_and_update_cuda_binary())
+        create_background_task(check_and_update_rocm_binary())
 
     # Pay the first-capture costs (audio-decoder loading, TLS to remote
     # STT/LLM endpoints) now instead of on the user's first dictation.
@@ -369,10 +383,11 @@ async def _run_startup(application: FastAPI) -> None:
 async def _run_shutdown() -> None:
     """Unload models on lifespan exit."""
     logger.info("Voicebox server shutting down...")
-    try:
-        tts.unload_tts_model()
-    except Exception:
-        logger.exception("Failed to unload TTS model")
+    if not edition.is_lite():
+        try:
+            tts.unload_tts_model()
+        except Exception:
+            logger.exception("Failed to unload TTS model")
     try:
         transcribe.unload_whisper_model()
     except Exception:

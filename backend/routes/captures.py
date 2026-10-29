@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from .. import config, models
+from .. import config, edition, models
 from ..backends import get_llm_model_configs, get_stt_model_configs
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
@@ -218,7 +218,9 @@ def _stt_readiness(saved, stt_cfg) -> models.ModelReadiness:
             size_mb=None,
         )
     return models.ModelReadiness(
-        ready=is_model_cached(stt_cfg.hf_repo_id),
+        # The lite edition can't run a local Whisper even if an old studio
+        # install left one in the cache: only an endpoint makes it ready.
+        ready=not edition.is_lite() and is_model_cached(stt_cfg.hf_repo_id),
         model_name=stt_cfg.model_name,
         display_name=stt_cfg.display_name,
         size=stt_cfg.model_size,
@@ -242,7 +244,7 @@ def _llm_readiness(saved, llm_cfg) -> models.ModelReadiness:
             size_mb=None,
         )
     return models.ModelReadiness(
-        ready=is_model_cached(llm_cfg.hf_repo_id),
+        ready=not edition.is_lite() and is_model_cached(llm_cfg.hf_repo_id),
         model_name=llm_cfg.model_name,
         display_name=llm_cfg.display_name,
         size=llm_cfg.model_size,

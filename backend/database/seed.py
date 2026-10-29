@@ -49,6 +49,13 @@ def backfill_generation_versions(SessionLocal, Generation, GenerationVersion) ->
 
 def seed_builtin_presets(SessionLocal, EffectPreset) -> None:
     """Ensure built-in effect presets exist in the database."""
+    from .. import edition
+
+    # Effects need pedalboard, which the lite build leaves out. Studio seeds
+    # the presets on its first start if the same data dir is reused.
+    if edition.is_lite():
+        return
+
     from ..utils.effects import BUILTIN_PRESETS
 
     db = SessionLocal()

@@ -103,7 +103,9 @@
       "exportEmpty": "Nothing to export",
       "shortcutNotArmed": "Shortcut on, but not yet armed",
       "shortcutNotArmedDescription_one": "{{names}} still needs to download. Open the Captures tab to start.",
-      "shortcutNotArmedDescription_other": "{{names}} still need to download. Open the Captures tab to start."
+      "shortcutNotArmedDescription_other": "{{names}} still need to download. Open the Captures tab to start.",
+      "shortcutNotArmedDescriptionLite_one": "{{names}} is not set yet. Set it up below.",
+      "shortcutNotArmedDescriptionLite_other": "{{names}} are not set yet. Set them up below."
     },
     "pill": {
       "recording": "Recording",
@@ -134,17 +136,23 @@
       "downloadStarted": "Download started",
       "downloadStartedDescription": "{{name}} is downloading. The shortcut will arm itself when it finishes.",
       "downloadFailed": "Download failed",
+      "configureButton": "Set up endpoint",
+      "endpointReady": "Endpoint set.",
       "stt": {
         "label": "{{name}} (speech-to-text)",
         "ready": "Model downloaded.",
         "missing": "Needed to transcribe your audio",
-        "missingWithSize": "Needed to transcribe your audio · {{size}}"
+        "missingWithSize": "Needed to transcribe your audio · {{size}}",
+        "labelLite": "Transcription endpoint",
+        "missingLite": "Set the endpoint, model and API key (Groq, OpenAI…) that transcribes your audio."
       },
       "llm": {
         "label": "{{name}} (refinement)",
         "ready": "Model downloaded.",
         "missing": "Cleans up the raw transcript before paste",
-        "missingWithSize": "Cleans up the raw transcript before paste · {{size}}"
+        "missingWithSize": "Cleans up the raw transcript before paste · {{size}}",
+        "labelLite": "Refinement endpoint",
+        "missingLite": "Set the endpoint, model and API key (Claude, OpenAI…) that cleans up the transcript, or turn off automatic refinement."
       },
       "inputMonitoring": {
         "label": "Input Monitoring permission",
@@ -984,6 +992,8 @@
         "customEndpoint": {
           "title": "Custom transcription endpoint (advanced)",
           "description": "Send captures to any OpenAI-compatible /audio/transcriptions server — OpenRouter, Groq, OpenAI, or a self-hosted Whisper. Leave blank to use the built-in Whisper.",
+          "titleLite": "Transcription endpoint",
+          "descriptionLite": "Voloz Lite transcribes on a remote OpenAI-compatible /audio/transcriptions server, such as Groq or OpenAI. Most providers also need an API key.",
           "endpointLabel": "Endpoint URL",
           "endpointPlaceholder": "https://openrouter.ai/api/v1",
           "modelLabel": "Model name",
@@ -994,7 +1004,8 @@
           "apiKeyConfigured": "Stored",
           "apiKeyClear": "Clear",
           "statusBuiltin": "Using the built-in Whisper model selected above.",
-          "statusRemote": "Sending every capture to {{endpoint}} for transcription."
+          "statusRemote": "Sending every capture to {{endpoint}} for transcription.",
+          "statusUnset": "Not set: dictation stays off until the endpoint and model are filled in."
         },
         "archive": {
           "title": "Archive audio",
@@ -1004,6 +1015,7 @@
       "refinement": {
         "title": "Refinement",
         "description": "Optionally run a local LLM over transcripts to clean filler words, punctuation, and self-corrections.",
+        "descriptionLite": "Optionally run an LLM over transcripts to clean filler words, punctuation, and self-corrections.",
         "auto": {
           "title": "Refine transcripts automatically",
           "description": "Runs after every capture. You can still toggle between raw and refined in the Captures tab."
@@ -1035,6 +1047,8 @@
         "customEndpoint": {
           "title": "Custom LLM endpoint (advanced)",
           "description": "Delegate refinement and personality rewrites to any OpenAI-compatible server — llama.cpp, vLLM, LM Studio, LocalAI, Ollama's shim, or the OpenAI API itself — or the Claude API (https://api.anthropic.com/v1). Leave blank to use the built-in Qwen3.",
+          "titleLite": "Refinement endpoint",
+          "descriptionLite": "The Claude API (https://api.anthropic.com/v1) or any OpenAI-compatible server. Needed while automatic refinement is on.",
           "endpointLabel": "Endpoint URL",
           "endpointPlaceholder": "http://localhost:8090/v1",
           "modelLabel": "Model name",
@@ -1045,7 +1059,8 @@
           "apiKeyConfigured": "Stored",
           "apiKeyClear": "Clear",
           "statusBuiltin": "Using the built-in Qwen3 model selected above.",
-          "statusRemote": "Sending every refinement and personality rewrite to {{endpoint}}."
+          "statusRemote": "Sending every refinement and personality rewrite to {{endpoint}}.",
+          "statusUnset": "Not set: with automatic refinement on, dictation stays off until the endpoint and model are filled in."
         }
       },
       "playback": {
@@ -1079,6 +1094,7 @@
       "sidebar": {
         "aboutTitle": "About Captures",
         "aboutBody": "Hold a shortcut anywhere on your machine, speak, and Voloz turns your voice into text. Replay it in any cloned voice, paste it into any app, or pipe it into your coding agent.",
+        "aboutBodyLite": "Hold a shortcut anywhere on your machine, speak, and Voloz turns your voice into text. Paste it into any app, or pipe it into your coding agent.",
         "differencesTitle": "What's different",
         "local": {
           "title": "Fully local.",
@@ -1095,6 +1111,10 @@
         "cloud": {
           "title": "Transcription and refinement run remotely.",
           "body": "Recorded audio is sent to {{stt}} to be transcribed, and the transcript to {{llm}} to be refined. Recordings and transcripts are stored by Voloz on this machine."
+        },
+        "lite": {
+          "title": "Remote by design.",
+          "body": "Voloz Lite has no local models: recorded audio goes to the transcription endpoint you set, and the transcript to the refinement endpoint. Recordings and transcripts are stored by Voloz on this machine."
         },
         "playAs": {
           "title": "Play as any voice.",

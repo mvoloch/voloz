@@ -23,6 +23,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { StoriesTab } from '@/components/StoriesTab/StoriesTab';
 import { Toaster } from '@/components/ui/toaster';
 import { VoicesTab } from '@/components/VoicesTab/VoicesTab';
+import { IS_LITE } from '@/lib/edition';
 import { useGenerationProgress } from '@/lib/hooks/useGenerationProgress';
 import { useModelDownloadToast } from '@/lib/hooks/useModelDownloadToast';
 import { MODEL_DISPLAY_NAMES, useRestoreActiveTasks } from '@/lib/hooks/useRestoreActiveTasks';
@@ -92,6 +93,19 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
+// The lite edition has no voice studio: Studio pages redirect instead of
+// rendering, so old links and bookmarks never call endpoints lite doesn't serve
+const studioOnly = IS_LITE
+  ? () => {
+      throw redirect({ to: '/' });
+    }
+  : undefined;
+const studioOnlySetting = IS_LITE
+  ? () => {
+      throw redirect({ to: '/settings' });
+    }
+  : undefined;
+
 // Index route: dictation home (capture history)
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -104,6 +118,7 @@ const generateRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/generate',
   component: MainEditor,
+  beforeLoad: studioOnly,
 });
 
 // Stories route
@@ -111,6 +126,7 @@ const storiesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/stories',
   component: StoriesTab,
+  beforeLoad: studioOnly,
 });
 
 // Voices route
@@ -118,6 +134,7 @@ const voicesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/voices',
   component: VoicesTab,
+  beforeLoad: studioOnly,
 });
 
 // Old captures path: the capture history is now the home screen
@@ -134,6 +151,7 @@ const effectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/effects',
   component: EffectsTab,
+  beforeLoad: studioOnly,
 });
 
 // Models route
@@ -141,6 +159,7 @@ const modelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/models',
   component: ModelsTab,
+  beforeLoad: studioOnly,
 });
 
 // Settings layout route (parent for sub-tabs)
@@ -161,6 +180,7 @@ const settingsGenerationRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/generation',
   component: GenerationPage,
+  beforeLoad: studioOnlySetting,
 });
 
 const settingsCapturesRoute = createRoute({
@@ -173,12 +193,14 @@ const settingsMCPRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/mcp',
   component: MCPPage,
+  beforeLoad: studioOnlySetting,
 });
 
 const settingsGpuRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/gpu',
   component: GpuPage,
+  beforeLoad: studioOnlySetting,
 });
 
 const settingsChangelogRoute = createRoute({

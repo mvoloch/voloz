@@ -61,6 +61,7 @@ import type {
 } from '@/lib/api/types';
 import type { LanguageCode } from '@/lib/constants/languages';
 import { BOTTOM_SAFE_AREA_PADDING } from '@/lib/constants/ui';
+import { IS_LITE } from '@/lib/edition';
 import { useCaptureRecordingSession } from '@/lib/hooks/useCaptureRecordingSession';
 import { useDictationReadiness } from '@/lib/hooks/useDictationReadiness';
 import { useCaptureSettings } from '@/lib/hooks/useSettings';
@@ -284,15 +285,19 @@ export function CapturesTab() {
   const pushToTalkKeys = captureSettings?.chord_push_to_talk_keys ?? [];
   const toggleToTalkKeys = captureSettings?.chord_toggle_to_talk_keys ?? [];
   // A custom endpoint replaces the on-device model only when both URL and model are set
-  // (same rule as backend/routes/captures.py).
+  // (same rule as backend/routes/captures.py). Lite has no on-device model to fall back to.
   const sttLabel =
     captureSettings?.custom_stt_endpoint && captureSettings.custom_stt_model
       ? shortModelName(captureSettings.custom_stt_model)
-      : `Whisper ${sttModel.charAt(0).toUpperCase()}${sttModel.slice(1)}`;
+      : IS_LITE
+        ? t('captures.readiness.stt.labelLite')
+        : `Whisper ${sttModel.charAt(0).toUpperCase()}${sttModel.slice(1)}`;
   const llmLabel =
     captureSettings?.custom_llm_endpoint && captureSettings.custom_llm_model
       ? shortModelName(captureSettings.custom_llm_model)
-      : `Qwen3 ${llmModel}`;
+      : IS_LITE
+        ? t('captures.readiness.llm.labelLite')
+        : `Qwen3 ${llmModel}`;
   const autoRefine = captureSettings?.auto_refine ?? true;
   const readiness = useDictationReadiness();
 
@@ -308,6 +313,8 @@ export function CapturesTab() {
   const { data: profiles } = useQuery({
     queryKey: ['profiles'],
     queryFn: () => apiClient.listProfiles(),
+    // Voice profiles (for "Play as") don't exist in the lite edition
+    enabled: !IS_LITE,
   });
 
   const captures = capturesData?.items ?? [];
@@ -867,79 +874,82 @@ export function CapturesTab() {
 
             {/* Bottom actions */}
             <div className="flex items-center gap-2 mt-4 flex-wrap">
-              <div className="inline-flex">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePlayAs()}
-                  disabled={!playAsVoice || playAsMutation.isPending}
-                  className={cn(
-                    'gap-2 rounded-r-none border-r-0 pr-3 pl-2 transition-colors',
-                    playbackState !== 'idle' &&
-                      'border-accent/50 text-foreground bg-accent/10 hover:bg-accent/15 hover:text-foreground hover:border-accent/50',
-                  )}
-                >
-                  {playbackState === 'generating' ? (
-                    <>
-                      <AudioBars mode="generating" className="h-3.5" />
-                      {t('captures.actions.playAsGenerating')}
-                    </>
-                  ) : playbackState === 'playing' ? (
-                    <>
-                      <Square className="h-3 w-3 fill-current" />
-                      {playAsVoice
-                        ? t('captures.actions.playAsStop', { name: playAsVoice.name })
-                        : t('captures.actions.playAsStopFallback')}
-                    </>
-                  ) : (
-                    <>
-                      <Volume2 className="h-3.5 w-3.5" />
-                      {playAsVoice
-                        ? t('captures.actions.playAs', { name: playAsVoice.name })
-                        : t('captures.actions.playAsFallback')}
-                    </>
-                  )}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        'rounded-l-none px-2 transition-colors',
-                        playbackState !== 'idle' &&
-                          'border-accent/50 bg-accent/10 hover:bg-accent/15 hover:text-foreground hover:border-accent/50',
-                      )}
-                      disabled={!profiles || !profiles.length}
-                    >
-                      <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-64">
-                    <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                      {t('captures.actions.playAsDropdownLabel')}
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {profiles?.map((v) => (
-                      <DropdownMenuItem
-                        key={v.id}
-                        onClick={() => handlePlayAs(v)}
-                        className="py-2"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium truncate">{v.name}</div>
-                          <div className="text-[11px] text-muted-foreground truncate">
-                            {v.description || v.language.toUpperCase()}
-                          </div>
-                        </div>
-                        {v.id === playAsVoiceId && (
-                          <Check className="h-3.5 w-3.5 text-accent shrink-0" />
+              {/* "Play as" reads the transcript in a cloned voice; lite has no voices */}
+              {!IS_LITE && (
+                <div className="inline-flex">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePlayAs()}
+                    disabled={!playAsVoice || playAsMutation.isPending}
+                    className={cn(
+                      'gap-2 rounded-r-none border-r-0 pr-3 pl-2 transition-colors',
+                      playbackState !== 'idle' &&
+                        'border-accent/50 text-foreground bg-accent/10 hover:bg-accent/15 hover:text-foreground hover:border-accent/50',
+                    )}
+                  >
+                    {playbackState === 'generating' ? (
+                      <>
+                        <AudioBars mode="generating" className="h-3.5" />
+                        {t('captures.actions.playAsGenerating')}
+                      </>
+                    ) : playbackState === 'playing' ? (
+                      <>
+                        <Square className="h-3 w-3 fill-current" />
+                        {playAsVoice
+                          ? t('captures.actions.playAsStop', { name: playAsVoice.name })
+                          : t('captures.actions.playAsStopFallback')}
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="h-3.5 w-3.5" />
+                        {playAsVoice
+                          ? t('captures.actions.playAs', { name: playAsVoice.name })
+                          : t('captures.actions.playAsFallback')}
+                      </>
+                    )}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          'rounded-l-none px-2 transition-colors',
+                          playbackState !== 'idle' &&
+                            'border-accent/50 bg-accent/10 hover:bg-accent/15 hover:text-foreground hover:border-accent/50',
                         )}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+                        disabled={!profiles || !profiles.length}
+                      >
+                        <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                        {t('captures.actions.playAsDropdownLabel')}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      {profiles?.map((v) => (
+                        <DropdownMenuItem
+                          key={v.id}
+                          onClick={() => handlePlayAs(v)}
+                          className="py-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">{v.name}</div>
+                            <div className="text-[11px] text-muted-foreground truncate">
+                              {v.description || v.language.toUpperCase()}
+                            </div>
+                          </div>
+                          {v.id === playAsVoiceId && (
+                            <Check className="h-3.5 w-3.5 text-accent shrink-0" />
+                          )}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              )}
               <Button variant="outline" size="sm" onClick={handleCopy}>
                 <Copy className="h-3.5 w-3.5 mr-1.5" />
                 {t('captures.actions.copy')}

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { useToast } from '@/components/ui/use-toast';
+import { IS_LITE } from '@/lib/edition';
 import { useDictationReadiness } from '@/lib/hooks/useDictationReadiness';
 import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { useProfiles } from '@/lib/hooks/useProfiles';
@@ -127,7 +128,8 @@ export function CapturesPage() {
   const platform = usePlatform();
   const serverUrl = useServerStore((state) => state.serverUrl);
   const { settings, update } = useCaptureSettings();
-  const { data: profiles } = useProfiles();
+  // Voice profiles only feed the playback voice, which lite doesn't have
+  const { data: profiles } = useProfiles({ enabled: !IS_LITE });
   const { toast } = useToast();
   const readiness = useDictationReadiness();
   const sttModel = settings?.stt_model ?? 'turbo';
@@ -255,18 +257,30 @@ export function CapturesPage() {
                     (g) => g === 'stt' || g === 'llm',
                   );
                   if (missingModels.length === 0) return;
+                  // Studio names the models to download; lite, the endpoints to set
+                  const sttName = IS_LITE
+                    ? t('captures.readiness.stt.labelLite')
+                    : readiness.stt?.display_name;
+                  const llmName = IS_LITE
+                    ? t('captures.readiness.llm.labelLite')
+                    : readiness.llm?.display_name;
                   const names = [
-                    missingModels.includes('stt') ? readiness.stt?.display_name : null,
-                    missingModels.includes('llm') ? readiness.llm?.display_name : null,
+                    missingModels.includes('stt') ? sttName : null,
+                    missingModels.includes('llm') ? llmName : null,
                   ]
                     .filter(Boolean)
                     .join(' and ');
                   toast({
                     title: t('captures.toast.shortcutNotArmed'),
-                    description: t('captures.toast.shortcutNotArmedDescription', {
-                      names,
-                      count: missingModels.length,
-                    }),
+                    description: t(
+                      IS_LITE
+                        ? 'captures.toast.shortcutNotArmedDescriptionLite'
+                        : 'captures.toast.shortcutNotArmedDescription',
+                      {
+                        names,
+                        count: missingModels.length,
+                      },
+                    ),
                   });
                 }}
               />
@@ -366,37 +380,40 @@ export function CapturesPage() {
         title={t('settings.captures.transcription.title')}
         description={t('settings.captures.transcription.description')}
       >
-        <SettingRow
-          title={t('settings.captures.transcription.model.title')}
-          description={t('settings.captures.transcription.model.description')}
-          action={
-            <Select
-              value={sttModel}
-              onValueChange={(v) => update({ stt_model: v as WhisperModelSize })}
-            >
-              <SelectTrigger className="w-[300px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="base">
-                  {t('settings.captures.transcription.model.base', { tail: t('settings.captures.transcription.model.tail.fast') })}
-                </SelectItem>
-                <SelectItem value="small">
-                  {t('settings.captures.transcription.model.small', { tail: t('settings.captures.transcription.model.tail.balanced') })}
-                </SelectItem>
-                <SelectItem value="medium">
-                  {t('settings.captures.transcription.model.medium', { tail: t('settings.captures.transcription.model.tail.higher') })}
-                </SelectItem>
-                <SelectItem value="large">
-                  {t('settings.captures.transcription.model.large', { tail: t('settings.captures.transcription.model.tail.best') })}
-                </SelectItem>
-                <SelectItem value="turbo">
-                  {t('settings.captures.transcription.model.turbo', { tail: t('settings.captures.transcription.model.tail.nearBest') })}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
+        {/* Lite has no on-device Whisper to pick a size for */}
+        {!IS_LITE && (
+          <SettingRow
+            title={t('settings.captures.transcription.model.title')}
+            description={t('settings.captures.transcription.model.description')}
+            action={
+              <Select
+                value={sttModel}
+                onValueChange={(v) => update({ stt_model: v as WhisperModelSize })}
+              >
+                <SelectTrigger className="w-[300px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="base">
+                    {t('settings.captures.transcription.model.base', { tail: t('settings.captures.transcription.model.tail.fast') })}
+                  </SelectItem>
+                  <SelectItem value="small">
+                    {t('settings.captures.transcription.model.small', { tail: t('settings.captures.transcription.model.tail.balanced') })}
+                  </SelectItem>
+                  <SelectItem value="medium">
+                    {t('settings.captures.transcription.model.medium', { tail: t('settings.captures.transcription.model.tail.higher') })}
+                  </SelectItem>
+                  <SelectItem value="large">
+                    {t('settings.captures.transcription.model.large', { tail: t('settings.captures.transcription.model.tail.best') })}
+                  </SelectItem>
+                  <SelectItem value="turbo">
+                    {t('settings.captures.transcription.model.turbo', { tail: t('settings.captures.transcription.model.tail.nearBest') })}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          />
+        )}
 
         <SettingRow
           title={t('settings.captures.transcription.language.title')}
@@ -427,7 +444,11 @@ export function CapturesPage() {
 
       <SettingSection
         title={t('settings.captures.refinement.title')}
-        description={t('settings.captures.refinement.description')}
+        description={t(
+          IS_LITE
+            ? 'settings.captures.refinement.descriptionLite'
+            : 'settings.captures.refinement.description',
+        )}
       >
         <SettingRow
           title={t('settings.captures.refinement.auto.title')}
@@ -442,32 +463,35 @@ export function CapturesPage() {
           }
         />
 
-        <SettingRow
-          title={t('settings.captures.refinement.model.title')}
-          description={t('settings.captures.refinement.model.description')}
-          action={
-            <Select
-              value={llmModel}
-              onValueChange={(v) => update({ llm_model: v as Qwen3ModelSize })}
-              disabled={!autoRefine}
-            >
-              <SelectTrigger className="w-[260px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0.6B">
-                  {t('settings.captures.refinement.model.size06', { tail: t('settings.captures.refinement.model.tail.veryFast') })}
-                </SelectItem>
-                <SelectItem value="1.7B">
-                  {t('settings.captures.refinement.model.size17', { tail: t('settings.captures.refinement.model.tail.fast') })}
-                </SelectItem>
-                <SelectItem value="4B">
-                  {t('settings.captures.refinement.model.size40', { tail: t('settings.captures.refinement.model.tail.fullQuality') })}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
+        {/* Lite has no on-device Qwen3 to pick a size for */}
+        {!IS_LITE && (
+          <SettingRow
+            title={t('settings.captures.refinement.model.title')}
+            description={t('settings.captures.refinement.model.description')}
+            action={
+              <Select
+                value={llmModel}
+                onValueChange={(v) => update({ llm_model: v as Qwen3ModelSize })}
+                disabled={!autoRefine}
+              >
+                <SelectTrigger className="w-[260px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0.6B">
+                    {t('settings.captures.refinement.model.size06', { tail: t('settings.captures.refinement.model.tail.veryFast') })}
+                  </SelectItem>
+                  <SelectItem value="1.7B">
+                    {t('settings.captures.refinement.model.size17', { tail: t('settings.captures.refinement.model.tail.fast') })}
+                  </SelectItem>
+                  <SelectItem value="4B">
+                    {t('settings.captures.refinement.model.size40', { tail: t('settings.captures.refinement.model.tail.fullQuality') })}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            }
+          />
+        )}
 
         <SettingRow
           title={t('settings.captures.refinement.smartCleanup.title')}
@@ -512,8 +536,16 @@ export function CapturesPage() {
         />
 
         <SettingRow
-          title={t('settings.captures.refinement.customEndpoint.title')}
-          description={t('settings.captures.refinement.customEndpoint.description')}
+          title={t(
+            IS_LITE
+              ? 'settings.captures.refinement.customEndpoint.titleLite'
+              : 'settings.captures.refinement.customEndpoint.title',
+          )}
+          description={t(
+            IS_LITE
+              ? 'settings.captures.refinement.customEndpoint.descriptionLite'
+              : 'settings.captures.refinement.customEndpoint.description',
+          )}
         >
           <div className="space-y-2 max-w-lg">
             <label htmlFor="customLlmEndpoint" className="block text-xs font-medium text-muted-foreground">
@@ -587,69 +619,76 @@ export function CapturesPage() {
                 ? t('settings.captures.refinement.customEndpoint.statusRemote', {
                     endpoint: customLlmEndpointSaved,
                   })
-                : t('settings.captures.refinement.customEndpoint.statusBuiltin')}
+                : t(
+                    IS_LITE
+                      ? 'settings.captures.refinement.customEndpoint.statusUnset'
+                      : 'settings.captures.refinement.customEndpoint.statusBuiltin',
+                  )}
             </p>
           </div>
         </SettingRow>
       </SettingSection>
 
-      <SettingSection
-        title={t('settings.captures.playback.title')}
-        description={t('settings.captures.playback.description')}
-      >
-        <SettingRow
-          title={t('settings.captures.playback.defaultVoice.title')}
-          description={t('settings.captures.playback.defaultVoice.description')}
-          action={
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 min-w-[220px] justify-between"
-                  disabled={voices.length === 0}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    {defaultVoice ? (
-                      <span className="truncate">{defaultVoice.name}</span>
-                    ) : (
-                      <span className="truncate text-muted-foreground">
-                        {voices.length === 0
-                          ? t('settings.captures.playback.defaultVoice.noClonedVoices')
-                          : t('settings.captures.playback.defaultVoice.noneSelected')}
-                      </span>
-                    )}
-                  </div>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
-                  {t('settings.captures.playback.defaultVoice.clonedVoices')}
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {voices.map((v) => (
-                  <DropdownMenuItem
-                    key={v.id}
-                    onClick={() => update({ default_playback_voice_id: v.id })}
-                    className="gap-2.5 py-2"
+      {/* Lite has no voice profiles to play transcripts back in */}
+      {!IS_LITE && (
+        <SettingSection
+          title={t('settings.captures.playback.title')}
+          description={t('settings.captures.playback.description')}
+        >
+          <SettingRow
+            title={t('settings.captures.playback.defaultVoice.title')}
+            description={t('settings.captures.playback.defaultVoice.description')}
+            action={
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 min-w-[220px] justify-between"
+                    disabled={voices.length === 0}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{v.name}</div>
-                      {v.description ? (
-                        <div className="text-[11px] text-muted-foreground truncate">
-                          {v.description}
-                        </div>
-                      ) : null}
+                    <div className="flex items-center gap-2 min-w-0">
+                      {defaultVoice ? (
+                        <span className="truncate">{defaultVoice.name}</span>
+                      ) : (
+                        <span className="truncate text-muted-foreground">
+                          {voices.length === 0
+                            ? t('settings.captures.playback.defaultVoice.noClonedVoices')
+                            : t('settings.captures.playback.defaultVoice.noneSelected')}
+                        </span>
+                      )}
                     </div>
-                    {v.id === defaultVoiceId && <Check className="h-3.5 w-3.5 text-accent shrink-0" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          }
-        />
-      </SettingSection>
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    {t('settings.captures.playback.defaultVoice.clonedVoices')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {voices.map((v) => (
+                    <DropdownMenuItem
+                      key={v.id}
+                      onClick={() => update({ default_playback_voice_id: v.id })}
+                      className="gap-2.5 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{v.name}</div>
+                        {v.description ? (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            {v.description}
+                          </div>
+                        ) : null}
+                      </div>
+                      {v.id === defaultVoiceId && <Check className="h-3.5 w-3.5 text-accent shrink-0" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            }
+          />
+        </SettingSection>
+      )}
 
       <SettingSection
         title={t('settings.captures.storage.title')}
@@ -677,7 +716,11 @@ export function CapturesPage() {
         <div className="space-y-2">
           <h3 className="text-sm font-semibold">{t('settings.captures.sidebar.aboutTitle')}</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            {t('settings.captures.sidebar.aboutBody')}
+            {t(
+              IS_LITE
+                ? 'settings.captures.sidebar.aboutBodyLite'
+                : 'settings.captures.sidebar.aboutBody',
+            )}
           </p>
         </div>
 
@@ -690,33 +733,40 @@ export function CapturesPage() {
                 <span className="text-foreground font-medium">
                   {customSttActive && customLlmActive
                     ? t('settings.captures.sidebar.cloud.title')
-                    : customSttActive
-                      ? t('settings.captures.sidebar.sttRemote.title')
-                      : customLlmActive
-                        ? t('settings.captures.sidebar.remote.title')
-                        : t('settings.captures.sidebar.local.title')}
+                    : IS_LITE
+                      ? t('settings.captures.sidebar.lite.title')
+                      : customSttActive
+                        ? t('settings.captures.sidebar.sttRemote.title')
+                        : customLlmActive
+                          ? t('settings.captures.sidebar.remote.title')
+                          : t('settings.captures.sidebar.local.title')}
                 </span>{' '}
                 {customSttActive && customLlmActive
                   ? t('settings.captures.sidebar.cloud.body', {
                       stt: customSttEndpointSaved,
                       llm: customLlmEndpointSaved,
                     })
-                  : customSttActive
-                    ? t('settings.captures.sidebar.sttRemote.body', { endpoint: customSttEndpointSaved })
-                    : customLlmActive
-                      ? t('settings.captures.sidebar.remote.body', { endpoint: customLlmEndpointSaved })
-                      : t('settings.captures.sidebar.local.body')}
+                  : IS_LITE
+                    ? t('settings.captures.sidebar.lite.body')
+                    : customSttActive
+                      ? t('settings.captures.sidebar.sttRemote.body', { endpoint: customSttEndpointSaved })
+                      : customLlmActive
+                        ? t('settings.captures.sidebar.remote.body', { endpoint: customLlmEndpointSaved })
+                        : t('settings.captures.sidebar.local.body')}
               </span>
             </li>
-            <li className="flex gap-2.5">
-              <Volume2 className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
-              <span className="leading-relaxed">
-                <span className="text-foreground font-medium">
-                  {t('settings.captures.sidebar.playAs.title')}
-                </span>{' '}
-                {t('settings.captures.sidebar.playAs.body')}
-              </span>
-            </li>
+            {/* Play as needs voice profiles, which lite doesn't have */}
+            {!IS_LITE && (
+              <li className="flex gap-2.5">
+                <Volume2 className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
+                <span className="leading-relaxed">
+                  <span className="text-foreground font-medium">
+                    {t('settings.captures.sidebar.playAs.title')}
+                  </span>{' '}
+                  {t('settings.captures.sidebar.playAs.body')}
+                </span>
+              </li>
+            )}
             <li className="flex gap-2.5">
               <Laptop className="h-4 w-4 shrink-0 mt-0.5 text-accent" />
               <span className="leading-relaxed">

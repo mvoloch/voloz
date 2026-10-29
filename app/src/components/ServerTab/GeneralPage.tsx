@@ -11,6 +11,7 @@ import { Progress } from '@/components/ui/progress';
 import { Toggle } from '@/components/ui/toggle';
 import { useToast } from '@/components/ui/use-toast';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
+import { IS_LITE } from '@/lib/edition';
 import { useServerHealth } from '@/lib/hooks/useServer';
 import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
@@ -208,7 +209,8 @@ export function GeneralPage() {
         />
       </SettingSection>
 
-      {health?.cloud_enabled && <CloudSection />}
+      {/* The lite server doesn't serve the Voicebox Cloud login (/cloud/*) */}
+      {!IS_LITE && health?.cloud_enabled && <CloudSection />}
 
       <ApiReferenceCard serverUrl={serverUrl} />
 

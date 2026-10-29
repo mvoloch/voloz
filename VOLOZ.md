@@ -110,9 +110,10 @@ keep-alive). Still to confirm in an installed build.
    identifier is a separate install and data dir: uninstall Voicebox 0.6.x
    first (both use port 17493) and reconfigure endpoints/keys
    (`scripts/cloud-dictation/configure-voicebox.ps1`).
-2. Lite edition: build flag that hides Studio routes in the frontend and a
-   torch-free backend (lazy PyTorch: `backend/app.py`, `routes/health.py`,
-   `utils/hf_offline_patch.py` import it at startup today).
+2. Lite edition — built on `feat/lite-edition` (not merged, not built for
+   Windows yet). See "Lite edition" below. Still to do: a first Windows build
+   (`release-lite.yml`), the owner's call on identity and update channel,
+   then merge into `wisprclone`.
 3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Still to do: a
    vocabulary/prompt setting for names and jargon (Whisper `prompt`; Groq
    honours it, OpenRouter ignored it).
@@ -206,6 +207,46 @@ Left open on purpose:
   is still using the old client, so the leak is the lesser risk.
 - Backend error texts shown in the pill (e.g. a Claude or Groq error)
   stay in English; they come from the server and the provider.
+
+## Lite edition (`feat/lite-edition`, 2026-10-28)
+
+One codebase, two builds. `backend/edition.py` says which edition the
+server is: lite when torch is not installed, studio otherwise
+(`VOICEBOX_EDITION=lite|studio` forces it).
+
+- **Server:** torch is imported only where it is used; lite serves health,
+  captures, settings, transcription, llm and tasks, and skips MCP, CUDA/ROCm
+  checks, effect presets and the TTS unload. `build_binary.py --lite` builds
+  the same `voicebox-server` from `backend/requirements-lite.txt`.
+- **Frontend:** `VITE_EDITION=lite` drops the Studio routes, sidebar group
+  and settings tabs and the calls to Studio endpoints.
+- **Desktop/CI:** `tauri/src-tauri/tauri.lite.conf.json` is merged with
+  `--config`; `.github/workflows/release-lite.yml` builds Windows on
+  `lite-v*` tags into its own draft release (`Voloz Lite v…`), so its
+  installers don't collide with the studio ones.
+
+Measured on GB4 (Linux, one machine): frozen lite server 157 MB, healthy
+in 2.4 s; a real dictation (Groq + Claude Haiku) works end to end with no
+torch loaded; unfrozen RSS ~320 MB. Studio tests unchanged (394 passed /
+13 skipped). Windows size and startup are not measured yet.
+
+Owner decisions pending (the build works either way):
+
+- **Identity.** The overlay keeps `productName` "Voloz" and the identifier
+  `io.github.mvoloch.voloz`, matching the decision that lite *is* "Voloz"
+  and the full build becomes "Voloz Studio". Consequence today: installing
+  lite replaces the installed studio build (same identifier) and keeps its
+  settings, keys and captures. Renaming the full build to "Voloz Studio"
+  (new identifier, its own data dir) is what lets both be installed.
+- **Updates.** Lite builds make no updater artifacts and point the updater
+  at `releases/download/lite-latest/latest.json`, which doesn't exist: a
+  lite install must never update to a studio build. A lite update channel
+  is still to be designed.
+- Both editions use port 17493 and the desktop app reuses a server already
+  running there, so running both at once is not supported.
+- Known noise: the desktop's speak monitor subscribes to `/events/speak`,
+  which lite doesn't serve (it lives with MCP); it retries with backoff
+  capped at 30 s, so one log line every 30 s.
 
 ## Developing on GB4
 
