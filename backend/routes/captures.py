@@ -7,7 +7,12 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, edition, models
-from ..backends import LLMRateLimitError, get_llm_model_configs, get_stt_model_configs
+from ..backends import (
+    LLMRateLimitError,
+    STTRateLimitError,
+    get_llm_model_configs,
+    get_stt_model_configs,
+)
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import audio_retention
@@ -72,6 +77,14 @@ async def create_capture_endpoint(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except STTRateLimitError as e:
+        # Expected on free tiers. A distinct status lets the pill say so
+        # briefly instead of showing the provider's error body.
+        logger.warning("Transcription rate-limited: %s", e)
+        raise HTTPException(
+            status_code=429,
+            detail="Transcription failed: the speech-to-text provider's rate limit was reached",
+        )
     except Exception as e:
         logger.exception("Failed to create capture")
         raise HTTPException(status_code=500, detail=str(e))

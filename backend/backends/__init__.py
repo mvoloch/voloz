@@ -30,6 +30,15 @@ class LLMRateLimitError(RuntimeError):
     any other backend error.
     """
 
+
+class STTRateLimitError(RuntimeError):
+    """A remote speech-to-text endpoint answered HTTP 429 (e.g. Groq's free
+    tier, audio seconds per hour).
+
+    Raised by the remote STT backend so the capture route can answer 429
+    with a short message instead of a 500 with the provider's error body.
+    """
+
 from ..utils.platform_detect import get_backend_type
 
 LANGUAGE_CODE_TO_NAME = {

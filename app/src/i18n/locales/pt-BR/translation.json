@@ -132,7 +132,8 @@
       "commandNoLlm": "Comandos de voz precisam de um modelo de linguagem. Configure o endpoint de refinamento em Configurações → Ditado.",
       "commandFailed": "Falha no comando de voz",
       "commandEmpty": "Nenhuma instrução ouvida",
-      "refineRateLimited": "Refinamento pulado (limite de uso), texto bruto colado"
+      "refineRateLimited": "Refinamento pulado (limite de uso), texto bruto colado",
+      "transcribeRateLimited": "Falha na transcrição (limite de uso), tente de novo em um minuto"
     },
     "chord": {
       "capturing": "Capturando…",

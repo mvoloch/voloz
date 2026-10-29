@@ -474,7 +474,11 @@ class ApiClient {
       const error = await response.json().catch(() => ({
         detail: response.statusText,
       }));
-      throw new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`));
+      // ``status`` lets the pill tell a provider rate limit (429) apart.
+      throw Object.assign(
+        new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`)),
+        { status: response.status, detail: error.detail },
+      );
     }
     return response.json();
   }

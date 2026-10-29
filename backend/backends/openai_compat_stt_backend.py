@@ -22,6 +22,8 @@ from typing import Optional
 import httpx
 import soundfile as sf
 
+from . import STTRateLimitError
+
 logger = logging.getLogger(__name__)
 
 # Transcription of a dictation-length clip returns in well under a second on
@@ -146,6 +148,7 @@ class OpenAICompatSTTBackend:
         it under Whisper's 224-token limit).
 
         Raises:
+            STTRateLimitError: The remote returned HTTP 429.
             RuntimeError: The remote returned a non-2xx status, could not be
                 reached (timeout, DNS, TLS), or sent a non-JSON body. The
                 message names the endpoint so the capture UI shows something
@@ -188,7 +191,8 @@ class OpenAICompatSTTBackend:
                 exc.response.status_code,
                 body_preview,
             )
-            raise RuntimeError(
+            error_cls = STTRateLimitError if exc.response.status_code == 429 else RuntimeError
+            raise error_cls(
                 f"Custom STT endpoint {url} returned HTTP {exc.response.status_code}: "
                 f"{body_preview}"
             ) from exc

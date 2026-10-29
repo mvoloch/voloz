@@ -1,6 +1,6 @@
 """
 Tests for the one-key Groq setup (``POST /settings/captures/groq``) and for
-refinement hitting a provider rate limit (HTTP 429).
+transcription and refinement hitting a provider rate limit (HTTP 429).
 
 Groq is stood in for by the in-process ``FakeServer`` from
 ``test_cloud_dictation.py`` (no network, no keys).
@@ -8,10 +8,11 @@ Groq is stood in for by the in-process ``FakeServer`` from
 
 import pytest
 
-from backend import backends
-from backend.backends import LLMRateLimitError, reset_backends
+from backend import backends, config
+from backend.backends import LLMRateLimitError, STTRateLimitError, reset_backends
 from backend.backends.anthropic_backend import AnthropicLLMBackend
 from backend.backends.openai_compat_backend import OpenAICompatLLMBackend
+from backend.backends.openai_compat_stt_backend import OpenAICompatSTTBackend
 from backend.services import quick_setup
 from backend.tests.test_cloud_dictation import FakeServer, _wav_bytes
 from backend.tests.test_vocabulary import api  # noqa: F401 — fixture
@@ -231,3 +232,34 @@ def test_a_rate_limited_refine_answers_429_and_keeps_the_raw_transcript(api):
     stored = api.get(f"/captures/{capture['id']}").json()
     assert stored["transcript_raw"] == "Bom dia a todos."
     assert stored["transcript_refined"] is None
+
+
+async def test_a_429_from_the_transcription_endpoint_is_a_rate_limit_error(tmp_path):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(_wav_bytes())
+    with FakeServer(lambda *_: RATE_LIMITED) as server:
+        backend = OpenAICompatSTTBackend(endpoint=server.base_url, model="whisper-large-v3-turbo")
+        with pytest.raises(STTRateLimitError, match="HTTP 429"):
+            await backend.transcribe(str(audio))
+
+
+def test_a_rate_limited_transcription_answers_429_and_keeps_nothing(api):
+    with FakeServer(lambda *_: RATE_LIMITED) as stt:
+        api.put(
+            "/settings/captures",
+            json={"custom_stt_endpoint": stt.base_url, "custom_stt_model": "whisper-large-v3-turbo"},
+        )
+        res = api.post(
+            "/captures",
+            files={"file": ("clip.wav", _wav_bytes(), "audio/wav")},
+            data={"source": "dictation"},
+        )
+
+    assert res.status_code == 429, res.text
+    assert res.json()["detail"] == (
+        "Transcription failed: the speech-to-text provider's rate limit was reached"
+    )
+    # The dictation is lost: no capture row, and the uploaded audio is
+    # deleted with the rest of the failed capture.
+    assert api.get("/captures").json()["total"] == 0
+    assert list(config.get_captures_dir().iterdir()) == []

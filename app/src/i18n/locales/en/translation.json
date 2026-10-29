@@ -132,7 +132,8 @@
       "commandNoLlm": "Voice commands need a language model. Set the refinement endpoint in Settings → Dictation.",
       "commandFailed": "Voice command failed",
       "commandEmpty": "No instruction heard",
-      "refineRateLimited": "Refinement skipped (rate limit), raw text pasted"
+      "refineRateLimited": "Refinement skipped (rate limit), raw text pasted",
+      "transcribeRateLimited": "Transcription failed (rate limit), try again in a minute"
     },
     "chord": {
       "capturing": "Capturing…",

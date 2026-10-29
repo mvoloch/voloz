@@ -431,6 +431,15 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   check required both the transcription and the Groq refinement model
   even when an Anthropic key moves refinement to Claude. Now the
   refinement model is required only when Groq refines.
+- **A transcription rate limit lost the dictation with a 500.** A 429
+  from the STT endpoint was a plain error: `POST /captures` answered 500
+  with the provider's body. It is now `STTRateLimitError`, the route
+  answers 429 with a short message and the pill says "Transcription
+  failed (rate limit), try again in a minute" (en, pt-BR). **The audio is
+  still lost:** when STT fails, `create_capture` deletes the file it had
+  just written (no row would point at it), so nothing can be
+  retranscribed later. A recovery path (keep the file, row without a
+  transcript, retry) is not built.
 
 ## Developing on GB4
 
