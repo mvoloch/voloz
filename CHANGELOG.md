@@ -5,6 +5,26 @@
 
 # Changelog
 
+## [0.8.4] - 2026-10-29
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **A recording that wouldn't stop:** when the microphone stopped by itself (a headset or device change), the pill stayed on "Recording" and nothing stopped it until Voloz was quit. Now the recording ends, what was recorded is sent, and the pill says the microphone stopped.
+- **Hands Free was invisible:** brushing Shift while holding the shortcut switched to Hands Free with no sign of it. The pill now says "Hands Free".
+- Quitting from the tray left a `voicebox-server.exe` process running.
+
+### Added
+
+- **Stop button** on the pill (■), and **Esc** stops a dictation; what you said is still transcribed and pasted.
+- **Level meter:** the bars on the pill follow your voice and stay flat in silence.
+- **Dictation log** (`dictation.log`, next to `watchdog.log` in the app's logs folder) to diagnose a dictation that went wrong. It records events only, never what you said.
+
+### Changed
+
+- The pill is always in English and uses the usual status symbols: a red dot while recording, a spinner while working, a check mark when done, a warning triangle for problems.
+
 ## [0.8.3] - 2026-10-29
 
 Voloz Lite: dictation only, no local models, no voice studio. Windows only for now; the installer is not code-signed yet. Lite installs under the same name as Voloz, so it replaces a Voloz install; settings, keys and dictation history stay.
