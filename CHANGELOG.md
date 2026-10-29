@@ -5,6 +5,29 @@
 
 # Changelog
 
+## [0.8.3] - 2026-10-29
+
+Voloz Lite: dictation only, no local models, no voice studio. Windows only for now; the installer is not code-signed yet. Lite installs under the same name as Voloz, so it replaces a Voloz install; settings, keys and dictation history stay.
+
+### Added
+
+- **First-run setup (Lite):** paste one free Groq key and transcription and refinement are set up. An optional Anthropic key moves refinement to Claude Haiku, which keeps your words more faithfully (recommended).
+- **Vocabulary:** words and names Voloz should spell your way (Settings → Dictation → Vocabulary). They are sent to transcription as a hint and to refinement; "heard as → write as" rules fix what is still misheard. Edit a transcript in the history and Voloz offers to learn the correction.
+- **Style per app:** email gets paragraphs, chat stays short with no final period, code editors keep names and commands exactly, and AI assistants (Claude, ChatGPT, Gemini…) get your prompt cleaned up but never answered or shortened. Switch: Settings → Dictation → Refinement.
+- **Voice commands:** select text, hold Ctrl+Alt+Win and say what to do ("deixa mais formal", "traduz para o inglês"); the result replaces the selection. With nothing selected, Voloz writes the text you ask for. Your clipboard is restored.
+- **Text shortcuts:** say a trigger ("meu endereço") and the saved text is pasted, also inside a longer dictation.
+- **Keep dictation audio:** Always (default), 30 days, 7 days or Never. The text history stays.
+- **Start with Windows:** on by default, switch in Settings → General. At login Voloz starts in the tray.
+
+### Changed
+
+- Refinement with only a Groq key uses `openai/gpt-oss-120b`.
+- A provider rate limit (common on Groq's free tier) shows a short notice. When refinement is skipped, the unrefined text is pasted with your shortcuts filled in.
+
+### Fixed
+
+- Refinement with Claude sometimes pasted a note about its edits after the text.
+
 ## [0.8.2] - 2026-10-28
 
 Windows only for now; the installer is not code-signed yet. Upgrading from 0.8.1 keeps your settings and keys.
