@@ -55,6 +55,8 @@ async def create_capture_endpoint(
             language=resolved_language,
             stt_model=resolved_stt,
             db=db,
+            vocabulary=saved.vocabulary,
+            replacements=saved.replacements,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -146,11 +148,40 @@ async def refine_capture_endpoint(
             flags=flags,
             model_size=resolved_model,
             db=db,
+            vocabulary=saved.vocabulary,
         )
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)
         raise HTTPException(status_code=500, detail=str(e))
 
+    if not capture:
+        raise HTTPException(status_code=404, detail="Capture not found")
+    return capture
+
+
+@router.put(
+    "/captures/{capture_id}/transcript",
+    response_model=models.CaptureTranscriptUpdateResponse,
+)
+async def update_capture_transcript_endpoint(
+    capture_id: str,
+    request: models.CaptureTranscriptUpdate,
+    db: Session = Depends(get_db),
+):
+    """Save a hand-corrected transcript as the refined text.
+
+    The response carries ``suggestions``: short word substitutions found in
+    the correction ("Valois" → "Voloz") that the UI offers to save as
+    replacement rules.
+    """
+    saved = settings_service.get_capture_settings(db)
+    capture = captures_service.update_capture_transcript(
+        capture_id=capture_id,
+        text=request.text,
+        base=request.base,
+        db=db,
+        replacements=saved.replacements,
+    )
     if not capture:
         raise HTTPException(status_code=404, detail="Capture not found")
     return capture
@@ -269,6 +300,8 @@ async def retranscribe_capture_endpoint(
             stt_model=resolved_stt,
             language=resolved_language,
             db=db,
+            vocabulary=saved.vocabulary,
+            replacements=saved.replacements,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=410, detail=str(e))

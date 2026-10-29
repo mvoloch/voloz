@@ -10,6 +10,7 @@ of appending one helper below and wiring one toggle on the frontend.
 
 import re
 from dataclasses import dataclass
+from typing import Iterable, Optional
 
 from . import llm as llm_service
 
@@ -183,8 +184,21 @@ When the speaker dictates a punctuation word inside a technical term, convert it
 For example, "run npm install then cd into src slash components and edit index dot tsx" yields "Run npm install then cd into src/components and edit index.tsx.\""""
 
 
-def build_refinement_prompt(flags: RefinementFlags) -> str:
-    """Assemble the system prompt for a given flag combination."""
+_VOCABULARY = """The speaker uses these names and terms. Spell each one exactly as written here, including capitalization and hyphens: {terms}
+
+When a word in the transcript is clearly a mis-hearing of one of these terms, write the term as listed. Leave words that merely look alike but mean something else."""
+
+
+def build_refinement_prompt(
+    flags: RefinementFlags,
+    vocabulary: Optional[Iterable[str]] = None,
+) -> str:
+    """Assemble the system prompt for a given flag combination.
+
+    A non-empty ``vocabulary`` adds a section with the user's spellings,
+    unless every toggle is off (the pass-through prompt must stay a
+    pass-through; replacement rules still run before refinement).
+    """
     sections = [_BASE_INSTRUCTIONS]
 
     if flags.smart_cleanup:
@@ -198,6 +212,10 @@ def build_refinement_prompt(flags: RefinementFlags) -> str:
         # No refinement toggles enabled — nothing meaningful to do, but the
         # caller still gets a deterministic pass-through prompt.
         sections.append("No transformations are enabled. Return the transcript unchanged.")
+    else:
+        terms = [t.strip() for t in vocabulary or [] if t and t.strip()]
+        if terms:
+            sections.append(_VOCABULARY.format(terms=", ".join(terms)))
 
     return "\n\n".join(sections)
 
@@ -269,8 +287,12 @@ async def refine_transcript(
     transcript: str,
     flags: RefinementFlags,
     model_size: str | None = None,
+    vocabulary: Optional[Iterable[str]] = None,
 ) -> tuple[str, str]:
     """Run the transcript through the LLM with the built system prompt.
+
+    ``vocabulary`` is the user's list of spellings for names and jargon;
+    see :func:`build_refinement_prompt`.
 
     Returns:
         (refined_text, llm_model_size) — so callers can persist which model
@@ -287,7 +309,7 @@ async def refine_transcript(
         # and a local model would make something up, so there is nothing to do.
         return "", resolved_size
 
-    system_prompt = build_refinement_prompt(flags)
+    system_prompt = build_refinement_prompt(flags, vocabulary)
     text = await backend.generate(
         prompt=cleaned_input,
         system=system_prompt,

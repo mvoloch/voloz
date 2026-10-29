@@ -19,10 +19,11 @@ from sqlalchemy.orm import Session
 
 from .. import config
 from ..database import Capture as DBCapture
-from ..models import CaptureResponse, RefinementFlagsModel
+from ..models import CaptureResponse, CaptureTranscriptUpdateResponse, RefinementFlagsModel
 from ..utils.audio import load_audio
 from .refinement import RefinementFlags, refine_transcript
-from .transcribe import get_whisper_model, resolve_stt_model
+from .transcribe import get_whisper_model, resolve_stt_model, transcribe_with_vocabulary
+from .vocabulary import apply_replacements, normalize_replacements, suggest_replacements
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +66,14 @@ async def create_capture(
     language: Optional[str],
     stt_model: Optional[str],
     db: Session,
+    vocabulary: Optional[list[str]] = None,
+    replacements: Optional[list[dict]] = None,
 ) -> CaptureResponse:
-    """Persist raw audio, run STT, store the row."""
+    """Persist raw audio, run STT, store the row.
+
+    ``vocabulary`` biases a remote STT endpoint; ``replacements`` are
+    applied to its output before it is stored as ``transcript_raw``.
+    """
     if source not in VALID_SOURCES:
         raise ValueError(f"Invalid source '{source}'. Must be one of {sorted(VALID_SOURCES)}")
 
@@ -119,7 +126,10 @@ async def create_capture(
 
         whisper = get_whisper_model()
         resolved_stt = resolve_stt_model(whisper, stt_model)
-        transcript = await whisper.transcribe(str(audio_path), language, resolved_stt)
+        transcript = await transcribe_with_vocabulary(
+            whisper, str(audio_path), language, resolved_stt, vocabulary
+        )
+        transcript = apply_replacements(transcript, replacements)
 
         row = DBCapture(
             id=capture_id,
@@ -186,6 +196,7 @@ async def refine_capture(
     flags: RefinementFlags,
     model_size: Optional[str],
     db: Session,
+    vocabulary: Optional[list[str]] = None,
 ) -> Optional[CaptureResponse]:
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
@@ -195,6 +206,7 @@ async def refine_capture(
         row.transcript_raw or "",
         flags,
         model_size=model_size,
+        vocabulary=vocabulary,
     )
 
     row.transcript_refined = refined
@@ -205,11 +217,55 @@ async def refine_capture(
     return _to_response(row)
 
 
+# ``llm_model`` label of a transcript the user corrected by hand, so the UI
+# says "edited" instead of naming a model that did not write it.
+MANUAL_EDIT_LABEL = "manual"
+
+
+def update_capture_transcript(
+    capture_id: str,
+    text: str,
+    base: str,
+    db: Session,
+    replacements: Optional[list[dict]] = None,
+) -> Optional[CaptureTranscriptUpdateResponse]:
+    """Store a hand-corrected transcript and suggest rules learned from it.
+
+    The edit becomes the refined text (the raw STT output is kept for
+    re-refining). Suggestions compare the edit with the version the user
+    edited (``base``: "raw" or "refined") and leave out rules that are
+    already saved.
+    """
+    row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
+    if not row:
+        return None
+
+    if base == "refined" and row.transcript_refined is not None:
+        before = row.transcript_refined
+    else:
+        before = row.transcript_raw or ""
+
+    saved = {(r["from"].casefold(), r["to"]) for r in normalize_replacements(replacements)}
+    suggestions = [
+        s for s in suggest_replacements(before, text) if (s["from"].casefold(), s["to"]) not in saved
+    ]
+
+    row.transcript_refined = text
+    row.llm_model = MANUAL_EDIT_LABEL
+    db.commit()
+    db.refresh(row)
+    return CaptureTranscriptUpdateResponse(
+        **_to_response(row).model_dump(), suggestions=suggestions
+    )
+
+
 async def retranscribe_capture(
     capture_id: str,
     stt_model: Optional[str],
     language: Optional[str],
     db: Session,
+    vocabulary: Optional[list[str]] = None,
+    replacements: Optional[list[dict]] = None,
 ) -> Optional[CaptureResponse]:
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
@@ -221,7 +277,10 @@ async def retranscribe_capture(
 
     whisper = get_whisper_model()
     resolved_stt = resolve_stt_model(whisper, stt_model)
-    transcript = await whisper.transcribe(str(resolved), language, resolved_stt)
+    transcript = await transcribe_with_vocabulary(
+        whisper, str(resolved), language, resolved_stt, vocabulary
+    )
+    transcript = apply_replacements(transcript, replacements)
 
     row.transcript_raw = transcript
     row.stt_model = resolved_stt

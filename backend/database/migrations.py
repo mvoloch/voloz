@@ -268,6 +268,9 @@ def _migrate_capture_settings(engine, inspector, tables: set[str]) -> None:
     for column in ("custom_stt_endpoint", "custom_stt_model", "custom_stt_api_key"):
         if column not in columns:
             _add_column(engine, "capture_settings", f"{column} VARCHAR", column)
+    for column in ("vocabulary", "replacements"):
+        if column not in columns:
+            _add_column(engine, "capture_settings", f"{column} TEXT NOT NULL DEFAULT '[]'", column)
 
 
 def _migrate_mcp_bindings(engine, inspector, tables: set[str]) -> None:

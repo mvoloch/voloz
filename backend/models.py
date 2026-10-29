@@ -2,10 +2,11 @@
 Pydantic models for request/response validation.
 """
 
-from pydantic import BaseModel, Field, model_validator
-from typing import Any, Optional, List
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Any, Dict, Optional, List
 from datetime import datetime
 
+from .services.vocabulary import normalize_replacements, normalize_vocabulary
 from .utils.capture_chords import (
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
@@ -238,6 +239,27 @@ class CaptureRefineRequest(BaseModel):
     model_size: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")
 
 
+class CaptureTranscriptUpdate(BaseModel):
+    """A transcript corrected by hand in the captures view.
+
+    ``base`` names the version the user edited, so the correction is
+    compared against the text they actually saw.
+    """
+
+    text: str = Field(..., max_length=100_000)
+    base: str = Field(default="refined", pattern="^(raw|refined)$")
+
+
+class CaptureTranscriptUpdateResponse(CaptureResponse):
+    """The updated capture plus replacement rules learned from the edit.
+
+    ``suggestions`` are ``{"from": ..., "to": ...}`` substitutions found in
+    the edit that are not already saved rules; the UI offers to add them.
+    """
+
+    suggestions: List[Dict[str, str]] = Field(default_factory=list)
+
+
 class CaptureRetranscribeRequest(BaseModel):
     """Request to re-run STT on a capture's audio with a different model."""
 
@@ -275,6 +297,10 @@ class CaptureSettingsResponse(BaseModel):
     custom_stt_model: Optional[str] = None
     # Same write-only treatment as ``custom_llm_api_key``.
     custom_stt_api_key_configured: bool = False
+    # Spellings for names / jargon, and ``{"from", "to"}`` rules applied to
+    # the raw transcript (see ``services/vocabulary.py``).
+    vocabulary: List[str] = Field(default_factory=list)
+    replacements: List[Dict[str, str]] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -329,6 +355,27 @@ class CaptureSettingsUpdate(BaseModel):
     custom_stt_endpoint: Optional[str] = None
     custom_stt_model: Optional[str] = None
     custom_stt_api_key: Optional[str] = None
+    # A list replaces the stored one whole. Terms and rules are trimmed,
+    # empties dropped and duplicates merged case-insensitively.
+    vocabulary: Optional[List[str]] = None
+    replacements: Optional[List[Dict[str, str]]] = None
+
+    @field_validator("vocabulary")
+    @classmethod
+    def _normalize_vocabulary(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        return None if value is None else normalize_vocabulary(value)
+
+    @field_validator("replacements")
+    @classmethod
+    def _normalize_replacements(
+        cls, value: Optional[List[Dict[str, str]]]
+    ) -> Optional[List[Dict[str, str]]]:
+        if value is None:
+            return None
+        for rule in value:
+            if set(rule) != {"from", "to"}:
+                raise ValueError('Each replacement rule needs exactly "from" and "to"')
+        return normalize_replacements(value)
 
 
 class GenerationSettingsResponse(BaseModel):
