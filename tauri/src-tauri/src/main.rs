@@ -1105,11 +1105,18 @@ const MODIFIER_RELEASE_TIMEOUT_S: u64 = 600;
 /// after the synthetic Ctrl+C. No change by then means nothing was selected.
 const COPY_WAIT_MS: u64 = 500;
 
-/// Apps where Ctrl+C is not "copy" when nothing is selected: in a terminal
-/// it interrupts the running program. The voice command treats them as
-/// having no selection unless UIAutomation reported one.
+/// Apps where Ctrl+C with nothing selected does something other than
+/// leave the clipboard alone: in a terminal it interrupts the running
+/// program; in a code editor (VS Code and its forks, JetBrains IDEs,
+/// Visual Studio, Sublime, Zed) it copies the current line, which the
+/// command would then rewrite and paste at the caret. The voice command
+/// treats them as having no selection unless UIAutomation reported one,
+/// so it drafts text instead. The cost: a selection UIAutomation can't
+/// read in one of these apps is not used. Exe names match the code set in
+/// `backend/services/app_context.py`.
 const NO_SYNTHETIC_COPY: &[&str] = &[
     "windowsterminal.exe",
+    "wt.exe",
     "openconsole.exe",
     "conhost.exe",
     "cmd.exe",
@@ -1118,6 +1125,22 @@ const NO_SYNTHETIC_COPY: &[&str] = &[
     "wezterm-gui.exe",
     "alacritty.exe",
     "mintty.exe",
+    "code.exe",
+    "code - insiders.exe",
+    "cursor.exe",
+    "windsurf.exe",
+    "zed.exe",
+    "sublime_text.exe",
+    "devenv.exe",
+    "idea64.exe",
+    "pycharm64.exe",
+    "webstorm64.exe",
+    "rider64.exe",
+    "goland64.exe",
+    "clion64.exe",
+    "phpstorm64.exe",
+    "rustrover64.exe",
+    "datagrip64.exe",
 ];
 
 /// Wait until the user lets go of Win/Ctrl/Shift/Alt, so a synthetic
@@ -1431,7 +1454,7 @@ async fn paste_final_text(
 /// something else), saves the user's clipboard, copies, reads the text and
 /// puts the user's clipboard back. Returns an empty string when the
 /// clipboard did not change within [`COPY_WAIT_MS`] (nothing selected), or
-/// for terminals, where Ctrl+C would interrupt the running program.
+/// for the apps in [`NO_SYNTHETIC_COPY`] (terminals, code editors).
 #[command]
 async fn copy_selection(focus: focus_capture::FocusSnapshot) -> Result<String, String> {
     let app = focus.bundle_id.as_deref().unwrap_or("");

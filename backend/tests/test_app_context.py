@@ -12,6 +12,8 @@ Usage:
 
 import asyncio
 import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -20,6 +22,7 @@ from backend.backends.anthropic_backend import AnthropicLLMBackend
 from backend.services import llm as llm_service
 from backend.services import refinement, voice_commands
 from backend.services.app_context import (
+    APP_STYLES,
     ASSISTANT,
     CHAT,
     CODE,
@@ -110,6 +113,18 @@ def test_every_style_has_an_instruction():
         assert style_instruction(style)
     assert style_instruction(None) is None
     assert style_instruction("spreadsheet") is None
+
+
+def test_voice_commands_send_no_ctrl_c_to_code_editors_or_terminals():
+    """Ctrl+C with nothing selected copies the line in an editor and interrupts
+    a terminal, so the desktop's ``NO_SYNTHETIC_COPY`` covers every Windows
+    exe of the code style."""
+    main_rs = Path(__file__).parents[2] / "tauri" / "src-tauri" / "src" / "main.rs"
+    source = main_rs.read_text(encoding="utf-8")
+    block = source.split("const NO_SYNTHETIC_COPY: &[&str] = &[", 1)[1].split("];", 1)[0]
+    no_copy = set(re.findall(r'"([^"]+)"', block))
+    windows_code_apps = {app for app in APP_STYLES[CODE] if app.endswith(".exe")}
+    assert windows_code_apps - no_copy == set()
 
 
 # ── Refinement prompt ─────────────────────────────────────────────────────

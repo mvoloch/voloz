@@ -418,6 +418,15 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   (labelled as a shortcut) and a warning logged. Live, 5 Portuguese
   dictations with 1–2 triggers × 2 runs: Claude Haiku kept 14/14
   placeholders, Groq `openai/gpt-oss-120b` 14/14; no fallback.
+- **Voice command in a code editor rewrote the current line.** With
+  nothing selected, VS Code, Cursor, Windsurf, Zed, JetBrains IDEs,
+  Visual Studio and Sublime copy the whole line on Ctrl+C, so the
+  synthetic-copy fallback handed that line to the command, which pasted
+  its rewrite at the caret. `NO_SYNTHETIC_COPY` (`main.rs`) now holds
+  every Windows exe of the code style in `app_context.py` (a test keeps
+  them in step): there the command drafts unless UIAutomation reported a
+  selection. Trade-off: a selection UIAutomation can't read in those
+  editors is not used. Compiled and linted for Windows, not run.
 
 ## Developing on GB4
 
