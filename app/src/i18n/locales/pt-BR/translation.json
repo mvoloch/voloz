@@ -51,7 +51,10 @@
       "refined": "Refinada",
       "raw": "Bruta",
       "refinedHint": "Refinada com {{model}}",
-      "rawHint": "Transcrita com Whisper {{model}}"
+      "rawHint": "Transcrita com Whisper {{model}}",
+      "editedHint": "Editada por você",
+      "editLabel": "Transcrição (editável)",
+      "unsaved": "Alterações não salvas"
     },
     "actions": {
       "configure": "Configurar",
@@ -73,7 +76,9 @@
       "playAsGenerating": "Gerando…",
       "playAsStop": "Parar · {{name}}",
       "playAsStopFallback": "Parar · Voz",
-      "playAsDropdownLabel": "Reproduzir transcrição como"
+      "playAsDropdownLabel": "Reproduzir transcrição como",
+      "saveEdit": "Salvar",
+      "discardEdit": "Descartar"
     },
     "empty": {
       "noMatches": "Nenhuma captura corresponde a \"{{query}}\"",
@@ -103,7 +108,10 @@
       "exportEmpty": "Nada para exportar",
       "shortcutNotArmed": "Atalho ligado, mas ainda não armado",
       "shortcutNotArmedDescription_one": "{{names}} ainda precisa ser baixado. Abra a aba Capturas para começar.",
-      "shortcutNotArmedDescription_other": "{{names}} ainda precisam ser baixados. Abra a aba Capturas para começar."
+      "shortcutNotArmedDescription_other": "{{names}} ainda precisam ser baixados. Abra a aba Capturas para começar.",
+      "transcriptSaved": "Transcrição salva",
+      "transcriptSaveFailed": "Não foi possível salvar a transcrição",
+      "learned": "Aprendido: {{from}} → {{to}}"
     },
     "pill": {
       "recording": "Gravando",
@@ -176,6 +184,12 @@
         "rechecking": "Verificando…",
         "stillMissing": "Ainda não detectado. O macOS geralmente exige fechar e reabrir o Voloz depois de alternar a permissão."
       }
+    },
+    "learn": {
+      "description": "As próximas transcrições farão essa correção, e a nova grafia entra no seu vocabulário.",
+      "rule": "Aprender: {{from}} → {{to}}?",
+      "confirm": "Aprender",
+      "dismiss": "Dispensar"
     }
   },
   "voicesTab": {
@@ -998,6 +1012,27 @@
         "archive": {
           "title": "Arquivar áudio",
           "description": "Mantenha a gravação original junto de cada transcrição."
+        }
+      },
+      "vocabulary": {
+        "title": "Vocabulário",
+        "description": "Nomes e termos que a transcrição erra. Vale para todos os ditados.",
+        "terms": {
+          "title": "Palavras e nomes",
+          "description": "Grafados exatamente como aqui. Enviados como dica a um endpoint de transcrição personalizado e ao refinamento.",
+          "placeholder": "Voloz, Pascoal, Log-In",
+          "add": "Adicionar",
+          "empty": "Nenhuma palavra ainda.",
+          "remove": "Remover {{term}}"
+        },
+        "replacements": {
+          "title": "Substituições",
+          "description": "Corrige uma palavra ou expressão que a transcrição sempre ouve errado, logo após a transcrição e mesmo com o refinamento desligado. Vale para palavras inteiras, em maiúsculas ou minúsculas.",
+          "fromPlaceholder": "Ouvido como (ex.: Valois)",
+          "toPlaceholder": "Escrever como (ex.: Voloz)",
+          "add": "Adicionar",
+          "empty": "Nenhuma substituição ainda. Corrija uma transcrição em Capturas para aprender uma.",
+          "remove": "Remover {{from}} → {{to}}"
         }
       },
       "refinement": {

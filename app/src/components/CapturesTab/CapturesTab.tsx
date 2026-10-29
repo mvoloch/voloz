@@ -57,6 +57,7 @@ import type {
   CaptureListResponse,
   CaptureResponse,
   CaptureSource,
+  ReplacementRule,
   VoiceProfileResponse,
 } from '@/lib/api/types';
 import type { LanguageCode } from '@/lib/constants/languages';
@@ -67,6 +68,7 @@ import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { cn } from '@/lib/utils/cn';
 import { formatAbsoluteDate, parseServerDate } from '@/lib/utils/format';
 import { displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
+import { mergeReplacementRules, mergeVocabulary } from '@/lib/utils/vocabulary';
 import { useGenerationStore } from '@/stores/generationStore';
 import { usePlayerStore } from '@/stores/playerStore';
 
@@ -377,6 +379,79 @@ export function CapturesTab() {
     profiles?.[0] ||
     null;
   const playAsVoiceId = playAsVoice?.id ?? null;
+
+  // Transcript text shown in the details panel, and the version it is.
+  const shownTranscript =
+    (showRefined && selected?.transcript_refined
+      ? selected.transcript_refined
+      : selected?.transcript_raw) ?? '';
+  const shownBase: 'raw' | 'refined' =
+    showRefined && selected?.transcript_refined ? 'refined' : 'raw';
+  // Hand edits of the shown transcript, tied to the capture and view they
+  // were typed in (same key as the Textarea): switching either drops them.
+  const draftKey = `${selected?.id}-${showRefined}`;
+  const [draftState, setDraftState] = useState<{ key: string; text: string } | null>(null);
+  const transcriptDraft = draftState?.key === draftKey ? draftState.text : null;
+  const setTranscriptDraft = (text: string | null) =>
+    setDraftState(text === null ? null : { key: draftKey, text });
+  const transcriptDirty = transcriptDraft !== null && transcriptDraft !== shownTranscript;
+  // Replacement rules offered after a corrected transcript is saved; shown
+  // only on that capture.
+  const [learnOffer, setLearnOffer] = useState<{
+    captureId: string;
+    rules: ReplacementRule[];
+  } | null>(null);
+
+  const saveTranscriptMutation = useMutation({
+    mutationFn: async (vars: { captureId: string; text: string; base: 'raw' | 'refined' }) =>
+      apiClient.updateCaptureTranscript(vars.captureId, { text: vars.text, base: vars.base }),
+    onSuccess: ({ suggestions, ...capture }) => {
+      queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) =>
+        prev
+          ? { ...prev, items: prev.items.map((c) => (c.id === capture.id ? capture : c)) }
+          : prev,
+      );
+      queryClient.invalidateQueries({ queryKey: ['captures'] });
+      // The edit is now the refined text.
+      setShowRefined(true);
+      setTranscriptDraft(null);
+      setLearnOffer(suggestions.length ? { captureId: capture.id, rules: suggestions } : null);
+      toast({ title: t('captures.toast.transcriptSaved') });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t('captures.toast.transcriptSaveFailed'),
+        description: err.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const saveTranscript = () => {
+    if (!selected || transcriptDraft === null || !transcriptDirty) return;
+    saveTranscriptMutation.mutate({
+      captureId: selected.id,
+      text: transcriptDraft,
+      base: shownBase,
+    });
+  };
+
+  const dropLearnRule = (rule: ReplacementRule) => {
+    setLearnOffer((offer) => {
+      if (!offer) return null;
+      const rules = offer.rules.filter((r) => r !== rule);
+      return rules.length ? { ...offer, rules } : null;
+    });
+  };
+
+  const learnRule = (rule: ReplacementRule) => {
+    updateCaptureSettings({
+      replacements: mergeReplacementRules(captureSettings?.replacements ?? [], [rule]),
+      vocabulary: mergeVocabulary(captureSettings?.vocabulary ?? [], [rule.to]),
+    });
+    dropLearnRule(rule);
+    toast({ title: t('captures.toast.learned', { from: rule.from, to: rule.to }) });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (captureId: string) => apiClient.deleteCapture(captureId),
@@ -831,7 +906,9 @@ export function CapturesTab() {
               </div>
               <div className="flex-1" />
               <span className="text-xs text-muted-foreground">
-                {showRefined && selected.transcript_refined
+                {showRefined && selected.transcript_refined && selected.llm_model === 'manual'
+                  ? t('captures.transcript.editedHint')
+                  : showRefined && selected.transcript_refined
                   ? t('captures.transcript.refinedHint', {
                       // Local refinement stores only the size ("0.6B").
                       model: selected.llm_model
@@ -854,16 +931,78 @@ export function CapturesTab() {
             <div className="rounded-xl border border-border bg-muted/10">
               <Textarea
                 key={`${selected.id}-${showRefined}`}
-                // Controlled, so a refine that lands while the panel is open shows up.
-                value={
-                  (showRefined && selected.transcript_refined
-                    ? selected.transcript_refined
-                    : selected.transcript_raw) ?? ''
-                }
-                readOnly
+                // Controlled, so a refine that lands while the panel is open
+                // shows up; typing starts a draft that Save stores as the
+                // refined text.
+                value={transcriptDraft ?? shownTranscript}
+                onChange={(e) => setTranscriptDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    saveTranscript();
+                  } else if (e.key === 'Escape' && transcriptDirty) {
+                    e.preventDefault();
+                    setTranscriptDraft(null);
+                  }
+                }}
+                aria-label={t('captures.transcript.editLabel')}
                 className="text-[15px] leading-relaxed min-h-[260px] border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 p-6"
               />
+              {transcriptDirty && (
+                <div className="flex items-center gap-2 px-4 pb-3">
+                  <span className="text-xs text-muted-foreground mr-auto">
+                    {t('captures.transcript.unsaved')}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setTranscriptDraft(null)}
+                    disabled={saveTranscriptMutation.isPending}
+                  >
+                    {t('captures.actions.discardEdit')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={saveTranscript}
+                    disabled={saveTranscriptMutation.isPending}
+                  >
+                    {saveTranscriptMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {t('captures.actions.saveEdit')}
+                  </Button>
+                </div>
+              )}
             </div>
+
+            {/* Corrections the user can turn into replacement rules */}
+            {learnOffer?.captureId === selected.id && (
+              <div className="mt-3 rounded-xl border border-accent/40 bg-accent/5 p-3 space-y-2">
+                <p className="text-xs text-muted-foreground">{t('captures.learn.description')}</p>
+                {learnOffer.rules.map((rule) => (
+                  <div key={`${rule.from}→${rule.to}`} className="flex items-center gap-2">
+                    <span className="flex-1 min-w-0 truncate text-sm">
+                      {t('captures.learn.rule', { from: rule.from, to: rule.to })}
+                    </span>
+                    <Button variant="outline" size="sm" onClick={() => learnRule(rule)}>
+                      {t('captures.learn.confirm')}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => dropLearnRule(rule)}
+                      aria-label={t('captures.learn.dismiss')}
+                      title={t('captures.learn.dismiss')}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Bottom actions */}
             <div className="flex items-center gap-2 mt-4 flex-wrap">

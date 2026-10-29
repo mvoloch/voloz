@@ -199,6 +199,27 @@ export interface CaptureRefineRequest {
   model_size?: Qwen3ModelSize;
 }
 
+/** A hand-corrected transcript; ``base`` is the version the user edited. */
+export interface CaptureTranscriptUpdate {
+  text: string;
+  base?: 'raw' | 'refined';
+}
+
+/**
+ * Response of ``PUT /captures/{id}/transcript``: the capture with the edit
+ * stored as its refined text, plus short substitutions found in the edit
+ * ("Valois" → "Voloz") that are not saved rules yet.
+ */
+export interface CaptureTranscriptUpdateResponse extends CaptureResponse {
+  suggestions: ReplacementRule[];
+}
+
+/** Rewrites ``from`` (any case, whole words) to ``to`` in raw transcripts. */
+export interface ReplacementRule {
+  from: string;
+  to: string;
+}
+
 export interface CaptureRetranscribeRequest {
   model?: WhisperModelSize;
   language?: LanguageCode;
@@ -247,6 +268,14 @@ export interface CaptureSettings {
   custom_stt_model: string | null;
   /** Same write-only contract as ``custom_llm_api_key_configured``. */
   custom_stt_api_key_configured: boolean;
+  /**
+   * Spellings of names and jargon. Sent to a remote transcription endpoint
+   * as the Whisper prompt and listed in the refinement prompt. A write
+   * replaces the whole list.
+   */
+  vocabulary: string[];
+  /** Applied to the raw transcript right after transcription. A write replaces the whole list. */
+  replacements: ReplacementRule[];
 }
 
 export type CaptureSettingsUpdate = Partial<
