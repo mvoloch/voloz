@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-29 (vocabulary and learning from corrections on `feat/vocabulary`). Update this file whenever state or decisions change._
+_Last updated: 2026-10-29 (style per target app and voice commands on `feat/app-context`). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -143,6 +143,8 @@ keep-alive). Still to confirm in an installed build.
    the prompt "Voloz" came back as the transcript 3/3, so a transcript that
    is only the prompt is dropped; other silence hallucinations ("E aí",
    "Legenda por …") remain, as before.
+   App context and voice commands are on `feat/app-context` (cut from
+   `light` at `a6d149c`, not merged); see the section below.
 4. Streaming STT + incremental refinement to approach Wispr's ~0.7 s.
 5. Linux build and test on GB4; then Android.
 6. Studio: cloud TTS/cloning engine (ElevenLabs/Cartesia/Fish Audio).
@@ -244,6 +246,64 @@ Left open on purpose:
   is still using the old client, so the leak is the lesser risk.
 - Backend error texts shown in the pill (e.g. a Claude or Groq error)
   stay in English; they come from the server and the provider.
+
+## App context and voice commands (`feat/app-context`, 2026-10-29)
+
+Two dictation features, both in Lite (they live in the captures router).
+
+- **Style per target app.** The focus snapshot taken at chord-start already
+  named the app (lowercased exe on Windows, bundle id on macOS); it now also
+  carries the window title (Windows) and both go with the capture
+  (`target_app`, `target_title` columns, shown as "In outlook" in the
+  capture details). `backend/services/app_context.py` holds the table:
+  email (Outlook, new Outlook `olk.exe`, Thunderbird, Mail; Gmail/Outlook
+  tabs by title) → full sentences, paragraphs when long; chat (WhatsApp,
+  Slack, Teams, Telegram, Discord, Signal; their web tabs) → short and
+  casual, no final period on a single short sentence; code (VS Code,
+  Cursor, Windsurf, Zed, Sublime, Visual Studio, JetBrains, Windows
+  Terminal, PowerShell, cmd) → identifiers and casing kept, no prose
+  restyling. Other apps, or the "Adapt style to the app" switch off
+  (Settings → Dictation → Refinement, on by default): the prompt is
+  byte-for-byte the old one. Both Claude Haiku and Qwen 3.8 27B kept the
+  final period on "Beleza, valeu." despite the prompt line (the few-shot
+  examples all end in one), so for chat it is dropped in code
+  (`finish_for_style`). Measured once per case, 2026-10-29: a long
+  three-topic Portuguese dictation got paragraphs for Outlook on both
+  models and stayed one block elsewhere; "beleza valeu" → "Beleza, valeu"
+  for WhatsApp, "Beleza, valeu." for Outlook/Notepad/VS Code. In VS Code
+  both models still end a dictated sentence with a period (left as is: a
+  sentence dictated into an editor is usually a comment or a prompt), and
+  Qwen left "use state" as two words in every app while Claude wrote
+  `useState` in every app — that is the technical-terms rule, not the style.
+- **Voice command** (third chord, default left Ctrl+Alt+Win, configurable
+  under Settings → Dictation; held like push-to-talk). At chord-start Rust
+  reads the selection with UIAutomation TextPattern (`Some("")` = nothing
+  selected); when the control has no TextPattern, the pill calls
+  `copy_selection` after the chord is released: it waits for the modifiers
+  to come up, saves the clipboard, sends Ctrl+C, waits up to 500 ms for the
+  clipboard sequence number to move (no move = nothing selected), reads the
+  text and restores the clipboard. Terminals are skipped (Ctrl+C there
+  interrupts the program). The audio becomes a capture with source
+  `command`; `POST /captures/{id}/command {selection}` runs the dedicated
+  prompt (`backend/services/voice_commands.py`: rewrite the selection, or
+  draft from the instruction when it is empty, keep the selection's
+  language, `<result>` tags for Claude) and stores the result as the
+  refined text; the pill pastes it over the selection. No LLM configured →
+  409 and the pill says so; a failed command pastes nothing.
+  Live, 4 instructions × Haiku and Qwen 3.8 27B: "deixa mais formal",
+  "traduz para português", "turn this into bullet points" (on a Portuguese
+  selection: bullets stayed Portuguese), "responde dizendo que aceito…"
+  (no selection: a reply was drafted) — all 8 correct, no notes or
+  preambles.
+
+Only compiled, never run: the Rust side (UIA selection, `copy_selection`,
+third chord) and the UI. To check on Windows: the chord with Word, Outlook,
+WhatsApp, Chrome (Gmail) and VS Code; whether a bare Ctrl+Alt+Win release
+opens the Start menu; that the clipboard is unchanged after a command; in
+VS Code with nothing selected, Ctrl+C copies the whole line (if UIA gives
+no TextPattern there, the command would treat that line as the selection
+and paste a rewritten line at the cursor). macOS: no selection reading yet
+(commands draft only); Linux has no paste at all yet.
 
 ## Lite edition (`feat/lite-edition`, 2026-10-28)
 
