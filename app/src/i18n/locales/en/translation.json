@@ -124,6 +124,7 @@
       "speaking": "Speaking",
       "completed": "Done",
       "stopAria": "Stop recording",
+      "stopEscTitle": "Stop recording (Esc)",
       "errorFallback": "Something went wrong",
       "errorCopyTooltip": "Click to copy error",
       "tooShort": "Recording too short, canceled",

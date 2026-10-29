@@ -1329,6 +1329,14 @@ fn reset_hotkey_state(state: State<'_, HotkeyState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Mirror the dictate pill's recording state into the global key hook, so
+/// Esc stops a dictation only while one is recording.
+#[cfg(desktop)]
+#[command]
+fn set_dictation_recording(recording: bool) {
+    hotkey_monitor::set_dictation_recording(recording);
+}
+
 /// Open the Privacy & Security → Accessibility pane in System Settings so
 /// the user can grant the permission. The URL scheme is stable across
 /// macOS 10.14–15; no-op on other platforms.
@@ -1828,7 +1836,8 @@ pub fn run() {
             enable_hotkey,
             disable_hotkey,
             update_chord_bindings,
-            reset_hotkey_state
+            reset_hotkey_state,
+            set_dictation_recording
         ])
         .on_window_event({
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

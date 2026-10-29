@@ -490,6 +490,18 @@ unrecoverable is.
   one per failure). The pill says "The microphone stopped; what was
   recorded was sent" when it ended by itself. Tests:
   `bun test app/tests` (Bun's runner; the app has no JS test runner).
+- **Stop always works, and shows.** The pill's stop control was the 8 px
+  dot; it is now a 24 px button with a stop square (aria-label, tooltip
+  "Stop recording (Esc)"), pulled into the padding so the pill keeps its
+  size. Esc stops a recording dictation and transcribes it: a second raw
+  `keytap::Tap` in `hotkey_monitor.rs` (`EscapeWatcher`) watches for
+  Esc key-down while the pill reports a recording
+  (`set_dictation_recording`), and sends `dictate:stop` with
+  `{source: "escape"}`. Not an Esc chord in the `ChordMatcher`: while
+  hands-free is on the matcher suppresses every other chord, which is
+  exactly when Esc is needed. The tap only observes, so Esc still reaches
+  the focused app. The pill resets the hotkey state after an Esc stop
+  (the hands-free toggle would otherwise stay on in keytap).
 
 ## Developing on GB4
 

@@ -77,6 +77,7 @@ export function CapturePill({
   state,
   elapsedMs,
   onStop,
+  stopTitle,
   errorMessage,
   onDismiss,
   className,
@@ -84,6 +85,8 @@ export function CapturePill({
   state: PillState;
   elapsedMs: number;
   onStop?: () => void;
+  /** Tooltip of the stop button; defaults to its aria label. */
+  stopTitle?: string;
   errorMessage?: string | null;
   onDismiss?: () => void;
   className?: string;
@@ -113,14 +116,18 @@ export function CapturePill({
     </span>
   );
 
+  // While recording, the dot becomes a stop button: a 24 px target with a
+  // stop square, pulled into the padding by negative margins so the pill
+  // keeps the dot's footprint and size.
   const stopButton = onStop && state === 'recording' ? (
     <button
       type="button"
       onClick={onStop}
       aria-label={t('captures.pill.stopAria')}
-      className="relative flex h-2 w-2 shrink-0 items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-accent/50"
+      title={stopTitle ?? t('captures.pill.stopAria')}
+      className="-mx-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent/15 transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
-      {dot}
+      <span className="h-2.5 w-2.5 rounded-[2px] bg-accent" />
     </button>
   ) : dot;
 

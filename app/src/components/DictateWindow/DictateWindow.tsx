@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CapturePill } from '@/components/CapturePill/CapturePill';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
@@ -13,6 +14,11 @@ interface DictateStartPayload {
   mode?: 'dictation' | 'command';
   /** Command only: the selection UIAutomation read; null when it couldn't. */
   selection?: string | null;
+}
+
+/** Rust's ``dictate:stop`` payload: null from a chord, ``escape`` from Esc. */
+interface DictateStopPayload {
+  source?: 'escape';
 }
 
 /** What rides along with one recording, from chord-start to paste. */
@@ -65,6 +71,7 @@ function toPlatformLineEndings(text: string): string {
  *      ``dictate:hide`` so Rust tucks the window away.
  */
 export function DictateWindow() {
+  const { t } = useTranslation();
   // Force the host document chrome to be transparent so the Tauri window
   // takes on the pill's own shape.
   useEffect(() => {
@@ -114,9 +121,10 @@ export function DictateWindow() {
   sessionRef.current = session;
 
   // Whether the recording in progress was stopped by a chord. A recording
-  // that ends otherwise (the pill's stop button, the length cap) may leave a
-  // hands-free toggle active in the Rust hotkey matcher, which then ignores
-  // push-to-talk until the toggle chord is pressed again — so reset it.
+  // that ends otherwise (the pill's stop button, Esc, the length cap, the
+  // microphone going away) may leave a hands-free toggle active in the Rust
+  // hotkey matcher, which then ignores push-to-talk until the toggle chord
+  // is pressed again — so reset it.
   const chordStoppedRef = useRef(false);
   const wasRecordingRef = useRef(false);
   useEffect(() => {
@@ -124,6 +132,8 @@ export function DictateWindow() {
       invoke('reset_hotkey_state').catch(() => {});
     }
     wasRecordingRef.current = session.isRecording;
+    // Rust's global key hook stops a recording dictation on Esc.
+    invoke('set_dictation_recording', { recording: session.isRecording }).catch(() => {});
   }, [session.isRecording]);
 
   // The recording in progress, so its chord release can start reading the
@@ -154,8 +164,9 @@ export function DictateWindow() {
       }),
     );
     unlistens.push(
-      listen('dictate:stop', () => {
-        chordStoppedRef.current = true;
+      listen<DictateStopPayload | null>('dictate:stop', (event) => {
+        // Esc is not a chord: the toggle it may leave on is reset above.
+        chordStoppedRef.current = event.payload?.source !== 'escape';
         // A command chord just released: copy the selection now (once the
         // keys are up), while the instruction is being transcribed.
         const context = currentContextRef.current;
@@ -377,6 +388,7 @@ export function DictateWindow() {
           errorMessage={session.errorMessage}
           onDismiss={session.dismissError}
           onStop={session.isRecording ? session.stopRecording : undefined}
+          stopTitle={t('captures.pill.stopEscTitle')}
         />
       ) : null}
     </div>

@@ -18,6 +18,8 @@
 //! coalesce into one `Restart` so hosts can discard the transition-
 //! moment audio rather than treat it as an unrelated Stop+Start pair.
 //!
+//! Esc stops a recording dictation (see [`EscapeWatcher`]).
+//!
 //! Left- and right-hand modifier variants are kept distinct all the way
 //! down to the OS event tap (keytap's core promise). Defaults bind to
 //! right-hand Cmd + right-hand Option on macOS / right-hand Ctrl +
@@ -31,7 +33,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use keytap::chord::{Chord, ChordEvent, ChordMatcher};
-use keytap::{Key, RecvTimeoutError};
+use keytap::{EventKind, Key, RecvTimeoutError, Tap};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::focus_capture;
@@ -77,6 +79,8 @@ pub struct HotkeyMonitor {
     app: AppHandle,
     active: Option<Active>,
     bindings: Bindings,
+    /// Kept across [`Self::reset`]: it holds no chord state.
+    escape: Option<EscapeWatcher>,
 }
 
 struct Active {
@@ -92,6 +96,7 @@ impl HotkeyMonitor {
             app,
             active: None,
             bindings: Bindings::new(),
+            escape: None,
         };
         m.apply(bindings);
         m
@@ -130,6 +135,7 @@ impl HotkeyMonitor {
         }
 
         if bindings.values().all(|set| set.is_empty()) {
+            self.escape = None;
             return;
         }
 
@@ -152,6 +158,10 @@ impl HotkeyMonitor {
             .expect("spawn hotkey dispatcher thread");
 
         self.active = Some(Active { dispatcher, shutdown });
+
+        if self.escape.is_none() {
+            self.escape = EscapeWatcher::spawn(self.app.clone());
+        }
     }
 }
 
@@ -161,6 +171,91 @@ impl Drop for HotkeyMonitor {
             active.shutdown.store(true, Ordering::Relaxed);
             let _ = active.dispatcher.join();
         }
+    }
+}
+
+// ========================================================================
+// Esc stops a recording dictation
+// ========================================================================
+
+/// Whether the dictate pill has a recording in progress, mirrored from its
+/// webview (`set_dictation_recording`). Esc stops a dictation only while
+/// this is set, so the rest of the time it is just a key.
+static DICTATION_RECORDING: AtomicBool = AtomicBool::new(false);
+
+pub fn set_dictation_recording(recording: bool) {
+    DICTATION_RECORDING.store(recording, Ordering::Relaxed);
+}
+
+/// Esc stops a recording dictation and transcribes it, as releasing the
+/// chord does. The pill never takes keyboard focus, so the key comes from a
+/// global tap, which only observes: Esc still reaches the focused app.
+///
+/// It is a second raw `keytap::Tap` rather than an Esc chord in the
+/// `ChordMatcher`: while a hands-free (Toggle) chord is active the matcher
+/// suppresses every other chord (keytap's
+/// `toggle_suppresses_other_chords_while_active` test), which is exactly
+/// when Esc is needed, and a held longer chord would win over a one-key one
+/// anyway. keytap documents two taps as the way to observe raw keys next to
+/// a matcher.
+struct EscapeWatcher {
+    thread: Option<JoinHandle<()>>,
+    shutdown: Arc<AtomicBool>,
+}
+
+impl EscapeWatcher {
+    fn spawn(app: AppHandle) -> Option<Self> {
+        let tap = match Tap::new() {
+            Ok(tap) => tap,
+            Err(err) => {
+                eprintln!("HotkeyMonitor: Esc tap failed ({err}); Esc will not stop a dictation.");
+                return None;
+            }
+        };
+        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown_for_thread = shutdown.clone();
+        let thread = thread::Builder::new()
+            .name("voloz-escape-watcher".into())
+            .spawn(move || {
+                // Dropping the tap at the end closes the OS hook.
+                while !shutdown_for_thread.load(Ordering::Relaxed) {
+                    match tap.recv_timeout(Duration::from_millis(100)) {
+                        Ok(event) => {
+                            if event.kind == EventKind::KeyDown(Key::Escape)
+                                && DICTATION_RECORDING.load(Ordering::Relaxed)
+                            {
+                                stop_on_escape(&app);
+                            }
+                        }
+                        Err(RecvTimeoutError::Timeout) => continue,
+                        Err(RecvTimeoutError::Disconnected) => break,
+                    }
+                }
+            });
+        match thread {
+            Ok(thread) => Some(Self { thread: Some(thread), shutdown }),
+            Err(err) => {
+                eprintln!("HotkeyMonitor: Esc watcher thread failed ({err}).");
+                None
+            }
+        }
+    }
+}
+
+impl Drop for EscapeWatcher {
+    fn drop(&mut self) {
+        self.shutdown.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+/// Stop the dictation like a chord release would. `source` tells the pill
+/// it was not a chord, so it resets a hands-free toggle left on in keytap.
+fn stop_on_escape(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
+        let _ = window.emit("dictate:stop", serde_json::json!({ "source": "escape" }));
     }
 }
 

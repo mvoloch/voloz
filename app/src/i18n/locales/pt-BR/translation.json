@@ -124,6 +124,7 @@
       "speaking": "Falando",
       "completed": "Concluído",
       "stopAria": "Parar gravação",
+      "stopEscTitle": "Parar gravação (Esc)",
       "errorFallback": "Algo deu errado",
       "errorCopyTooltip": "Clique para copiar o erro",
       "tooShort": "Gravação muito curta, cancelada",
