@@ -131,6 +131,7 @@
       "tooShort": "Recording too short, canceled",
       "refineFailed": "Refinement failed",
       "uploadFailed": "Upload failed",
+      "unsupportedAudio": "Couldn't read this audio format",
       "commandNoLlm": "Voice commands need a language model. Set the refinement endpoint in Settings → Dictation.",
       "commandFailed": "Voice command failed",
       "commandEmpty": "No instruction heard",

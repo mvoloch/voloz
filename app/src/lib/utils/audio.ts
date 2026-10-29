@@ -70,11 +70,27 @@ export async function getAudioDuration(
   }
 }
 
+/** What speech-to-text works at; the server resamples dictations to it too. */
+export const SPEECH_SAMPLE_RATE = 16_000;
+
+export interface WavOptions {
+  /**
+   * Resample to this rate and mix down to mono. Decoding happens in an
+   * OfflineAudioContext at that rate (the browser's sinc resampler), so no
+   * audio device is opened.
+   */
+  monoSampleRate?: number;
+}
+
 /**
  * Convert any audio blob to WAV format using Web Audio API.
  * This ensures compatibility without requiring ffmpeg on the backend.
+ * Rejects when the webview can't decode the format.
  */
-export async function convertToWav(audioBlob: Blob): Promise<Blob> {
+export async function convertToWav(audioBlob: Blob, options: WavOptions = {}): Promise<Blob> {
+  if (options.monoSampleRate) {
+    return convertToMonoWav(audioBlob, options.monoSampleRate);
+  }
   // Create audio context
   const audioContext = new AudioContext();
 
@@ -94,10 +110,31 @@ export async function convertToWav(audioBlob: Blob): Promise<Blob> {
   }
 }
 
+async function convertToMonoWav(audioBlob: Blob, sampleRate: number): Promise<Blob> {
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  // decodeAudioData resamples to the context's rate.
+  const decoded = await new OfflineAudioContext(1, 1, sampleRate).decodeAudioData(arrayBuffer);
+  if (decoded.numberOfChannels === 1) return audioBufferToWav(decoded);
+  // Same rate in and out: rendering only mixes the channels down (Web
+  // Audio's "speakers" rules, e.g. (L + R) / 2 for stereo).
+  const mixer = new OfflineAudioContext(1, Math.max(1, decoded.length), sampleRate);
+  const source = mixer.createBufferSource();
+  source.buffer = decoded;
+  source.connect(mixer.destination);
+  source.start();
+  return audioBufferToWav(await mixer.startRendering());
+}
+
+/** The part of an AudioBuffer the WAV writer reads. */
+export type WavSource = Pick<
+  AudioBuffer,
+  'numberOfChannels' | 'sampleRate' | 'length' | 'getChannelData'
+>;
+
 /**
- * Convert AudioBuffer to WAV blob.
+ * Convert AudioBuffer to a 16-bit PCM WAV blob.
  */
-function audioBufferToWav(buffer: AudioBuffer): Blob {
+export function audioBufferToWav(buffer: WavSource): Blob {
   const numberOfChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
   const format = 1; // PCM
@@ -138,7 +175,7 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
 /**
  * Interleave multiple channels into a single array.
  */
-function interleaveChannels(buffer: AudioBuffer): Float32Array {
+function interleaveChannels(buffer: WavSource): Float32Array {
   const numberOfChannels = buffer.numberOfChannels;
   const length = buffer.length;
   const interleaved = new Float32Array(length * numberOfChannels);

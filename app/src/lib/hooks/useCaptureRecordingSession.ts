@@ -10,8 +10,23 @@ import type {
   CaptureResponse,
   CaptureSource,
 } from '@/lib/api/types';
+import { IS_LITE } from '@/lib/edition';
 import { useAudioRecording } from '@/lib/hooks/useAudioRecording';
+import { convertToWav, SPEECH_SAMPLE_RATE } from '@/lib/utils/audio';
 import { dictationLog } from '@/lib/utils/dictationLog';
+
+/** An imported audio file as 16 kHz mono WAV, named after the original. */
+async function toSpeechWav(file: File): Promise<File> {
+  let wav: Blob;
+  try {
+    wav = await convertToWav(file, { monoSampleRate: SPEECH_SAMPLE_RATE });
+  } catch (err) {
+    dictationLog(`import decode failed (${err instanceof Error ? err.message : 'error'})`);
+    throw new Error(pillT('captures.pill.unsupportedAudio'));
+  }
+  const base = file.name.replace(/\.[^./\\]+$/, '') || 'audio';
+  return new File([wav], `${base}.wav`, { type: 'audio/wav' });
+}
 
 /**
  * Broadcast to sibling Tauri webviews that the captures list has changed.
@@ -326,7 +341,11 @@ export function useCaptureRecordingSession(
       context?: unknown;
     }) => {
       dictationLog(`upload start: ${source}, ${Math.round(file.size / 1024)} KB ${file.type || '?'}`);
-      return apiClient.createCapture(file, { source, targetApp, targetTitle });
+      // The lite server decodes WAV only (no librosa/ffmpeg): an imported
+      // file is decoded here and sent as 16 kHz mono WAV, the rate the STT
+      // upload uses anyway. Dictations are WAV already.
+      const upload = IS_LITE && source === 'file' ? await toSpeechWav(file) : file;
+      return apiClient.createCapture(upload, { source, targetApp, targetTitle });
     },
     onSuccess: (capture, { context }) => {
       dictationLog(
@@ -374,6 +393,12 @@ export function useCaptureRecordingSession(
       // briefly instead of showing the provider's error body.
       if ((err as { status?: number }).status === 429) {
         showError(pillT('captures.pill.transcribeRateLimited'), RATE_LIMIT_NOTICE_MS);
+        return;
+      }
+      // The lite server can't read the format (a dictation whose WAV
+      // conversion failed and went as webm).
+      if ((err as { status?: number }).status === 415) {
+        showError(pillT('captures.pill.unsupportedAudio'), BRIEF_NOTICE_MS);
         return;
       }
       // Backend's librosa-audioread fallback returns a 400 with this shape
