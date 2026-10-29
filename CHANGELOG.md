@@ -5,6 +5,19 @@
 
 # Changelog
 
+## [0.8.2] - 2026-10-28
+
+Windows only for now; the installer is not code-signed yet. Upgrading from 0.8.1 keeps your settings and keys.
+
+### Fixed
+
+- **Dictation pill:** after a too-short tap, the pill could disappear in the middle of the next recording while the microphone kept running.
+- **Hands-free:** touching Shift while holding the shortcut switches to hands-free; the pill now stays visible, and every recording stops by itself after 10 minutes.
+- After a hands-free recording ended with the pill's stop button, the shortcut stopped responding until Ctrl+Shift+Win was pressed again.
+- Text finished while you were already holding the shortcut for the next dictation was pasted as Win+Ctrl+V (opening Windows' sound panel) and lost; the paste now waits for you to let go of the keys.
+- Releasing the shortcut right after the microphone opened could be missed.
+- Voloz waits up to 5 minutes for its server to start (it was 2); on some Windows machines the first start after an update took longer than 2 minutes.
+
 ## [0.8.1] - 2026-10-28
 
 Windows only for now; the installer is not code-signed yet. Upgrading from 0.8.0 keeps your settings and keys.

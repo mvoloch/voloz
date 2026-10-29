@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-28 (0.8.1: audit fixes, Groq, open findings fixed). Update this file whenever state or decisions change._
+_Last updated: 2026-10-28 (0.8.2: dictation fixes from testing 0.8.1). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -147,9 +147,9 @@ keep-alive). Still to confirm in an installed build.
   would be blocked again.
 - The first two server starts after the install unpacked at 5–7 MB/s and
   hit the 120 s startup limit ("Server startup timeout"); a later start took
-  155 s from launch to healthy (94 s of it unpacking). Since the next commit
-  after `7c841cb` the limit is 300 s and the error no longer points to
-  macOS's Console.app; this ships in the next build, not in 0.8.1.
+  155 s from launch to healthy (94 s of it unpacking). Since `af3c449` the limit
+  is 300 s and the error no longer points to macOS's Console.app; shipped
+  in 0.8.2.
 - Owner tested paste into an Explorer folder: works. Alt+F4 on the pill
   can't be reached by hand (the pill never takes focus); a WM_CLOSE sent
   to it left Voloz and the server running.
@@ -161,7 +161,7 @@ the Dell by driving the hotkey with `SendInput`, feeding the pill a TTS
 WAV in place of the mic and watching it over WebView2 remote debugging
 (`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=…`); the
 new frontend was tested in the installed app by serving its build to the
-pill through CDP `Fetch`. Fixed (not in a build yet):
+pill through CDP `Fetch`. Fixed in `5aa3b5b`, shipped in 0.8.2:
 
 - A notice's hide timer ("too short" after a quick tap) was not cleared
   by the next recording: the pill hid mid-recording while the mic ran.
