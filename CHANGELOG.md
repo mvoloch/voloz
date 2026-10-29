@@ -5,6 +5,19 @@
 
 # Changelog
 
+## [0.8.7] - 2026-10-29
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **First words of a dictation:** the recording now keeps the microphone's audio from the first sample, instead of waiting for an encoder to start. After a dictation the microphone stays open for 3 minutes, so the next one starts at once and includes a moment from just before the shortcut was pressed. Windows shows the microphone in use during those 3 minutes; it closes earlier when the audio devices change.
+- **Stuck in "Recording" after the main window was opened or closed:** opening the main window re-armed the shortcut, which could lose the release of a shortcut being held. The shortcut is no longer re-armed when nothing changed, and on Windows Voloz now notices when the shortcut's keys are up and stops the dictation even if the release was missed.
+
+### Changed
+
+- Dictations are uploaded as 16 kHz mono audio, a third of the previous size; transcription quality is unchanged (the server converted to 16 kHz before).
+
 ## [0.8.6] - 2026-10-29
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
