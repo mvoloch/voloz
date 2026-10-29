@@ -333,7 +333,7 @@ def _configure(api, server, **extra):
             "custom_stt_endpoint": server.base_url,
             "custom_stt_model": "whisper-large-v3-turbo",
             "custom_llm_endpoint": server.base_url,
-            "custom_llm_model": "qwen/qwen3.8-27b",
+            "custom_llm_model": "openai/gpt-oss-120b",
             **extra,
         },
     )
@@ -392,7 +392,7 @@ def test_command_rewrites_the_selection_and_drafts_without_one(api):  # noqa: F8
         body = res.json()
         assert body["transcript_raw"] == "deixa mais formal"
         assert body["transcript_refined"] == "Prezado, segue o arquivo."
-        assert body["llm_model"] == "qwen/qwen3.8-27b"
+        assert body["llm_model"] == "openai/gpt-oss-120b"
         sent = json.loads(server.requests[-1]["raw"])
         user = sent["messages"][-1]["content"]
         assert user == (

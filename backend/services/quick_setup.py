@@ -24,10 +24,14 @@ logger = logging.getLogger(__name__)
 
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1"
 GROQ_STT_MODEL = "whisper-large-v3-turbo"
-# Refinement model when only the Groq key is given. The one place to change
-# it: the default is still being measured on real dictations. Non-Claude
-# models get ``refinement._KEEP_LANGUAGE_INSTRUCTION`` in their prompt.
-GROQ_LLM_MODEL = "qwen/qwen3.8-27b"
+# Refinement model when only the Groq key is given; the one place to change
+# it. Measured 2026-10-29 on the owner's 27 real dictations x 2 runs:
+# gpt-oss-120b cut or translated none, median 1.29 s, but writes more
+# formally (kept 34 colloquial words vs 53 for Haiku); qwen3.8-27b was
+# faster (0.55 s) but rewrote one dictation's meaning in 2 of 2 runs and
+# translated a noisy one. Non-Claude models get
+# ``refinement._KEEP_LANGUAGE_INSTRUCTION`` in their prompt.
+GROQ_LLM_MODEL = "openai/gpt-oss-120b"
 
 ANTHROPIC_ENDPOINT = "https://api.anthropic.com/v1"
 ANTHROPIC_LLM_MODEL = "claude-haiku-5-5"

@@ -186,7 +186,7 @@ def test_a_blank_key_is_rejected_before_any_call(api):
 
 RATE_LIMITED = (
     429,
-    {"error": {"message": "Rate limit reached for model qwen/qwen3.8-27b", "code": "rate_limit_exceeded"}},
+    {"error": {"message": "Rate limit reached for model openai/gpt-oss-120b", "code": "rate_limit_exceeded"}},
 )
 
 
@@ -217,7 +217,7 @@ def test_a_rate_limited_refine_answers_429_and_keeps_the_raw_transcript(api):
                 "custom_stt_endpoint": stt.base_url,
                 "custom_stt_model": "whisper-large-v3-turbo",
                 "custom_llm_endpoint": llm.base_url,
-                "custom_llm_model": "qwen/qwen3.8-27b",
+                "custom_llm_model": "openai/gpt-oss-120b",
             },
         )
         capture = api.post(

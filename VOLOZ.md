@@ -376,8 +376,9 @@ Cut from `light` at `a6d149c`, not merged. All three work in lite.
   set, lite opens on "Set up Voloz": paste one free Groq key ("Test and
   save" checks it with `GET /models`) and transcription and refinement go
   to Groq (`whisper-large-v3-turbo`, refinement model `GROQ_LLM_MODEL` in
-  `backend/services/quick_setup.py`, now `qwen/qwen3.8-27b` — one constant
-  because the default is still being measured). Recommended, optional: an
+  `backend/services/quick_setup.py`, now `openai/gpt-oss-120b` (was
+  `qwen/qwen3.8-27b` until `fix/audit`, see below) — one constant).
+  Recommended, optional: an
   Anthropic key, which moves refinement to `claude-haiku-5-5` (checked with
   `GET /v1/models/claude-haiku-5-5`, no tokens); STT stays on Groq. "Set up
   manually" opens the settings for that session. Never shown in studio.
@@ -391,6 +392,11 @@ Cut from `light` at `a6d149c`, not merged. All three work in lite.
   On 2026-10-29 the shared key reached 199 048 of 200 000 during these
   tests and the parallel model comparison. That is a reason to recommend
   the Anthropic key, or to pick a Groq model with a larger daily budget.
+  For `openai/gpt-oss-120b`, the default since `fix/audit`, Groq's
+  response headers say 8 000 tokens per minute and 1 000 requests per
+  day; two refinements measured 1 245 and 1 714 tokens (about 1 170 of
+  prompt, the rest mostly reasoning), so about five refinements a
+  minute. Its daily token cap is not in the headers and was not checked.
 - **Pre-existing bug fixed** (`0c50d51`): `config.to_storage_path` matched
   the first path component named `data`, so a data dir under `/mnt/data`
   stored unusable capture paths (no playback; retention refused to delete
@@ -448,6 +454,15 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   the TTS trimming already uses), so a click doesn't count. Checked on
   synthetic audio only; the level of a real silent dictation (the webview
   records with auto gain and noise suppression on) was not measured.
+- **Free refinement default is now `openai/gpt-oss-120b`** (was
+  `qwen/qwen3.8-27b`; `GROQ_LLM_MODEL` in `quick_setup.py`). Measured
+  2026-10-29 on the owner's 27 real dictations × 2 runs: gpt-oss-120b cut
+  or translated none, median 1.29 s, but writes more formally (34
+  colloquial words kept vs 53 for Haiku); qwen3.8-27b took 0.55 s but
+  rewrote one dictation's meaning in 2 of 2 runs and translated a noisy
+  one. The setup screen's copy now says the free model is more formal
+  (not that it rewrites or translates) and "about five refinements a
+  minute" (was six). Existing installs keep the model they stored.
 
 ## Developing on GB4
 
