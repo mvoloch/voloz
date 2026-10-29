@@ -1,0 +1,107 @@
+name: Release (lite)
+
+# Voloz lite: dictation only, server built without PyTorch
+# (backend/requirements-lite.txt, build_binary.py --lite) and the frontend
+# built with VITE_EDITION=lite. Windows only, like release.yml.
+#
+# Its own tag (lite-v<version>) and draft release, so its installers don't
+# collide with the studio ones of the same version. tauri.lite.conf.json
+# turns off updater artifacts and points the updater at a lite-only URL
+# that has no release yet: a lite install must never update itself to the
+# studio build, which shares its identifier.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "lite-v*"
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies (lite)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r backend/requirements-lite.txt
+
+      - name: Check the environment has no PyTorch
+        shell: bash
+        run: |
+          if python -c "import torch" 2>/dev/null; then
+            echo "::error::torch is installed; the lite server must be built without it"
+            exit 1
+          fi
+
+      - name: Build Python server (lite)
+        shell: bash
+        run: |
+          cd backend
+          python build_binary.py --lite
+          python build_binary.py --shim
+
+          PLATFORM=$(rustc --print host-tuple)
+          mkdir -p ../tauri/src-tauri/binaries
+          cp dist/voicebox-server.exe ../tauri/src-tauri/binaries/voicebox-server-${PLATFORM}.exe
+          cp dist/voicebox-mcp.exe ../tauri/src-tauri/binaries/voicebox-mcp-${PLATFORM}.exe
+          ls -la ../tauri/src-tauri/binaries
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./tauri/src-tauri -> target"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Extract release notes from CHANGELOG.md
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="$(jq -r '.version' tauri/src-tauri/tauri.conf.json)"
+          NOTES=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{/^## \[${VERSION}\]/d;/^## \[/d;p;}" CHANGELOG.md)
+          if [ -z "$(echo "$NOTES" | tr -d '[:space:]')" ]; then
+            NOTES="See the assets below to download and install this version."
+          fi
+          {
+            echo "notes<<CHANGELOG_EOF"
+            echo "Lite edition: dictation only, cloud transcription and refinement."
+            echo ""
+            echo "$NOTES"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v0.6
+        timeout-minutes: 45
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_EDITION: lite
+          CARGO_TERM_VERBOSE: "true"
+          RUST_BACKTRACE: "1"
+        with:
+          projectPath: tauri
+          tagName: lite-v__VERSION__
+          releaseName: "Voloz Lite v__VERSION__"
+          releaseBody: ${{ steps.changelog.outputs.notes }}
+          releaseDraft: true
+          prerelease: false
+          args: --config src-tauri/tauri.lite.conf.json
+          includeUpdaterJson: false

@@ -115,3 +115,26 @@ print("ok")
     )
     assert proc.returncode == 0, proc.stderr[-3000:]
     assert proc.stdout.strip().endswith("ok")
+
+
+def test_lite_readiness_needs_endpoints_even_with_cached_models(lite, monkeypatch):
+    from types import SimpleNamespace
+
+    from backend.routes import captures as captures_route
+
+    monkeypatch.setattr(captures_route, "is_model_cached", lambda repo_id: True)
+    saved = SimpleNamespace(
+        custom_stt_endpoint=None,
+        custom_stt_model=None,
+        custom_llm_endpoint=None,
+        custom_llm_model=None,
+    )
+    cfg = SimpleNamespace(
+        model_name="m", display_name="M", model_size="s", size_mb=1, hf_repo_id="r"
+    )
+    assert captures_route._stt_readiness(saved, cfg).ready is False
+    assert captures_route._llm_readiness(saved, cfg).ready is False
+
+    saved.custom_stt_endpoint = "https://api.groq.com/openai/v1"
+    saved.custom_stt_model = "whisper-large-v3-turbo"
+    assert captures_route._stt_readiness(saved, cfg).ready is True
