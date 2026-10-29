@@ -427,6 +427,10 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   them in step): there the command drafts unless UIAutomation reported a
   selection. Trade-off: a selection UIAutomation can't read in those
   editors is not used. Compiled and linted for Windows, not run.
+- **Quick setup asked Groq for a model it would not use.** The Groq key
+  check required both the transcription and the Groq refinement model
+  even when an Anthropic key moves refinement to Claude. Now the
+  refinement model is required only when Groq refines.
 
 ## Developing on GB4
 

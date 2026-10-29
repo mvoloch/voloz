@@ -67,8 +67,13 @@ async def _get(url: str, headers: dict[str, str], provider: str, field: str) -> 
     return response
 
 
-async def validate_groq_key(api_key: str, endpoint: Optional[str] = None) -> None:
-    """Check ``api_key`` against Groq's model list, which must offer both models.
+async def validate_groq_key(
+    api_key: str, endpoint: Optional[str] = None, refines: bool = True
+) -> None:
+    """Check ``api_key`` against Groq's model list, which must offer the models it will run.
+
+    That is always the transcription model, and the refinement model only
+    when Groq ``refines`` (no Anthropic key).
 
     Raises:
         QuickSetupError: 400 when Groq rejects the key, 503 when it can't be
@@ -84,7 +89,8 @@ async def validate_groq_key(api_key: str, endpoint: Optional[str] = None) -> Non
         listed = {m.get("id") for m in response.json().get("data", [])}
     except (ValueError, AttributeError) as exc:
         raise QuickSetupError("Groq sent an unexpected model list.", 502, "groq") from exc
-    missing = [m for m in (GROQ_STT_MODEL, GROQ_LLM_MODEL) if m not in listed]
+    needed = (GROQ_STT_MODEL, GROQ_LLM_MODEL) if refines else (GROQ_STT_MODEL,)
+    missing = [m for m in needed if m not in listed]
     if missing:
         raise QuickSetupError(f"Groq does not offer {', '.join(missing)} to this key.", 502, "groq")
 
@@ -127,7 +133,7 @@ async def configure_quick_setup(
     if not groq_key:
         raise QuickSetupError("Paste a Groq API key.", 400, "groq")
 
-    await validate_groq_key(groq_key)
+    await validate_groq_key(groq_key, refines=not anthropic_key)
     if anthropic_key:
         await validate_anthropic_key(anthropic_key)
         llm = (ANTHROPIC_ENDPOINT, ANTHROPIC_LLM_MODEL, anthropic_key)

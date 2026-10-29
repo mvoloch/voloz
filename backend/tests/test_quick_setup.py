@@ -95,6 +95,33 @@ def test_an_anthropic_key_moves_refinement_to_claude(api, monkeypatch):
     assert backends.get_llm_backend().api_key == "sk-test-claude"
 
 
+def test_with_claude_refining_groq_only_needs_the_transcription_model(api, monkeypatch):
+    with (
+        FakeServer(lambda *_: _models(quick_setup.GROQ_STT_MODEL)) as groq,
+        FakeServer(lambda *_: (200, {"type": "model", "id": quick_setup.ANTHROPIC_LLM_MODEL})) as claude,
+    ):
+        monkeypatch.setattr(quick_setup, "GROQ_ENDPOINT", groq.base_url)
+        monkeypatch.setattr(quick_setup, "ANTHROPIC_ENDPOINT", claude.base_url)
+        res = _setup(api, "groq-test", "sk-test-claude")
+    assert res.status_code == 200, res.text
+    assert api.get("/settings/captures").json()["custom_llm_model"] == "claude-haiku-5-5"
+
+
+def test_the_transcription_model_is_required_even_with_claude(api, monkeypatch):
+    with (
+        FakeServer(lambda *_: _models(quick_setup.GROQ_LLM_MODEL)) as groq,
+        FakeServer(lambda *_: (200, {"type": "model", "id": quick_setup.ANTHROPIC_LLM_MODEL})) as claude,
+    ):
+        monkeypatch.setattr(quick_setup, "GROQ_ENDPOINT", groq.base_url)
+        monkeypatch.setattr(quick_setup, "ANTHROPIC_ENDPOINT", claude.base_url)
+        res = _setup(api, "groq-test", "sk-test-claude")
+    assert res.status_code == 502, res.text
+    assert res.json()["detail"]["message"] == (
+        f"Groq does not offer {quick_setup.GROQ_STT_MODEL} to this key."
+    )
+    _not_configured(api)
+
+
 @pytest.mark.parametrize(
     "reply, status, message",
     [
