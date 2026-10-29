@@ -6,6 +6,38 @@ import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
 import { useCaptureRecordingSession } from '@/lib/hooks/useCaptureRecordingSession';
 
+/** Rust's ``dictate:start`` payload. */
+interface DictateStartPayload {
+  focus: FocusSnapshot | null;
+  /** ``command``: the voice-command chord (edit the selected text). */
+  mode?: 'dictation' | 'command';
+  /** Command only: the selection UIAutomation read; null when it couldn't. */
+  selection?: string | null;
+}
+
+/** What rides along with one recording, from chord-start to paste. */
+interface DictationContext {
+  focus: FocusSnapshot | null;
+  command: boolean;
+  /** Command only: the selected text, once known. */
+  selection?: Promise<string>;
+}
+
+/**
+ * The selection a voice command works on: what UIAutomation read at
+ * chord-start, or else a synthetic copy in the target app (Rust saves and
+ * restores the clipboard around it). Started once and shared, so the copy
+ * fired when the chord is released is the one the command waits for.
+ */
+function commandSelection(context: DictationContext): Promise<string> {
+  if (!context.selection) {
+    context.selection = context.focus
+      ? invoke<string>('copy_selection', { focus: context.focus })
+      : Promise.resolve('');
+  }
+  return context.selection;
+}
+
 /**
  * Floating dictate surface shown in a separate transparent Tauri window.
  * Mounted when the URL contains ``?view=dictate``. The main window bypasses
@@ -40,9 +72,13 @@ export function DictateWindow() {
   // as its context and comes back with its final text. A chord pressed
   // while the previous dictation is still refining has its own snapshot,
   // so each text is pasted where it was dictated.
+  //
+  // A voice command's result is pasted the same way: the target app still
+  // has the text selected, so the paste replaces it.
   const session = useCaptureRecordingSession({
+    getCommandSelection: (context) => commandSelection(context as DictationContext),
     onFinalText: async (text, _capture, allowAutoPaste, context) => {
-      const focus = (context as FocusSnapshot | null | undefined) ?? null;
+      const focus = (context as DictationContext | null | undefined)?.focus ?? null;
       if (!allowAutoPaste) return;
       if (!focus || !text.trim()) return;
       try {
@@ -79,17 +115,45 @@ export function DictateWindow() {
     wasRecordingRef.current = session.isRecording;
   }, [session.isRecording]);
 
+  // The recording in progress, so its chord release can start reading the
+  // selection while the audio uploads.
+  const currentContextRef = useRef<DictationContext | null>(null);
+
   useEffect(() => {
     const unlistens: Promise<UnlistenFn>[] = [];
     unlistens.push(
-      listen<{ focus: FocusSnapshot | null }>('dictate:start', (event) => {
+      listen<DictateStartPayload>('dictate:start', (event) => {
         chordStoppedRef.current = false;
-        sessionRef.current.startRecording(event.payload?.focus ?? null);
+        if (sessionRef.current.isRecording) return;
+        const focus = event.payload?.focus ?? null;
+        const command = event.payload?.mode === 'command';
+        const uiaSelection = event.payload?.selection;
+        const context: DictationContext = {
+          focus,
+          command,
+          selection:
+            command && typeof uiaSelection === 'string' ? Promise.resolve(uiaSelection) : undefined,
+        };
+        currentContextRef.current = context;
+        sessionRef.current.startRecording(context, {
+          source: command ? 'command' : 'dictation',
+          targetApp: focus?.bundle_id ?? null,
+          targetTitle: focus?.title ?? null,
+        });
       }),
     );
     unlistens.push(
       listen('dictate:stop', () => {
         chordStoppedRef.current = true;
+        // A command chord just released: copy the selection now (once the
+        // keys are up), while the instruction is being transcribed.
+        const context = currentContextRef.current;
+        currentContextRef.current = null;
+        if (context?.command) {
+          commandSelection(context).catch(() => {
+            /* surfaced when the command awaits it */
+          });
+        }
         // Always forward: a release that lands while the mic is still
         // opening is held and applied once recording starts.
         sessionRef.current.stopRecording();

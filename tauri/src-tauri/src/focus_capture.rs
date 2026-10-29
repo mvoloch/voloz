@@ -39,6 +39,11 @@ pub struct FocusSnapshot {
     /// taskbar is an Explorer window too). `None` elsewhere.
     #[serde(default)]
     pub window: Option<isize>,
+    /// Windows: the foreground window's title. Sent with the capture so
+    /// refinement can tell web apps apart inside a browser ("… - Gmail").
+    /// `None` elsewhere.
+    #[serde(default)]
+    pub title: Option<String>,
 }
 
 #[cfg(target_os = "macos")]
@@ -249,6 +254,7 @@ pub fn capture_focus() -> Result<FocusSnapshot, String> {
             bundle_id,
             role,
             window: None,
+            title: None,
         })
     }
 }
@@ -342,10 +348,13 @@ mod win {
         AttachThreadInput, GetCurrentThreadId, OpenProcess, QueryFullProcessImageNameW,
         PROCESS_NAME_FORMAT, PROCESS_QUERY_LIMITED_INFORMATION,
     };
-    use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation, IUIAutomationElement};
+    use windows::Win32::UI::Accessibility::{
+        CUIAutomation, IUIAutomation, IUIAutomationElement, IUIAutomationTextPattern,
+        UIA_TextPatternId,
+    };
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetForegroundWindow, GetWindow, GetWindowThreadProcessId, IsWindow,
-        IsWindowVisible, SetForegroundWindow, GW_OWNER,
+        EnumWindows, GetForegroundWindow, GetWindow, GetWindowTextW, GetWindowThreadProcessId,
+        IsWindow, IsWindowVisible, SetForegroundWindow, GW_OWNER,
     };
 
     /// Read the PID that owns `hwnd`. Returns 0 on failure.
@@ -410,6 +419,41 @@ mod win {
             } else {
                 Some(s)
             }
+        }
+    }
+
+    /// The window's title bar text, or `None` when it has none.
+    pub fn window_title(hwnd: HWND) -> Option<String> {
+        let mut buf = [0u16; 512];
+        let len = unsafe { GetWindowTextW(hwnd, &mut buf) };
+        if len <= 0 {
+            return None;
+        }
+        String::from_utf16(&buf[..len as usize]).ok()
+    }
+
+    /// Text selected in the focused control, read through UIAutomation's
+    /// TextPattern. `Some("")` when the control supports it and nothing is
+    /// selected; `None` when it doesn't (or any UIA call fails), so the
+    /// caller can fall back to a synthetic copy.
+    pub fn focused_selection() -> Option<String> {
+        unsafe {
+            // Same COM setup as `focused_control_class`.
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let automation: IUIAutomation =
+                CoCreateInstance(&CUIAutomation, None::<&IUnknown>, CLSCTX_INPROC_SERVER).ok()?;
+            let element: IUIAutomationElement = automation.GetFocusedElement().ok()?;
+            let pattern: IUIAutomationTextPattern =
+                element.GetCurrentPatternAs(UIA_TextPatternId).ok()?;
+            let ranges = pattern.GetSelection().ok()?;
+            let mut text = String::new();
+            for i in 0..ranges.Length().ok()? {
+                let range = ranges.GetElement(i).ok()?;
+                // -1: no length limit.
+                let part: BSTR = range.GetText(-1).ok()?;
+                text.push_str(&part.to_string());
+            }
+            Some(text)
         }
     }
 
@@ -533,8 +577,22 @@ pub fn capture_focus() -> Result<FocusSnapshot, String> {
             bundle_id,
             role,
             window: Some(hwnd.0 as isize),
+            title: win::window_title(hwnd),
         })
     }
+}
+
+/// Text selected in the focused control: `Some` (possibly empty) when the
+/// control exposes it through UIAutomation, `None` when the caller has to
+/// fall back to a synthetic copy.
+#[cfg(target_os = "windows")]
+pub fn read_selection() -> Option<String> {
+    win::focused_selection()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn read_selection() -> Option<String> {
+    None
 }
 
 #[cfg(target_os = "windows")]

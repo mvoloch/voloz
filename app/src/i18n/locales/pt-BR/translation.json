@@ -45,7 +45,8 @@
     "source": {
       "dictation": "Ditado",
       "recording": "Gravação",
-      "file": "Arquivo"
+      "file": "Arquivo",
+      "command": "Comando de voz"
     },
     "transcript": {
       "refined": "Refinada",
@@ -126,7 +127,10 @@
       "errorCopyTooltip": "Clique para copiar o erro",
       "tooShort": "Gravação muito curta, cancelada",
       "refineFailed": "Falha no refinamento",
-      "uploadFailed": "Falha no envio"
+      "uploadFailed": "Falha no envio",
+      "commandNoLlm": "Comandos de voz precisam de um modelo de linguagem. Configure o endpoint de refinamento em Configurações → Ditado.",
+      "commandFailed": "Falha no comando de voz",
+      "commandEmpty": "Nenhuma instrução ouvida"
     },
     "chord": {
       "capturing": "Capturando…",
@@ -198,7 +202,8 @@
       "rule": "Aprender: {{from}} → {{to}}?",
       "confirm": "Aprender",
       "dismiss": "Dispensar"
-    }
+    },
+    "targetApp": "Em {{app}}"
   },
   "voicesTab": {
     "title": "Vozes",
@@ -959,7 +964,10 @@
           "pttTitle": "Definir atalho de apertar para falar",
           "pttDescription": "Segure as teclas que deseja usar, depois solte e clique em Salvar. O selo de modificador da direita mostra se a tecla é a variante esquerda ou direita.",
           "toggleTitle": "Definir atalho de alternância",
-          "toggleDescription": "Segure as teclas que deseja usar, depois solte e clique em Salvar. Escolha algo distinto da sua combinação de apertar para falar."
+          "toggleDescription": "Segure as teclas que deseja usar, depois solte e clique em Salvar. Escolha algo distinto da sua combinação de apertar para falar.",
+          "commandTitle": "Definir atalho de comando de voz",
+          "commandDescription": "Segure as teclas que deseja usar, depois solte e clique em Salvar. Escolha algo diferente dos seus atalhos de ditado.",
+          "conflict": "Esse atalho já é usado por outro atalho de ditado."
         },
         "preview": {
           "title": "Prévia",
@@ -972,6 +980,11 @@
         "autoPaste": {
           "title": "Colar automaticamente no campo de texto em foco",
           "description": "Se um campo de texto estiver em foco em outro app, cola diretamente nele. O Voloz salva e restaura o que estava na sua área de transferência."
+        },
+        "command": {
+          "title": "Atalho de comando de voz",
+          "description": "Selecione um texto, segure o atalho e diga o que fazer com ele (\"deixa mais formal\", \"traduz para o inglês\"); o resultado substitui a seleção. Sem nada selecionado, o Voloz escreve um texto novo a partir do que você disser.",
+          "change": "Alterar"
         }
       },
       "transcription": {
@@ -1099,6 +1112,10 @@
           "statusBuiltin": "Usando o modelo Qwen3 embutido selecionado acima.",
           "statusRemote": "Enviando todo polimento e reescrita de personalidade para {{endpoint}}.",
           "statusUnset": "Não configurado: com o refinamento automático ligado, o ditado fica desligado até o endpoint e o modelo serem preenchidos."
+        },
+        "adaptToApp": {
+          "title": "Adaptar o estilo ao app",
+          "description": "E-mails ganham frases completas e parágrafos, mensagens de chat ficam curtas e informais, editores de código e terminais mantêm os nomes exatamente como ditos. Nos outros apps nada muda."
         }
       },
       "playback": {

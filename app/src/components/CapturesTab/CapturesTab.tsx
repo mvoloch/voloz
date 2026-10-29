@@ -20,6 +20,7 @@ import {
   Trash2,
   Upload,
   Volume2,
+  Wand2,
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -114,13 +115,15 @@ function ChordKeys({ keys, size = 'sm' }: { keys: string[]; size?: 'sm' | 'lg' }
 
 function SourceBadge({ source }: { source: CaptureSource }) {
   const { t } = useTranslation();
-  const Icon = source === 'dictation' ? Mic : source === 'recording' ? CircleDot : FileAudio;
-  const label =
+  const Icon =
     source === 'dictation'
-      ? t('captures.source.dictation')
+      ? Mic
       : source === 'recording'
-        ? t('captures.source.recording')
-        : t('captures.source.file');
+        ? CircleDot
+        : source === 'command'
+          ? Wand2
+          : FileAudio;
+  const label = t(`captures.source.${source}`);
   return (
     <Badge
       variant="secondary"
@@ -130,6 +133,11 @@ function SourceBadge({ source }: { source: CaptureSource }) {
       {label}
     </Badge>
   );
+}
+
+/** "outlook.exe" → "outlook"; a macOS bundle id stays as it is. */
+function appLabel(app: string): string {
+  return app.replace(/\.exe$/i, '');
 }
 
 interface DayGroup {
@@ -205,12 +213,7 @@ interface CaptureRowProps {
 
 function CaptureRow({ capture, text, time, isLatest, isOpen, onOpen, onCopy }: CaptureRowProps) {
   const { t } = useTranslation();
-  const sourceLabel =
-    capture.source === 'dictation'
-      ? t('captures.source.dictation')
-      : capture.source === 'recording'
-        ? t('captures.source.recording')
-        : t('captures.source.file');
+  const sourceLabel = t(`captures.source.${capture.source}`);
   return (
     <div
       className={cn(
@@ -593,6 +596,7 @@ export function CapturesTab() {
     if (capture.language) lines.push(`- **Language:** ${capture.language}`);
     if (capture.stt_model) lines.push(`- **STT model:** ${capture.stt_model}`);
     if (capture.llm_model) lines.push(`- **LLM model:** ${capture.llm_model}`);
+    if (capture.target_app) lines.push(`- **App:** ${capture.target_app}`);
     lines.push('');
     if (capture.transcript_refined?.trim()) {
       lines.push('## Refined transcript', '', capture.transcript_refined.trim(), '');
@@ -870,6 +874,14 @@ export function CapturesTab() {
               )}
               <span className="text-muted-foreground/40">·</span>
               <SourceBadge source={selected.source} />
+              {selected.target_app && (
+                <>
+                  <span className="text-muted-foreground/40">·</span>
+                  <span title={selected.target_title ?? undefined}>
+                    {t('captures.targetApp', { app: appLabel(selected.target_app) })}
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Audio player card */}

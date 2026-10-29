@@ -24,6 +24,7 @@ import sqlite3
 from sqlalchemy import inspect, text
 
 from ..utils.capture_chords import (
+    default_command_chord,
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
@@ -42,6 +43,7 @@ def run_migrations(engine) -> None:
     _migrate_effect_presets(engine, inspector, tables)
     _migrate_generation_versions(engine, inspector, tables)
     _migrate_capture_settings(engine, inspector, tables)
+    _migrate_captures(engine, inspector, tables)
     _migrate_mcp_bindings(engine, inspector, tables)
     _normalize_storage_paths(engine, tables)
     _migrate_add_indexes(engine, tables)
@@ -271,6 +273,30 @@ def _migrate_capture_settings(engine, inspector, tables: set[str]) -> None:
     for column in ("vocabulary", "replacements"):
         if column not in columns:
             _add_column(engine, "capture_settings", f"{column} TEXT NOT NULL DEFAULT '[]'", column)
+    if "chord_command_keys" not in columns:
+        command_default = json.dumps(default_command_chord())
+        _add_column(
+            engine,
+            "capture_settings",
+            f"chord_command_keys TEXT NOT NULL DEFAULT '{command_default}'",
+            "chord_command_keys",
+        )
+    if "adapt_to_app" not in columns:
+        _add_column(
+            engine,
+            "capture_settings",
+            "adapt_to_app BOOLEAN NOT NULL DEFAULT 1",
+            "adapt_to_app",
+        )
+
+
+def _migrate_captures(engine, inspector, tables: set[str]) -> None:
+    if "captures" not in tables:
+        return
+    columns = _get_columns(inspector, "captures")
+    for column in ("target_app", "target_title"):
+        if column not in columns:
+            _add_column(engine, "captures", f"{column} VARCHAR", column)
 
 
 def _migrate_mcp_bindings(engine, inspector, tables: set[str]) -> None:
