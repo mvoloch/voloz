@@ -297,6 +297,14 @@ _TAGGED_OUTPUT_INSTRUCTION = (
 _TAGGED_RE = re.compile(rf"<{_TRANSCRIPT_TAG}>(.*?)</{_TRANSCRIPT_TAG}>", re.DOTALL)
 
 
+# Qwen 3.8 27B on Groq answered a Portuguese transcript in English 4 of 18
+# times with the plain prompt (the few-shot examples are English); with this
+# line it was 0 of 20. Claude never translated, so it keeps its prompt.
+_KEEP_LANGUAGE_INSTRUCTION = (
+    "Write the output in the same language as the transcript. Never translate."
+)
+
+
 def _wants_tagged_output(backend) -> bool:
     from ..backends.anthropic_backend import AnthropicLLMBackend
 
@@ -344,6 +352,8 @@ async def refine_transcript(
             (user, f"<{_TRANSCRIPT_TAG}>{assistant}</{_TRANSCRIPT_TAG}>")
             for user, assistant in REFINEMENT_EXAMPLES
         ]
+    else:
+        system_prompt = f"{system_prompt}\n\n{_KEEP_LANGUAGE_INSTRUCTION}"
     text = await backend.generate(
         prompt=cleaned_input,
         system=system_prompt,

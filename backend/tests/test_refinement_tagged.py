@@ -53,6 +53,7 @@ def test_claude_gets_tagged_prompt_and_examples(monkeypatch):
 
     assert text == "Hello there."
     assert "<transcript></transcript>" in calls["system"]
+    assert refinement._KEEP_LANGUAGE_INSTRUCTION not in calls["system"]
     assert all(
         assistant.startswith("<transcript>") and assistant.endswith("</transcript>")
         for _user, assistant in calls["examples"]
@@ -73,4 +74,5 @@ def test_local_backend_keeps_plain_format(monkeypatch):
 
     assert text == "Hello there."
     assert "<transcript>" not in calls["system"]
+    assert calls["system"].endswith(refinement._KEEP_LANGUAGE_INSTRUCTION)
     assert calls["examples"] == refinement.REFINEMENT_EXAMPLES
