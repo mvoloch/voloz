@@ -816,6 +816,10 @@
         "runningDescription": "Server will continue running when app closes",
         "stoppedDescription": "Server will stop when app closes"
       },
+      "autostart": {
+        "title": "Start Voloz when Windows starts",
+        "description": "Opens in the tray, with the server and the dictation shortcut ready."
+      },
       "networkAccess": {
         "title": "Allow network access",
         "description": "Makes the server accessible from other devices on your network. Restart the app after changing.",

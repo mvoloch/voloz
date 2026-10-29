@@ -52,6 +52,9 @@ webkit2gtk = "2.0"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2.0"
 tauri-plugin-process = "2.0"
+# Start at login (Settings → General). Held at 2.5, like the JS package:
+# 2.6 and later need tauri 2.12, and the CLI rejects mismatched minors.
+tauri-plugin-autostart = "~2.5"
 # A second launch while Voicebox sits in the tray focuses the running
 # instance instead of starting another one with its own keyboard tap.
 tauri-plugin-single-instance = "2"

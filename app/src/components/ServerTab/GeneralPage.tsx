@@ -172,6 +172,8 @@ export function GeneralPage() {
           }
         />
 
+        {platform.metadata.isTauri && <AutostartRow />}
+
         {platform.metadata.isTauri && (
           <SettingRow
             title={t('settings.general.networkAccess.title')}
@@ -214,6 +216,51 @@ export function GeneralPage() {
 
       {platform.metadata.isTauri && <UpdatesSection />}
     </div>
+  );
+}
+
+/** Start at login. Reads and writes the OS entry itself, not a stored copy. */
+function AutostartRow() {
+  const { t } = useTranslation();
+  const platform = usePlatform();
+  const { toast } = useToast();
+  // null until the OS entry has been read; the switch stays disabled.
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    platform.autostart
+      .isEnabled()
+      .then(setEnabled)
+      .catch((error) => {
+        console.error('Failed to read the autostart entry:', error);
+      });
+  }, [platform]);
+
+  return (
+    <SettingRow
+      title={t('settings.general.autostart.title')}
+      description={t('settings.general.autostart.description')}
+      htmlFor="autostart"
+      action={
+        <Toggle
+          id="autostart"
+          checked={enabled ?? false}
+          disabled={enabled === null}
+          onCheckedChange={(checked: boolean) => {
+            setEnabled(checked);
+            platform.autostart.setEnabled(checked).catch((error) => {
+              console.error('Failed to update the autostart entry:', error);
+              setEnabled(!checked);
+              toast({
+                title: t('settings.saveFailed'),
+                description: error instanceof Error ? error.message : String(error),
+                variant: 'destructive',
+              });
+            });
+          }}
+        />
+      }
+    />
   );
 }
 

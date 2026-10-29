@@ -66,6 +66,12 @@ export interface PlatformLifecycle {
   onServerReady?: () => void;
 }
 
+/** Start the app when the user signs in to the OS. */
+export interface PlatformAutostart {
+  isEnabled(): Promise<boolean>;
+  setEnabled(enabled: boolean): Promise<void>;
+}
+
 export interface PlatformMetadata {
   getVersion(): Promise<string>;
   isTauri: boolean;
@@ -76,5 +82,6 @@ export interface Platform {
   updater: PlatformUpdater;
   audio: PlatformAudio;
   lifecycle: PlatformLifecycle;
+  autostart: PlatformAutostart;
   metadata: PlatformMetadata;
 }
