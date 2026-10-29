@@ -502,6 +502,16 @@ unrecoverable is.
   exactly when Esc is needed. The tap only observes, so Esc still reaches
   the focused app. The pill resets the hotkey state after an Esc stop
   (the hands-free toggle would otherwise stay on in keytap).
+- **Dictation log.** `<app data>/logs/dictation.log` (next to
+  `watchdog.log`; `%APPDATA%\io.github.mvoloch.voloz\logs` on Windows),
+  moved to `dictation.log.1` at 1 MB. `[rust]` lines: chord
+  start/stop/restart with the chord action, Esc stops, and each
+  `dictate:start`/`dictate:stop` sent. `[dictate]`/`[main]` lines (from the
+  webview through the `dictation_log` command): microphone opened (device
+  label), recorder state changes, track ended/muted, recorder errors, stop
+  requests and what they did, upload/refine results with sizes and HTTP
+  status, paste result. No transcript text, keys or window titles. Read
+  it first the next time a dictation misbehaves.
 
 ## Developing on GB4
 

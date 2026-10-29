@@ -7,6 +7,7 @@ mod audio_output;
 #[cfg(desktop)]
 mod autostart;
 mod clipboard;
+mod dictation_log;
 mod focus_capture;
 #[cfg(desktop)]
 mod hotkey_monitor;
@@ -1329,6 +1330,13 @@ fn reset_hotkey_state(state: State<'_, HotkeyState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Append a line from a webview to `dictation.log`, tagged with its window
+/// (`dictate` for the pill, `main` for the Captures tab).
+#[command]
+fn dictation_log(window: tauri::Window, message: String) {
+    dictation_log::log(&format!("[{}] {}", window.label(), message));
+}
+
 /// Mirror the dictate pill's recording state into the global key hook, so
 /// Esc stops a dictation only while one is recording.
 #[cfg(desktop)]
@@ -1717,6 +1725,8 @@ pub fn run() {
         .manage(audio_capture::AudioCaptureState::new())
         .manage(audio_output::AudioOutputState::new())
         .setup(|app| {
+            dictation_log::init(app.handle());
+
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
@@ -1837,7 +1847,8 @@ pub fn run() {
             disable_hotkey,
             update_chord_bindings,
             reset_hotkey_state,
-            set_dictation_recording
+            set_dictation_recording,
+            dictation_log
         ])
         .on_window_event({
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

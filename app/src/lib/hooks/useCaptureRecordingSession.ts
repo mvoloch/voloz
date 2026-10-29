@@ -11,6 +11,7 @@ import type {
   CaptureSource,
 } from '@/lib/api/types';
 import { useAudioRecording } from '@/lib/hooks/useAudioRecording';
+import { dictationLog } from '@/lib/utils/dictationLog';
 
 /**
  * Broadcast to sibling Tauri webviews that the captures list has changed.
@@ -240,6 +241,7 @@ export function useCaptureRecordingSession(
     mutationFn: async ({ captureId }: { captureId: string; auto?: AutoRefine }) =>
       apiClient.refineCapture(captureId, {}),
     onSuccess: (data, { captureId, auto }) => {
+      if (auto) dictationLog('refine ok');
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastUpdated(captureId);
       if (pillStateRef.current === 'refining') scheduleHidePill();
@@ -255,6 +257,7 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error, { auto }) => {
+      if (auto) dictationLog(`refine failed: status ${(err as { status?: number }).status ?? 'none'}`);
       // Deliver the raw transcript rather than lose the dictation, with its
       // text shortcuts expanded (``transcript_raw`` leaves them to the refine).
       const fallback = auto?.capture.fallback_text ?? auto?.capture.transcript_raw;
@@ -288,6 +291,7 @@ export function useCaptureRecordingSession(
       return apiClient.runCaptureCommand(capture.id, { selection });
     },
     onSuccess: (data, { capture, context }) => {
+      dictationLog('voice command ok');
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastUpdated(data.id);
       if (pillStateRef.current === 'refining') scheduleHidePill();
@@ -296,6 +300,7 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error & { status?: number }) => {
+      dictationLog(`voice command failed: status ${err.status ?? 'none'}`);
       if (pillStateRef.current === 'recording') return;
       showError(
         err.status === 409
@@ -317,8 +322,14 @@ export function useCaptureRecordingSession(
       targetApp?: string | null;
       targetTitle?: string | null;
       context?: unknown;
-    }) => apiClient.createCapture(file, { source, targetApp, targetTitle }),
+    }) => {
+      dictationLog(`upload start: ${source}, ${Math.round(file.size / 1024)} KB ${file.type || '?'}`);
+      return apiClient.createCapture(file, { source, targetApp, targetTitle });
+    },
     onSuccess: (capture, { context }) => {
+      dictationLog(
+        `upload ok: transcript ${capture.transcript_raw?.length ?? 0} chars, auto_refine=${capture.auto_refine}`,
+      );
       queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
         if (!prev) return prev;
         if (prev.items.some((c) => c.id === capture.id)) return prev;
@@ -354,6 +365,7 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error) => {
+      dictationLog(`upload failed: status ${(err as { status?: number }).status ?? 'none'}`);
       // A newer recording owns the pill; don't paint an old error over it.
       if (pillStateRef.current === 'recording') return;
       // The speech-to-text provider's rate limit (Groq's free tier): say so
@@ -383,6 +395,7 @@ export function useCaptureRecordingSession(
     error: recordError,
   } = useAudioRecording({
     maxDurationSeconds: MAX_RECORDING_DURATION_S,
+    log: dictationLog,
     onRecordingEnded: (_reason, recordedDuration) => {
       // Leave "Recording" as soon as the recorder stops: the audio still has
       // to be converted, and the timer must not look like it is running.
@@ -443,7 +456,11 @@ export function useCaptureRecordingSession(
 
   const startRecording = useCallback(
     (context?: unknown, options: RecordingOptions = {}) => {
-      if (isRecording) return;
+      if (isRecording) {
+        dictationLog('start ignored: already recording');
+        return;
+      }
+      dictationLog(`recording requested (${options.source ?? 'dictation'})`);
       contextRef.current = context;
       recordingOptionsRef.current = options;
       clearRestTimer();

@@ -36,6 +36,7 @@ use keytap::chord::{Chord, ChordEvent, ChordMatcher};
 use keytap::{EventKind, Key, RecvTimeoutError, Tap};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::dictation_log;
 use crate::focus_capture;
 use crate::DICTATE_WINDOW_LABEL;
 
@@ -256,6 +257,7 @@ impl Drop for EscapeWatcher {
 fn stop_on_escape(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
         let _ = window.emit("dictate:stop", serde_json::json!({ "source": "escape" }));
+        dictation_log::log("[rust] Esc while recording: dictate:stop sent");
     }
 }
 
@@ -402,16 +404,21 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
                     "selection": selection,
                 });
                 let _ = window.emit("dictate:start", payload);
+                dictation_log::log(&format!("[rust] chord start ({action:?}): dictate:start sent"));
+            } else {
+                dictation_log::log(&format!("[rust] chord start ({action:?}): no dictate window"));
             }
         }
-        Effect::StopRecording(_) => {
+        Effect::StopRecording(action) => {
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
                 let _ = window.emit("dictate:stop", ());
+                dictation_log::log(&format!("[rust] chord stop ({action:?}): dictate:stop sent"));
             }
         }
-        Effect::RestartRecording(_) => {
+        Effect::RestartRecording(action) => {
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
                 let _ = window.emit("dictate:restart", ());
+                dictation_log::log(&format!("[rust] chord restart ({action:?}): dictate:restart sent"));
             }
         }
     }

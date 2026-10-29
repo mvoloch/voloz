@@ -6,6 +6,7 @@ import { CapturePill } from '@/components/CapturePill/CapturePill';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
 import { useCaptureRecordingSession } from '@/lib/hooks/useCaptureRecordingSession';
+import { dictationLog } from '@/lib/utils/dictationLog';
 
 /** Rust's ``dictate:start`` payload. */
 interface DictateStartPayload {
@@ -97,15 +98,23 @@ export function DictateWindow() {
     getCommandSelection: (context) => commandSelection(context as DictationContext),
     onFinalText: async (text, _capture, allowAutoPaste, context) => {
       const focus = (context as DictationContext | null | undefined)?.focus ?? null;
-      if (!allowAutoPaste) return;
-      if (!focus || !text.trim()) return;
+      if (!allowAutoPaste) {
+        dictationLog('paste skipped: auto-paste off');
+        return;
+      }
+      if (!focus || !text.trim()) {
+        dictationLog(`paste skipped: ${focus ? 'empty text' : 'no focus snapshot'}`);
+        return;
+      }
       try {
         await invoke('paste_final_text', { text: toPlatformLineEndings(text), focus });
+        dictationLog('paste ok');
       } catch (err) {
         // Surface accessibility failures to the main window so it can prompt
         // the user to grant permission. Other errors stay swallowed —
         // the transcription still landed in the captures list.
         const msg = err instanceof Error ? err.message : String(err);
+        dictationLog(`paste failed${/accessibility/i.test(msg) ? ' (accessibility)' : ''}`);
         if (/accessibility/i.test(msg)) {
           emit('system:accessibility-missing').catch(() => {});
         }
@@ -144,6 +153,7 @@ export function DictateWindow() {
     const unlistens: Promise<UnlistenFn>[] = [];
     unlistens.push(
       listen<DictateStartPayload>('dictate:start', (event) => {
+        dictationLog(`dictate:start received (${event.payload?.mode ?? 'dictation'})`);
         chordStoppedRef.current = false;
         if (sessionRef.current.isRecording) return;
         const focus = event.payload?.focus ?? null;
@@ -165,6 +175,7 @@ export function DictateWindow() {
     );
     unlistens.push(
       listen<DictateStopPayload | null>('dictate:stop', (event) => {
+        dictationLog(`dictate:stop received (${event.payload?.source ?? 'chord'})`);
         // Esc is not a chord: the toggle it may leave on is reset above.
         chordStoppedRef.current = event.payload?.source !== 'escape';
         // A command chord just released: copy the selection now (once the
