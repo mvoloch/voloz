@@ -134,6 +134,9 @@ keep-alive). Still to confirm in an installed build.
    (41–63 s measured on the Dell with 0.8.0, 58–94 s with 0.8.1; onefile
    leaves 1.3 GB in `%TEMP%` per force-killed server). Until then the app
    waits up to 300 s for the server (was 120 s; see below).
+8. Mobile Studio (Android first, iOS later): design and owner decisions in
+   `docs/plans/MOBILE_STUDIO.md` (MVP: Tauri v2 Android app calling Fish
+   Audio with the user's key; desktop pairing after it).
 
 ### Installing 0.8.1 on the Dell (2026-10-28)
 
