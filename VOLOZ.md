@@ -150,8 +150,42 @@ keep-alive). Still to confirm in an installed build.
   155 s from launch to healthy (94 s of it unpacking). Since the next commit
   after `7c841cb` the limit is 300 s and the error no longer points to
   macOS's Console.app; this ships in the next build, not in 0.8.1.
-- Not yet tested by the owner on 0.8.1: paste into an Explorer folder,
-  Alt+F4 on the pill.
+- Owner tested paste into an Explorer folder: works. Alt+F4 on the pill
+  can't be reached by hand (the pill never takes focus); a WM_CLOSE sent
+  to it left Voloz and the server running.
+
+### Dictation bugs found testing 0.8.1 (2026-10-28)
+
+The owner's mic stayed on for 11:39 with the pill hidden. Reproduced on
+the Dell by driving the hotkey with `SendInput`, feeding the pill a TTS
+WAV in place of the mic and watching it over WebView2 remote debugging
+(`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=…`); the
+new frontend was tested in the installed app by serving its build to the
+pill through CDP `Fetch`. Fixed (not in a build yet):
+
+- A notice's hide timer ("too short" after a quick tap) was not cleared
+  by the next recording: the pill hid mid-recording while the mic ran.
+  Reproduced every time on 0.8.1; gone with the fix.
+- Hands-free is entered by touching Shift while holding push-to-talk
+  (`dictate:restart`, which nothing listened to): release no longer stops,
+  with no visible change. The pill now stays visible; recordings stop at
+  10 min (`MAX_RECORDING_DURATION_S`, under the ~13 min 25 MB upload limit).
+- After a hands-free recording ended by the pill's stop button or the cap,
+  keytap kept the toggle active and ignored push-to-talk until the toggle
+  chord was pressed again. New `reset_hotkey_state` command rebuilds the
+  matcher; the pill calls it when a recording ends without a chord (seen
+  over IPC; the Rust side is compiled, not run).
+- A paste fired while the user held the chord for the next dictation
+  became Win+Ctrl+V (Windows' sound-output flyout) and the text was lost.
+  `paste_final_text` now waits for Win/Ctrl/Shift/Alt to be released
+  (compiled, not run).
+- `useAudioRecording.stopRecording` read React state; a release between
+  the mic opening and the re-render was dropped. Now it asks the recorder.
+  Not reproduced in 12 timed attempts (30–150 ms), so rare.
+
+Still open: Whisper turns silence into "." / "Gracias." / "...", which is
+pasted; after each paste on the Dell the clipboard kept the transcript
+(the restore was skipped; cause not looked at).
 
 ### Findings from the 2026-10-28 audit
 

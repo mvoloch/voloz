@@ -74,6 +74,7 @@ pub type Bindings = HashMap<ChordAction, HashSet<Key>>;
 pub struct HotkeyMonitor {
     app: AppHandle,
     active: Option<Active>,
+    bindings: Bindings,
 }
 
 struct Active {
@@ -85,7 +86,11 @@ impl HotkeyMonitor {
     /// Build the monitor with initial bindings. Equivalent to constructing
     /// an empty monitor and calling [`Self::update_bindings`] once.
     pub fn spawn(app: AppHandle, bindings: Bindings) -> Self {
-        let mut m = Self { app, active: None };
+        let mut m = Self {
+            app,
+            active: None,
+            bindings: Bindings::new(),
+        };
         m.apply(bindings);
         m
     }
@@ -99,7 +104,19 @@ impl HotkeyMonitor {
         self.apply(bindings);
     }
 
+    /// Rebuild the matcher with the current bindings, dropping any chord
+    /// state keytap holds. A hands-free (Toggle) chord stays active in
+    /// keytap until it is pressed again, and suppresses push-to-talk
+    /// meanwhile — so a recording stopped another way (the pill's stop
+    /// button, the length cap) would leave the next push-to-talk press
+    /// ignored.
+    pub fn reset(&mut self) {
+        let bindings = self.bindings.clone();
+        self.apply(bindings);
+    }
+
     fn apply(&mut self, bindings: Bindings) {
+        self.bindings = bindings.clone();
         // Tear down any existing matcher + dispatcher first. The
         // dispatcher sees the shutdown flag on its next recv_timeout
         // (≤100ms) and returns; joining waits for that. Dropping the

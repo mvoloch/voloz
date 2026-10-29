@@ -51,6 +51,11 @@ const BRIEF_NOTICE_MS = 2000;
 // nor ffmpeg will accept. Caught client-side and surfaced as a friendly
 // "Recording too short, canceled" pill instead of bubbling up a 400.
 const MIN_RECORDING_DURATION_S = 0.5;
+// A dictation whose stop never arrives (a lost hotkey release, a hands-free
+// toggle the user didn't notice) would otherwise record until the next press.
+// 10 min stays under the 25 MB upload limit common to hosted Whisper APIs
+// (~13 min of 16 kHz mono WAV).
+const MAX_RECORDING_DURATION_S = 600;
 const shortRecordingMessage = () => i18n.t('captures.pill.tooShort');
 
 export type CapturePillState = PillState | 'hidden';
@@ -291,6 +296,7 @@ export function useCaptureRecordingSession(
     stopRecording,
     error: recordError,
   } = useAudioRecording({
+    maxDurationSeconds: MAX_RECORDING_DURATION_S,
     onRecordingComplete: (blob, recordedDuration) => {
       const context = contextRef.current;
       contextRef.current = undefined;
@@ -326,6 +332,11 @@ export function useCaptureRecordingSession(
       if (isRecording) return;
       contextRef.current = context;
       clearRestTimer();
+      // A notice still on screen (e.g. "too short" from a quick tap) would
+      // otherwise fire its hide timer mid-recording and tuck the pill away
+      // while the mic keeps running.
+      clearErrorTimer();
+      setErrorMessage(null);
       setFrozenElapsedMs(0);
       setPillState('recording');
       beginAudioRecording();
@@ -333,7 +344,7 @@ export function useCaptureRecordingSession(
       // so the upload after release doesn't pay the TLS handshake. Never awaited.
       apiClient.warmupCapture().catch(() => {});
     },
-    [isRecording, beginAudioRecording, clearRestTimer],
+    [isRecording, beginAudioRecording, clearRestTimer, clearErrorTimer],
   );
 
   const toggleRecording = useCallback(() => {

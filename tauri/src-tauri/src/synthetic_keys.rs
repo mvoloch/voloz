@@ -214,6 +214,26 @@ pub fn send_paste() -> Result<(), String> {
     Ok(())
 }
 
+/// Whether the user is physically holding Win, Ctrl, Shift or Alt right
+/// now. A synthetic Ctrl+V sent meanwhile combines with them (Win+Ctrl+V
+/// opens the sound-output flyout instead of pasting).
+#[cfg(target_os = "windows")]
+pub fn modifiers_held() -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    };
+
+    [VK_LWIN, VK_RWIN, VK_CONTROL, VK_SHIFT, VK_MENU]
+        .iter()
+        // High bit set = key is down.
+        .any(|vk| unsafe { GetAsyncKeyState(vk.0 as i32) } < 0)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn modifiers_held() -> bool {
+    false
+}
+
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn send_paste() -> Result<(), String> {
     Err("synthetic paste is not yet implemented on this platform".into())

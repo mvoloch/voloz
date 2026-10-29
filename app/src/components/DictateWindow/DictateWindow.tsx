@@ -66,15 +66,30 @@ export function DictateWindow() {
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
+  // Whether the recording in progress was stopped by a chord. A recording
+  // that ends otherwise (the pill's stop button, the length cap) may leave a
+  // hands-free toggle active in the Rust hotkey matcher, which then ignores
+  // push-to-talk until the toggle chord is pressed again — so reset it.
+  const chordStoppedRef = useRef(false);
+  const wasRecordingRef = useRef(false);
+  useEffect(() => {
+    if (wasRecordingRef.current && !session.isRecording && !chordStoppedRef.current) {
+      invoke('reset_hotkey_state').catch(() => {});
+    }
+    wasRecordingRef.current = session.isRecording;
+  }, [session.isRecording]);
+
   useEffect(() => {
     const unlistens: Promise<UnlistenFn>[] = [];
     unlistens.push(
       listen<{ focus: FocusSnapshot | null }>('dictate:start', (event) => {
+        chordStoppedRef.current = false;
         sessionRef.current.startRecording(event.payload?.focus ?? null);
       }),
     );
     unlistens.push(
       listen('dictate:stop', () => {
+        chordStoppedRef.current = true;
         // Always forward: a release that lands while the mic is still
         // opening is held and applied once recording starts.
         sessionRef.current.stopRecording();

@@ -1094,6 +1094,11 @@ const POST_ACTIVATE_SETTLE_MS: u64 = 120;
 /// the user sees our text if they look at their clipboard manager.
 const PASTE_CONSUME_MS: u64 = 400;
 
+/// Longest wait for the user to let go of modifier keys before pasting.
+/// Matches the frontend's 10-minute dictation cap: the keys may be the
+/// push-to-talk chord of the next dictation, held for as long as it lasts.
+const MODIFIER_RELEASE_TIMEOUT_S: u64 = 600;
+
 /// Reports whether the process currently has macOS Accessibility trust.
 /// Used by the settings UI and the paste debug harness to decide whether
 /// synthetic key events will actually land.
@@ -1243,6 +1248,20 @@ fn update_chord_bindings(
     Ok(())
 }
 
+/// Forget the chord state of the running `HotkeyMonitor`. Called by the
+/// dictate window when a recording ended without a chord (the pill's stop
+/// button, the length cap): a hands-free toggle would otherwise stay on in
+/// keytap and swallow the next push-to-talk press.
+#[cfg(desktop)]
+#[command]
+fn reset_hotkey_state(state: State<'_, HotkeyState>) -> Result<(), String> {
+    let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
+    if let Some(monitor) = slot.as_mut() {
+        monitor.reset();
+    }
+    Ok(())
+}
+
 /// Open the Privacy & Security → Accessibility pane in System Settings so
 /// the user can grant the permission. The URL scheme is stable across
 /// macOS 10.14–15; no-op on other platforms.
@@ -1326,6 +1345,20 @@ async fn paste_final_text(
             "Accessibility permission required for auto-paste. Open System Settings → Privacy & Security → Accessibility and enable Voloz."
                 .into(),
         );
+    }
+
+    // A paste fired while the user still holds modifiers — typically the
+    // push-to-talk chord of the next dictation — reaches the target as
+    // Win+Ctrl+V and the like (Windows opens its sound-output flyout) and
+    // the text is lost. Wait for the keys first; activating the target
+    // earlier would also pull focus away from where the user is dictating.
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_secs(MODIFIER_RELEASE_TIMEOUT_S);
+    while synthetic_keys::modifiers_held() {
+        if std::time::Instant::now() >= deadline {
+            return Err("Modifier keys still held; paste skipped.".into());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
 
     focus_capture::activate(&focus)?;
@@ -1670,7 +1703,8 @@ pub fn run() {
             paste_final_text,
             enable_hotkey,
             disable_hotkey,
-            update_chord_bindings
+            update_chord_bindings,
+            reset_hotkey_state
         ])
         .on_window_event({
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));

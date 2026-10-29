@@ -198,8 +198,12 @@ export function useAudioRecording({
       stopRequestedRef.current = true;
       return;
     }
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    // Ask the recorder, not `isRecording`: a release that lands after the
+    // mic opened but before React re-rendered sees a stale `false` and was
+    // dropped, leaving the mic recording until the next hotkey press.
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
       setIsRecording(false);
 
       if (timerRef.current !== null) {
@@ -207,7 +211,7 @@ export function useAudioRecording({
         timerRef.current = null;
       }
     }
-  }, [isRecording]);
+  }, []);
 
   const cancelRecording = useCallback(() => {
     if (startingRef.current) {
