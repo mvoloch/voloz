@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 import { FormControl } from '@/components/ui/form';
 import {
   Select,
@@ -9,8 +10,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { VoiceProfileResponse } from '@/lib/api/types';
+import { CLOUD_ENGINES } from '@/lib/constants/engines';
 import { getLanguageOptionsForEngine } from '@/lib/constants/languages';
 import type { GenerationFormValues } from '@/lib/hooks/useGenerationForm';
+import { useGenerationSettings } from '@/lib/hooks/useSettings';
 
 /**
  * Engine/model options and their display metadata.
@@ -29,6 +32,8 @@ const ENGINE_OPTIONS = [
   { value: 'tada:3B', label: 'TADA 3B Multilingual', engine: 'tada' },
   { value: 'kokoro', label: 'Kokoro 82M', engine: 'kokoro' },
   { value: 'omnivoice', label: 'OmniVoice (non-commercial)', engine: 'omnivoice' },
+  // Shown label comes from i18n (cloud tag + price, or where to add the key).
+  { value: 'fish_audio', label: 'Fish Audio', engine: 'fish_audio' },
 ] as const;
 
 const ENGINE_DESCRIPTIONS: Record<string, string> = {
@@ -41,6 +46,8 @@ const ENGINE_DESCRIPTIONS: Record<string, string> = {
   tada: 'HumeAI, 700s+ coherent audio',
   kokoro: '82M params, CPU realtime, 8 langs',
   omnivoice: '23 languages, voice design. CC-BY-NC weights: non-commercial use only',
+  fish_audio:
+    'Cloud, clones from the profile sample. ~$0.02 per minute of audio, billed by Fish Audio',
 };
 
 /** Engines that only support English and should force language to 'en' on select. */
@@ -54,6 +61,7 @@ const CLONING_ENGINES = new Set([
   'chatterbox_turbo',
   'tada',
   'omnivoice',
+  'fish_audio',
 ]);
 
 /** Engines that synthesise a voice from a written description. */
@@ -128,6 +136,11 @@ interface EngineModelSelectorProps {
 }
 
 export function EngineModelSelector({ form, compact, selectedProfile }: EngineModelSelectorProps) {
+  const { t } = useTranslation();
+  const { settings: genSettings } = useGenerationSettings();
+  // Without a stored key the cloud engine stays listed but can't be picked;
+  // its label says where to add the key.
+  const fishAudioReady = Boolean(genSettings?.fish_audio_api_key_configured);
   const engine = form.watch('engine') || 'qwen';
   const modelSize = form.watch('modelSize');
   const selectValue = getSelectValue(engine, modelSize);
@@ -154,11 +167,27 @@ export function EngineModelSelector({ form, compact, selectedProfile }: EngineMo
         </SelectTrigger>
       </FormControl>
       <SelectContent side={compact ? 'top' : undefined}>
-        {availableOptions.map((opt) => (
-          <SelectItem key={opt.value} value={opt.value} className={itemClass}>
-            {opt.label}
-          </SelectItem>
-        ))}
+        {availableOptions.map((opt) => {
+          if (!CLOUD_ENGINES.has(opt.engine)) {
+            return (
+              <SelectItem key={opt.value} value={opt.value} className={itemClass}>
+                {opt.label}
+              </SelectItem>
+            );
+          }
+          return (
+            <SelectItem
+              key={opt.value}
+              value={opt.value}
+              className={itemClass}
+              disabled={!fishAudioReady && opt.value !== selectValue}
+            >
+              {fishAudioReady
+                ? t('generation.engine.fishAudio')
+                : t('generation.engine.fishAudioNeedsKey')}
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

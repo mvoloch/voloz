@@ -737,6 +737,10 @@
       "tooltipInactive": "以角色發話",
       "ariaLabelActive": "以角色發話中",
       "ariaLabelInactive": "以角色發話"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · 雲端 · 約 $0.02/分鐘",
+      "fishAudioNeedsKey": "Fish Audio · 雲端 · 請在設定中新增 API 金鑰"
     }
   },
   "main": {
@@ -896,6 +900,17 @@
           "title": "代理就緒。",
           "body": "REST API 提供逐一聲音檔案的控制——讓任何 AI 擁有您複製過的聲音。"
         }
+      },
+      "fishAudio": {
+        "title": "Fish Audio API 金鑰（雲端語音）",
+        "description": "在 Fish Audio 的伺服器上生成，而不是在這台電腦上：沒有 GPU 時快得多。每次生成都會將文字和語音設定檔的樣本傳送給 Fish Audio，每分鐘音訊約收費 $0.02。",
+        "apiKeyPlaceholder": "貼上你的 Fish Audio API 金鑰",
+        "apiKeyPlaceholderReplace": "輸入新金鑰以取代已儲存的金鑰",
+        "apiKeyConfigured": "已儲存",
+        "apiKeyClear": "清除",
+        "getKey": "在 fish.audio/app/api-keys 建立金鑰，並在 fish.audio/app/billing 儲值。",
+        "statusReady": "已就緒：生成時在引擎選單中選擇 Fish Audio。",
+        "statusMissing": "沒有金鑰時，Fish Audio 引擎無法使用。"
       }
     },
     "captures": {

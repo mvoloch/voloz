@@ -326,6 +326,17 @@ async def _run_startup(application: FastAPI) -> None:
     finally:
         db.close()
 
+    # Same for the Fish Audio cloud TTS key (generation settings).
+    db = next(get_db())
+    try:
+        from .services.settings import bootstrap_tts_backend_config
+
+        bootstrap_tts_backend_config(db)
+    except Exception as e:
+        logger.warning("Could not bootstrap cloud TTS config: %s", e)
+    finally:
+        db.close()
+
     backend_type = get_backend_type()
     logger.info("Backend: %s", backend_type.upper())
     logger.info("GPU: %s", _get_gpu_status())

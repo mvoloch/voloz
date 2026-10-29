@@ -750,6 +750,10 @@
       "tooltipInactive": "Falar no personagem",
       "ariaLabelActive": "Falando no personagem",
       "ariaLabelInactive": "Falar no personagem"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · nuvem · ~US$ 0,02/min",
+      "fishAudioNeedsKey": "Fish Audio · nuvem · adicione uma chave de API nas Configurações"
     }
   },
   "main": {
@@ -909,6 +913,17 @@
           "title": "Pronto para agentes.",
           "body": "API REST com controle por perfil — dê a qualquer IA uma voz que você clonou."
         }
+      },
+      "fishAudio": {
+        "title": "Chave de API do Fish Audio (vozes na nuvem)",
+        "description": "Gera nos servidores do Fish Audio em vez deste computador: bem mais rápido sem GPU. Cada geração envia o texto e a amostra do perfil de voz ao Fish Audio, que cobra cerca de US$ 0,02 por minuto de áudio.",
+        "apiKeyPlaceholder": "Cole sua chave de API do Fish Audio",
+        "apiKeyPlaceholderReplace": "Digite uma nova chave para substituir a salva",
+        "apiKeyConfigured": "Salva",
+        "apiKeyClear": "Limpar",
+        "getKey": "Crie uma chave em fish.audio/app/api-keys e adicione crédito em fish.audio/app/billing.",
+        "statusReady": "Pronto: escolha Fish Audio no menu de motores ao gerar.",
+        "statusMissing": "Sem chave, o motor Fish Audio fica indisponível."
       }
     },
     "captures": {

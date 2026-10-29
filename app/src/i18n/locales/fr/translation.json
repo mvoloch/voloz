@@ -737,6 +737,10 @@
       "tooltipInactive": "Parler dans le personnage",
       "ariaLabelActive": "Parle dans le personnage",
       "ariaLabelInactive": "Parler dans le personnage"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · cloud · ~0,02 $/min",
+      "fishAudioNeedsKey": "Fish Audio · cloud · ajoutez une clé API dans les Réglages"
     }
   },
   "main": {
@@ -896,6 +900,17 @@
           "title": "Prêt pour les agents.",
           "body": "API REST avec contrôle par profil — donnez une voix que vous avez clonée à n'importe quelle IA."
         }
+      },
+      "fishAudio": {
+        "title": "Clé API Fish Audio (voix dans le cloud)",
+        "description": "Génère sur les serveurs de Fish Audio plutôt que sur cet ordinateur : bien plus rapide sans GPU. Chaque génération envoie le texte et l'échantillon du profil vocal à Fish Audio, qui facture environ 0,02 $ par minute d'audio.",
+        "apiKeyPlaceholder": "Collez votre clé API Fish Audio",
+        "apiKeyPlaceholderReplace": "Saisissez une nouvelle clé pour remplacer celle enregistrée",
+        "apiKeyConfigured": "Enregistrée",
+        "apiKeyClear": "Effacer",
+        "getKey": "Créez une clé sur fish.audio/app/api-keys et ajoutez du crédit sur fish.audio/app/billing.",
+        "statusReady": "Prêt : choisissez Fish Audio dans le menu des moteurs lors de la génération.",
+        "statusMissing": "Sans clé, le moteur Fish Audio reste indisponible."
       }
     },
     "captures": {

@@ -32,7 +32,15 @@ from . import history
 
 logger = logging.getLogger(__name__)
 
-CLONING_ENGINES = {"qwen", "luxtts", "chatterbox", "chatterbox_turbo", "tada", "omnivoice"}
+CLONING_ENGINES = {
+    "qwen",
+    "luxtts",
+    "chatterbox",
+    "chatterbox_turbo",
+    "tada",
+    "omnivoice",
+    "fish_audio",
+}
 
 # Engines that synthesise a voice from a natural-language description
 # (voice_type "designed") rather than from samples or a preset id.

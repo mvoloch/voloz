@@ -7,6 +7,7 @@ import { Toggle } from '@/components/ui/toggle';
 import { useGenerationSettings } from '@/lib/hooks/useSettings';
 import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
+import { FishAudioKeyRow } from './FishAudioKeyRow';
 import { SettingRow, SettingSection } from './SettingRow';
 
 export function GenerationPage() {
@@ -144,6 +145,8 @@ export function GenerationPage() {
             </Button>
           }
         />
+
+        <FishAudioKeyRow settings={settings} update={update} />
       </SettingSection>
       </div>
 

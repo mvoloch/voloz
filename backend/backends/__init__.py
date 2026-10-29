@@ -67,6 +67,9 @@ class ModelConfig:
     retries_runaway: bool = False
     supports_instruct: bool = False
     languages: list[str] = field(default_factory=lambda: ["en"])
+    # Runs on a provider's API: nothing to download, load or delete, and it
+    # never counts as downloaded/local. ``hf_repo_id`` is empty for these.
+    cloud: bool = False
 
 
 @runtime_checkable
@@ -237,6 +240,11 @@ _custom_stt_api_key: Optional[str] = None
 _remote_stt_backend: Optional[STTBackend] = None
 _stt_config_lock = threading.Lock()
 
+# Fish Audio cloud TTS key, seeded from the persisted generation settings on
+# startup and refreshed on every generation-settings write (same flow as the
+# custom STT/LLM keys above). ``None`` leaves the engine listed but unavailable.
+_fish_audio_api_key: Optional[str] = None
+
 # Supported TTS engines — keyed by engine name, value is the backend class import path.
 # The factory function uses this for the if/elif chain; the model configs live on the backend classes.
 TTS_ENGINES = {
@@ -249,6 +257,7 @@ TTS_ENGINES = {
     "tada": "TADA",
     "kokoro": "Kokoro",
     "omnivoice": "OmniVoice",
+    "fish_audio": "Fish Audio (cloud)",
 }
 
 LLM_ENGINES = {
@@ -483,6 +492,22 @@ def _get_non_qwen_tts_configs() -> list[ModelConfig]:
     ]
 
 
+def _get_cloud_tts_configs() -> list[ModelConfig]:
+    """Return configs for TTS engines that run on a provider's API."""
+    return [
+        ModelConfig(
+            model_name="fish-audio",
+            display_name="Fish Audio (cloud)",
+            engine="fish_audio",
+            hf_repo_id="",
+            cloud=True,
+            # The languages with dedicated support in Fish Audio's TTS docs
+            # that Voicebox's language enum knows. The model covers ~80 more.
+            languages=["en", "zh", "ja", "ko", "es", "fr", "de", "it", "pt", "ru", "ar", "tr"],
+        ),
+    ]
+
+
 def _get_whisper_configs() -> list[ModelConfig]:
     """Return Whisper STT model configs."""
     return [
@@ -582,6 +607,7 @@ def get_all_model_configs() -> list[ModelConfig]:
         + _get_qwen_custom_voice_configs()
         + _get_qwen_voice_design_configs()
         + _get_non_qwen_tts_configs()
+        + _get_cloud_tts_configs()
         + _get_whisper_configs()
         + _get_qwen_llm_configs()
     )
@@ -594,6 +620,7 @@ def get_tts_model_configs() -> list[ModelConfig]:
         + _get_qwen_custom_voice_configs()
         + _get_qwen_voice_design_configs()
         + _get_non_qwen_tts_configs()
+        + _get_cloud_tts_configs()
     )
 
 
@@ -634,6 +661,22 @@ def engine_retries_runaway(engine: str) -> bool:
     return False
 
 
+def is_cloud_engine(engine: str) -> bool:
+    """Whether this engine runs on a provider's API rather than a local model."""
+    return any(cfg.cloud for cfg in get_tts_model_configs() if cfg.engine == engine)
+
+
+def cloud_engine_unavailable_reason(engine: str) -> Optional[str]:
+    """Why a cloud engine can't run now (e.g. no API key), or ``None``.
+
+    Always ``None`` for local engines. Routes call this before creating a
+    generation so a missing key is a clear 400, not a failed job.
+    """
+    if not is_cloud_engine(engine):
+        return None
+    return get_tts_backend_for_engine(engine).unavailable_reason()
+
+
 def engine_has_model_sizes(engine: str) -> bool:
     """Whether this engine supports multiple model sizes (only Qwen currently)."""
     configs = [c for c in get_tts_model_configs() if c.engine == engine]
@@ -662,6 +705,12 @@ async def ensure_model_cached_or_raise(engine: str, model_size: str = "default")
             cfg = c
             break
 
+    if is_cloud_engine(engine):
+        reason = backend.unavailable_reason()
+        if reason:
+            raise HTTPException(status_code=400, detail=reason)
+        return
+
     if engine in ("qwen", "qwen_custom_voice", "tada"):
         if not backend._is_model_cached(model_size):
             raise HTTPException(
@@ -682,6 +731,10 @@ def unload_model_by_config(config: ModelConfig) -> bool:
     from . import get_tts_backend_for_engine
     from ..services import tts, transcribe
     from ..utils.cache import clear_voice_prompt_memory_cache
+
+    if config.cloud:
+        # Nothing is held in local memory for a cloud engine.
+        return False
 
     if config.engine == "whisper":
         whisper_model = transcribe.get_whisper_model()
@@ -734,6 +787,9 @@ def check_model_loaded(config: ModelConfig) -> bool:
     from ..services import tts, transcribe
 
     try:
+        if config.cloud:
+            return False
+
         if config.engine == "whisper":
             whisper_model = transcribe.get_whisper_model()
             return whisper_model.is_loaded() and getattr(whisper_model, "model_size", None) == config.model_size
@@ -860,6 +916,10 @@ def get_tts_backend_for_engine(engine: str) -> TTSBackend:
             from .qwen_voice_design_backend import QwenVoiceDesignBackend
 
             backend = QwenVoiceDesignBackend()
+        elif engine == "fish_audio":
+            from .fish_audio_backend import FishAudioTTSBackend
+
+            backend = FishAudioTTSBackend()
         else:
             raise ValueError(f"Unknown TTS engine: {engine}. Supported: {list(TTS_ENGINES.keys())}")
 
@@ -936,6 +996,23 @@ def set_stt_config(
         _custom_stt_api_key = api_key
         if changed:
             _remote_stt_backend = None
+
+
+def set_fish_audio_config(api_key: Optional[str]) -> None:
+    """Update the runtime Fish Audio API key.
+
+    Called from the settings service after every generation-settings write
+    and once on startup with the persisted row. Empty string or ``None``
+    clears it, which leaves the engine listed but unavailable. The backend
+    reads the key per request, so no cached instance needs dropping.
+    """
+    global _fish_audio_api_key
+    _fish_audio_api_key = api_key or None
+
+
+def get_fish_audio_api_key() -> Optional[str]:
+    """The Fish Audio API key currently in effect, or ``None``."""
+    return _fish_audio_api_key
 
 
 def set_llm_config(
@@ -1052,6 +1129,7 @@ def reset_backends():
     global _tts_backend, _tts_backends, _stt_backend, _llm_backends
     global _custom_llm_endpoint, _custom_llm_model, _custom_llm_api_key
     global _custom_stt_endpoint, _custom_stt_model, _custom_stt_api_key, _remote_stt_backend
+    global _fish_audio_api_key
     _tts_backend = None
     _tts_backends.clear()
     _stt_backend = None
@@ -1063,3 +1141,4 @@ def reset_backends():
     _custom_stt_model = None
     _custom_stt_api_key = None
     _remote_stt_backend = None
+    _fish_audio_api_key = None

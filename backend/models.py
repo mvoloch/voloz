@@ -85,7 +85,7 @@ class GenerationRequest(BaseModel):
     seed: Optional[int] = Field(None, ge=0)
     model_size: Optional[str] = Field(default="1.7B", pattern="^(1\\.7B|0\\.6B|1B|3B)$")
     instruct: Optional[str] = Field(None, max_length=500)
-    engine: Optional[str] = Field(default=None, pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice)$")
+    engine: Optional[str] = Field(default=None, pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice|fish_audio)$")
     personality: bool = Field(
         default=False,
         description="When true and the profile has a personality prompt, the input text is rewritten in-character before TTS.",
@@ -245,6 +245,33 @@ class CaptureRetranscribeRequest(BaseModel):
     language: Optional[str] = Field(None, pattern="^(en|zh|ja|ko|de|fr|ru|pt|es|it)$")
 
 
+def _mask_secret_fields(data: Any, secret_fields: tuple[str, ...]) -> Any:
+    """Swap each raw secret for a boolean ``<field>_configured`` flag.
+
+    Used by the settings responses' ``mode="before"`` validators, so stored
+    credentials are never materialised on a Response instance, even in
+    memory. Accepts both SQLAlchemy ORM rows (``from_attributes=True`` path)
+    and plain dicts so tests that construct the model directly get the same
+    treatment.
+    """
+    if isinstance(data, dict):
+        for field in secret_fields:
+            raw_key = data.pop(field, None)
+            data.setdefault(f"{field}_configured", bool(raw_key))
+        return data
+    # ORM row — build a snapshot dict, drop the secrets, and hand the
+    # rest to Pydantic. ``from_attributes`` won't reach the raw
+    # attributes anymore because the returned dict wins.
+    columns = getattr(getattr(data, "__table__", None), "columns", None)
+    if columns is None:
+        return data
+    snapshot = {c.name: getattr(data, c.name, None) for c in columns}
+    for field in secret_fields:
+        raw_key = snapshot.pop(field, None)
+        snapshot[f"{field}_configured"] = bool(raw_key)
+    return snapshot
+
+
 class CaptureSettingsResponse(BaseModel):
     """Server-persisted defaults for the capture / refine flow."""
 
@@ -279,30 +306,8 @@ class CaptureSettingsResponse(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _mask_custom_api_keys(cls, data: Any) -> Any:
-        """Replace each raw ``custom_*_api_key`` with a boolean ``_configured`` flag.
-
-        Runs before field validation so the stored credentials are never
-        materialised on a Response instance, even in memory. Accepts both
-        SQLAlchemy ORM rows (``from_attributes=True`` path) and plain dicts
-        so tests that construct the model directly get the same treatment.
-        """
-        secret_fields = ("custom_llm_api_key", "custom_stt_api_key")
-        if isinstance(data, dict):
-            for field in secret_fields:
-                raw_key = data.pop(field, None)
-                data.setdefault(f"{field}_configured", bool(raw_key))
-            return data
-        # ORM row — build a snapshot dict, drop the secrets, and hand the
-        # rest to Pydantic. ``from_attributes`` won't reach the raw
-        # attributes anymore because the returned dict wins.
-        columns = getattr(getattr(data, "__table__", None), "columns", None)
-        if columns is None:
-            return data
-        snapshot = {c.name: getattr(data, c.name, None) for c in columns}
-        for field in secret_fields:
-            raw_key = snapshot.pop(field, None)
-            snapshot[f"{field}_configured"] = bool(raw_key)
-        return snapshot
+        """Replace each raw ``custom_*_api_key`` with a boolean ``_configured`` flag."""
+        return _mask_secret_fields(data, ("custom_llm_api_key", "custom_stt_api_key"))
 
     class Config:
         from_attributes = True
@@ -338,6 +343,15 @@ class GenerationSettingsResponse(BaseModel):
     crossfade_ms: int = Field(default=50, ge=0, le=500)
     normalize_audio: bool = True
     autoplay_on_generate: bool = True
+    # Fish Audio cloud TTS key — write-only, like ``custom_llm_api_key``:
+    # the response says whether one is stored, never what it is.
+    fish_audio_api_key_configured: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mask_fish_audio_api_key(cls, data: Any) -> Any:
+        """Replace the raw ``fish_audio_api_key`` with a boolean ``_configured`` flag."""
+        return _mask_secret_fields(data, ("fish_audio_api_key",))
 
     class Config:
         from_attributes = True
@@ -350,6 +364,8 @@ class GenerationSettingsUpdate(BaseModel):
     crossfade_ms: Optional[int] = Field(default=None, ge=0, le=500)
     normalize_audio: Optional[bool] = None
     autoplay_on_generate: Optional[bool] = None
+    # ``None`` clears the stored key; an empty string is treated the same.
+    fish_audio_api_key: Optional[str] = None
 
 
 class MCPClientBindingResponse(BaseModel):
@@ -362,7 +378,7 @@ class MCPClientBindingResponse(BaseModel):
     profile_id: Optional[str] = None
     default_engine: Optional[str] = Field(
         None,
-        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice)$",
+        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice|fish_audio)$",
     )
     default_personality: bool = False
     last_seen_at: Optional[datetime] = None
@@ -381,7 +397,7 @@ class MCPClientBindingUpsert(BaseModel):
     profile_id: Optional[str] = None
     default_engine: Optional[str] = Field(
         None,
-        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice)$",
+        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice|fish_audio)$",
     )
     default_personality: bool = False
 
@@ -400,7 +416,7 @@ class SpeakRequest(BaseModel):
     )
     engine: Optional[str] = Field(
         None,
-        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice)$",
+        pattern="^(qwen|qwen_custom_voice|qwen_voice_design|luxtts|chatterbox|chatterbox_turbo|tada|kokoro|omnivoice|fish_audio)$",
     )
     personality: Optional[bool] = Field(
         None,
@@ -521,6 +537,10 @@ class ModelStatus(BaseModel):
     downloading: bool = False  # True if download is in progress
     size_mb: Optional[float] = None
     loaded: bool = False
+    # Runs on a provider's API: never downloaded, nothing to load or delete.
+    cloud: bool = False
+    # Set when a cloud engine can't run yet (e.g. no API key), with what to do.
+    unavailable_reason: Optional[str] = None
 
 
 class ModelStatusListResponse(BaseModel):

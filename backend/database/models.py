@@ -245,6 +245,10 @@ class GenerationSettings(Base):
     crossfade_ms = Column(Integer, nullable=False, default=50)
     normalize_audio = Column(Boolean, nullable=False, default=True)
     autoplay_on_generate = Column(Boolean, nullable=False, default=True)
+    # API key for the Fish Audio cloud TTS engine. Stored like the custom
+    # STT/LLM keys on capture_settings: local DB only, write-only over the
+    # API (responses carry ``fish_audio_api_key_configured`` instead).
+    fish_audio_api_key = Column(String, nullable=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

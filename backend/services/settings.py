@@ -143,6 +143,23 @@ def bootstrap_llm_backend_config(db: Session) -> None:
     _sync_llm_backend_config(row)
 
 
+def _sync_tts_backend_config(row: DBGenerationSettings) -> None:
+    """Push the persisted Fish Audio key into the backend module state.
+
+    Twin of :func:`_sync_llm_backend_config` for the cloud TTS engine:
+    called after every generation-settings write and once on startup.
+    """
+    from .. import backends
+
+    backends.set_fish_audio_config(api_key=row.fish_audio_api_key)
+
+
+def bootstrap_tts_backend_config(db: Session) -> None:
+    """Seed the cloud TTS key from the persisted row on server startup."""
+    row = _get_or_create_generation_row(db)
+    _sync_tts_backend_config(row)
+
+
 def get_generation_settings(db: Session) -> DBGenerationSettings:
     """Return the generation settings row, creating it with defaults if missing."""
     return _get_or_create_generation_row(db)
@@ -151,13 +168,16 @@ def get_generation_settings(db: Session) -> DBGenerationSettings:
 def update_generation_settings(db: Session, patch: dict[str, Any]) -> DBGenerationSettings:
     """Apply a partial update to the generation-settings singleton and persist it.
 
-    Unlike :func:`update_capture_settings`, no runtime state depends on
-    these values — the fields flow directly into the next
-    ``run_generation`` invocation via ``GenerationSettings`` — so the
-    commit is enough.
+    The chunking/normalize fields flow directly into the next
+    ``run_generation`` invocation; the Fish Audio key is pushed into the
+    backend module state via :func:`_sync_tts_backend_config` so the next
+    cloud generation uses it without a restart. A blank key clears it.
     """
     row = _get_or_create_generation_row(db)
+    if "fish_audio_api_key" in patch:
+        patch = {**patch, "fish_audio_api_key": (patch["fish_audio_api_key"] or "").strip() or None}
     _apply_patch(row, patch)
     db.commit()
     db.refresh(row)
+    _sync_tts_backend_config(row)
     return row

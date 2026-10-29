@@ -737,6 +737,10 @@
       "tooltipInactive": "캐릭터로 말하기",
       "ariaLabelActive": "캐릭터로 말하는 중",
       "ariaLabelInactive": "캐릭터로 말하기"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · 클라우드 · 분당 약 $0.02",
+      "fishAudioNeedsKey": "Fish Audio · 클라우드 · 설정에서 API 키를 추가하세요"
     }
   },
   "main": {
@@ -896,6 +900,17 @@
           "title": "에이전트 지원.",
           "body": "프로필별 제어가 가능한 REST API — 복제한 음성으로 모든 AI에 목소리를 주세요."
         }
+      },
+      "fishAudio": {
+        "title": "Fish Audio API 키 (클라우드 음성)",
+        "description": "이 컴퓨터 대신 Fish Audio 서버에서 생성합니다. GPU가 없어도 훨씬 빠릅니다. 생성할 때마다 텍스트와 음성 프로필 샘플이 Fish Audio로 전송되며, 오디오 1분당 약 $0.02가 청구됩니다.",
+        "apiKeyPlaceholder": "Fish Audio API 키를 붙여넣으세요",
+        "apiKeyPlaceholderReplace": "저장된 키를 바꾸려면 새 키를 입력하세요",
+        "apiKeyConfigured": "저장됨",
+        "apiKeyClear": "지우기",
+        "getKey": "fish.audio/app/api-keys에서 키를 만들고 fish.audio/app/billing에서 크레딧을 추가하세요.",
+        "statusReady": "준비 완료: 생성할 때 엔진 메뉴에서 Fish Audio를 선택하세요.",
+        "statusMissing": "키가 없으면 Fish Audio 엔진을 사용할 수 없습니다."
       }
     },
     "captures": {

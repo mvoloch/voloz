@@ -5,7 +5,7 @@ import * as z from 'zod';
 import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type { EffectConfig } from '@/lib/api/types';
-import { engineSupportsInstruct } from '@/lib/constants/engines';
+import { CLOUD_ENGINES, engineSupportsInstruct } from '@/lib/constants/engines';
 import { LANGUAGE_CODES, type LanguageCode } from '@/lib/constants/languages';
 import { useGeneration } from '@/lib/hooks/useGeneration';
 import { useModelDownloadToast } from '@/lib/hooks/useModelDownloadToast';
@@ -30,6 +30,7 @@ const generationSchema = z.object({
       'tada',
       'kokoro',
       'omnivoice',
+      'fish_audio',
     ])
     .optional(),
   personality: z.boolean().optional(),
@@ -135,17 +136,20 @@ export function useGenerationForm(options: UseGenerationFormOptions = {}) {
                           ? 'Qwen TTS 1.7B'
                           : 'Qwen TTS 0.6B';
 
-      // Check if model needs downloading
-      try {
-        const modelStatus = await apiClient.getModelStatus();
-        const model = modelStatus.models.find((m) => m.model_name === modelName);
+      // Check if model needs downloading. Cloud engines never do; a missing
+      // API key comes back from /generate as a 400 with what to do.
+      if (!CLOUD_ENGINES.has(engine)) {
+        try {
+          const modelStatus = await apiClient.getModelStatus();
+          const model = modelStatus.models.find((m) => m.model_name === modelName);
 
-        if (model && !model.downloaded) {
-          setDownloadingModelName(modelName);
-          setDownloadingDisplayName(displayName);
+          if (model && !model.downloaded) {
+            setDownloadingModelName(modelName);
+            setDownloadingDisplayName(displayName);
+          }
+        } catch (error) {
+          console.error('Failed to check model status:', error);
         }
-      } catch (error) {
-        console.error('Failed to check model status:', error);
       }
 
       const hasModelSizes =

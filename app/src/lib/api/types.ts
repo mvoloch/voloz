@@ -80,7 +80,8 @@ export interface GenerationRequest {
     | 'chatterbox_turbo'
     | 'tada'
     | 'kokoro'
-    | 'omnivoice';
+    | 'omnivoice'
+    | 'fish_audio';
   instruct?: string;
   /** When true and the profile has a personality prompt, input text is rewritten in-character before TTS. */
   personality?: boolean;
@@ -283,9 +284,16 @@ export interface GenerationSettings {
   crossfade_ms: number;
   normalize_audio: boolean;
   autoplay_on_generate: boolean;
+  /** Whether a Fish Audio API key is stored. The key itself is write-only. */
+  fish_audio_api_key_configured: boolean;
 }
 
-export type GenerationSettingsUpdate = Partial<GenerationSettings>;
+export type GenerationSettingsUpdate = Partial<
+  Omit<GenerationSettings, 'fish_audio_api_key_configured'>
+> & {
+  /** Write-only. `null` (or an empty string) clears the stored key. */
+  fish_audio_api_key?: string | null;
+};
 
 export interface TranscriptionRequest {
   language?: LanguageCode;
@@ -372,6 +380,10 @@ export interface ModelStatus {
   downloading: boolean; // True if download is in progress
   size_mb?: number;
   loaded: boolean;
+  /** Runs on a provider's API: never downloaded, nothing to load or delete. */
+  cloud?: boolean;
+  /** Set when a cloud engine can't run yet (e.g. no API key), with what to do. */
+  unavailable_reason?: string | null;
 }
 
 export interface HuggingFaceModelInfo {

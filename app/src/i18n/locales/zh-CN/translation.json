@@ -737,6 +737,10 @@
       "tooltipInactive": "以人物设定朗读",
       "ariaLabelActive": "正以人物设定朗读",
       "ariaLabelInactive": "以人物设定朗读"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · 云端 · 约 $0.02/分钟",
+      "fishAudioNeedsKey": "Fish Audio · 云端 · 请在设置中添加 API 密钥"
     }
   },
   "main": {
@@ -896,6 +900,17 @@
           "title": "面向代理。",
           "body": "REST API 支持按档案控制——给任何 AI 一个您克隆的声音。"
         }
+      },
+      "fishAudio": {
+        "title": "Fish Audio API 密钥（云端语音）",
+        "description": "在 Fish Audio 的服务器上生成，而不是在本机生成：没有 GPU 时快得多。每次生成都会把文本和语音配置文件的样本发送给 Fish Audio，每分钟音频约收费 $0.02。",
+        "apiKeyPlaceholder": "粘贴你的 Fish Audio API 密钥",
+        "apiKeyPlaceholderReplace": "输入新密钥以替换已保存的密钥",
+        "apiKeyConfigured": "已保存",
+        "apiKeyClear": "清除",
+        "getKey": "在 fish.audio/app/api-keys 创建密钥，并在 fish.audio/app/billing 充值。",
+        "statusReady": "已就绪：生成时在引擎菜单中选择 Fish Audio。",
+        "statusMissing": "没有密钥时，Fish Audio 引擎不可用。"
       }
     },
     "captures": {

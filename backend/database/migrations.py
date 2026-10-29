@@ -42,6 +42,7 @@ def run_migrations(engine) -> None:
     _migrate_effect_presets(engine, inspector, tables)
     _migrate_generation_versions(engine, inspector, tables)
     _migrate_capture_settings(engine, inspector, tables)
+    _migrate_generation_settings(engine, inspector, tables)
     _migrate_mcp_bindings(engine, inspector, tables)
     _normalize_storage_paths(engine, tables)
     _migrate_add_indexes(engine, tables)
@@ -268,6 +269,15 @@ def _migrate_capture_settings(engine, inspector, tables: set[str]) -> None:
     for column in ("custom_stt_endpoint", "custom_stt_model", "custom_stt_api_key"):
         if column not in columns:
             _add_column(engine, "capture_settings", f"{column} VARCHAR", column)
+
+
+def _migrate_generation_settings(engine, inspector, tables: set[str]) -> None:
+    """Add the Fish Audio API key column to the generation-settings singleton."""
+    if "generation_settings" not in tables:
+        return
+    columns = _get_columns(inspector, "generation_settings")
+    if "fish_audio_api_key" not in columns:
+        _add_column(engine, "generation_settings", "fish_audio_api_key VARCHAR", "fish_audio_api_key")
 
 
 def _migrate_mcp_bindings(engine, inspector, tables: set[str]) -> None:

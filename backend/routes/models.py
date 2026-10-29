@@ -316,6 +316,8 @@ async def get_model_status():
             "hf_repo_id": cfg.hf_repo_id,
             "aux_hf_repo_ids": cfg.aux_hf_repo_ids,
             "model_size": cfg.model_size,
+            "engine": cfg.engine,
+            "cloud": cfg.cloud,
             "check_loaded": lambda c=cfg: check_model_loaded(c),
         }
         for cfg in registry_configs
@@ -334,6 +336,22 @@ async def get_model_status():
     statuses = []
 
     for config in model_configs:
+        if config["cloud"]:
+            # A provider's API: never downloaded or loaded here. Report
+            # whether it can run (e.g. an API key is stored) instead.
+            from ..backends import get_tts_backend_for_engine
+
+            statuses.append(
+                models.ModelStatus(
+                    model_name=config["model_name"],
+                    display_name=config["display_name"],
+                    hf_repo_id=None,
+                    downloaded=False,
+                    cloud=True,
+                    unavailable_reason=get_tts_backend_for_engine(config["engine"]).unavailable_reason(),
+                )
+            )
+            continue
         try:
             downloaded = False
             size_mb = None
@@ -467,6 +485,11 @@ async def trigger_model_download(request: models.ModelDownloadRequest):
     config = get_model_config(request.model_name)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown model: {request.model_name}")
+    if config.cloud:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{config.display_name} runs in the cloud; there is nothing to download.",
+        )
 
     load_func = get_model_load_func(config)
 
@@ -522,6 +545,11 @@ async def delete_model(model_name: str):
     config = get_model_config(model_name)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
+    if config.cloud:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{config.display_name} runs in the cloud; there is no local copy to delete.",
+        )
 
     hf_repo_id = config.hf_repo_id
 

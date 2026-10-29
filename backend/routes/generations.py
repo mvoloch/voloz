@@ -53,6 +53,19 @@ def _resolve_generation_engine(data: models.GenerationRequest, profile) -> str:
     return data.engine or profiles.default_engine_for_profile(profile)
 
 
+def _require_engine_available(engine: str) -> None:
+    """Reject up front a cloud engine that can't run (e.g. no API key yet).
+
+    Without this the request would create a generation that fails a moment
+    later; a 400 carrying the reason lets the UI say what to do instead.
+    """
+    from ..backends import cloud_engine_unavailable_reason
+
+    reason = cloud_engine_unavailable_reason(engine)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
+
+
 @router.post("/generate", response_model=models.GenerationResponse)
 async def generate_speech(
     data: models.GenerationRequest,
@@ -73,6 +86,7 @@ async def generate_speech(
         profiles.validate_profile_engine(profile, engine)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    _require_engine_available(engine)
 
     model_size = (data.model_size or "1.7B") if engine_has_model_sizes(engine) else None
 
@@ -154,6 +168,7 @@ async def retry_generation(generation_id: str, db: Session = Depends(get_db)):
 
     if (gen.status or "completed") != "failed":
         raise HTTPException(status_code=400, detail="Only failed generations can be retried")
+    _require_engine_available(gen.engine or "qwen")
 
     gen.status = "generating"
     gen.error = None
@@ -198,6 +213,7 @@ async def regenerate_generation(generation_id: str, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Generation not found")
     if (gen.status or "completed") != "completed":
         raise HTTPException(status_code=400, detail="Generation must be completed to regenerate")
+    _require_engine_available(gen.engine or "qwen")
 
     gen.status = "generating"
     gen.error = None

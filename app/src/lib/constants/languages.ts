@@ -6,6 +6,7 @@
  * Chatterbox Multilingual supports 23 languages.
  * Chatterbox Turbo is English-only.
  * Kokoro supports 8 languages.
+ * Fish Audio (cloud) lists 12 of these with dedicated support.
  */
 
 /** All languages that any engine supports. */
@@ -70,6 +71,9 @@ export const ENGINE_LANGUAGES: Record<string, readonly LanguageCode[]> = {
   tada: ['en', 'ar', 'zh', 'de', 'es', 'fr', 'it', 'ja', 'pl', 'pt'],
   kokoro: ['en', 'es', 'fr', 'hi', 'it', 'pt', 'ja', 'zh'],
   qwen_custom_voice: ['zh', 'en', 'ja', 'ko', 'de', 'fr', 'ru', 'pt', 'es', 'it'],
+  // Fish Audio's model covers ~80 languages; these are the ones its TTS docs
+  // give dedicated support that ALL_LANGUAGES knows.
+  fish_audio: ['en', 'zh', 'ja', 'ko', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'ar', 'tr'],
   qwen_voice_design: ['zh', 'en', 'ja', 'ko', 'de', 'fr', 'ru', 'pt', 'es', 'it'],
   // OmniVoice covers 600+ languages. Listed here are the ones ALL_LANGUAGES
   // already knows -- widening that list is a separate change.

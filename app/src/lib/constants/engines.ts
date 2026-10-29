@@ -17,6 +17,9 @@ export const INSTRUCT_ENGINES: ReadonlySet<string> = new Set([
   'omnivoice',
 ]);
 
+/** Engines that run on a provider's API: no download, an API key instead. */
+export const CLOUD_ENGINES: ReadonlySet<string> = new Set(['fish_audio']);
+
 /** Whether the given engine should show and forward the instruct field. */
 export function engineSupportsInstruct(engine: string | undefined): boolean {
   return engine !== undefined && INSTRUCT_ENGINES.has(engine);

@@ -737,6 +737,10 @@
       "tooltipInactive": "キャラクターとして発話",
       "ariaLabelActive": "キャラクターとして発話中",
       "ariaLabelInactive": "キャラクターとして発話"
+    },
+    "engine": {
+      "fishAudio": "Fish Audio · クラウド · 約$0.02/分",
+      "fishAudioNeedsKey": "Fish Audio · クラウド · 設定でAPIキーを追加してください"
     }
   },
   "main": {
@@ -896,6 +900,17 @@
           "title": "エージェント対応。",
           "body": "プロファイル単位で制御できる REST API — クローンしたボイスをどの AI にも渡せます。"
         }
+      },
+      "fishAudio": {
+        "title": "Fish Audio APIキー（クラウド音声）",
+        "description": "このコンピューターではなくFish Audioのサーバーで生成します。GPUがなくても高速です。生成のたびにテキストと音声プロファイルのサンプルがFish Audioに送信され、音声1分あたり約$0.02が課金されます。",
+        "apiKeyPlaceholder": "Fish AudioのAPIキーを貼り付け",
+        "apiKeyPlaceholderReplace": "保存済みのキーを置き換えるには新しいキーを入力",
+        "apiKeyConfigured": "保存済み",
+        "apiKeyClear": "消去",
+        "getKey": "fish.audio/app/api-keys でキーを作成し、fish.audio/app/billing でクレジットを追加してください。",
+        "statusReady": "準備完了：生成時にエンジンメニューでFish Audioを選択してください。",
+        "statusMissing": "キーがないとFish Audioエンジンは使用できません。"
       }
     },
     "captures": {

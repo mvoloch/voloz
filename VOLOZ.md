@@ -118,7 +118,17 @@ keep-alive). Still to confirm in an installed build.
    honours it, OpenRouter ignored it).
 4. Streaming STT + incremental refinement to approach Wispr's ~0.7 s.
 5. Linux build and test on GB4; then Android.
-6. Studio: cloud TTS/cloning engine (ElevenLabs/Cartesia/Fish Audio).
+6. Studio: cloud TTS/cloning engine — **built on `feat/cloud-tts`, not
+   merged, untested against the real API (no key yet).** Fish Audio
+   (`backend/backends/fish_audio_backend.py`, engine `fish_audio`):
+   `POST https://api.fish.audio/v1/tts`, MessagePack body, the profile's
+   sample + transcript sent inline as `references` on every request, model
+   header `s2.1-pro` ($15 per million UTF-8 bytes, pay as you go; Fish says
+   1M bytes ≈ 12 h of speech, so ~$0.02/min). Key: Settings → Generation
+   (column `generation_settings.fish_audio_api_key`, local DB only). Tests
+   mock HTTP (`backend/tests/test_fish_audio_tts.py`). First real test:
+   short Portuguese line with a cloned profile, then a wrong key, then an
+   empty balance, and check each failed generation's stored error.
    Known bug: a Qwen3-TTS 1.7B generation on CPU failed with the generic
    "Worker exited without writing terminal status"
    (`backend/services/task_queue.py`); retry and delete also failed — root
