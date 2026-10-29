@@ -200,6 +200,9 @@ export interface CaptureListResponse {
 export interface CaptureCreateResponse extends CaptureResponse {
   auto_refine: boolean;
   allow_auto_paste: boolean;
+  /** What to paste if the refinement that follows fails: the raw transcript
+   * with text shortcuts expanded. */
+  fallback_text?: string | null;
 }
 
 export interface CaptureRefineRequest {

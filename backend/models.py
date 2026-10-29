@@ -233,10 +233,15 @@ class CaptureCreateResponse(CaptureResponse):
     decide whether to chain a refinement request and whether to fire the
     synthetic-paste pipeline, so it doesn't need a synced local copy of the
     capture_settings table across sibling Tauri webviews.
+
+    ``fallback_text`` is what to paste if that refinement fails: the raw
+    transcript with text shortcuts expanded (``transcript_raw`` keeps them
+    unexpanded while a refinement follows). Not stored.
     """
 
     auto_refine: bool
     allow_auto_paste: bool
+    fallback_text: Optional[str] = None
 
 
 class CaptureRefineRequest(BaseModel):

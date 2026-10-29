@@ -248,10 +248,12 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error, { auto }) => {
-      // Deliver the raw transcript rather than lose the dictation.
-      if (auto?.capture.transcript_raw?.trim()) {
+      // Deliver the raw transcript rather than lose the dictation, with its
+      // text shortcuts expanded (``transcript_raw`` leaves them to the refine).
+      const fallback = auto?.capture.fallback_text ?? auto?.capture.transcript_raw;
+      if (auto && fallback?.trim()) {
         onFinalTextRef.current?.(
-          auto.capture.transcript_raw,
+          fallback,
           auto.capture,
           auto.capture.allow_auto_paste,
           auto.context,

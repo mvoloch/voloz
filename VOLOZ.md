@@ -395,6 +395,17 @@ Cut from `light` at `a6d149c`, not merged. All three work in lite.
   them). Installed apps' default data dirs were not affected; rows already
   stored that way stay broken.
 
+## Review fixes (`fix/audit`, 2026-10-29)
+
+Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
+`light`:
+
+- **Shortcut lost when refinement failed.** With a refinement to follow,
+  `transcript_raw` keeps triggers unexpanded, and a failed refine (a Groq
+  429, say) pasted it: "meu endereço" instead of the address. `POST
+  /captures` now also returns `fallback_text` (raw transcript, shortcuts
+  expanded; not stored) and the pill pastes that when the refine fails.
+
 ## Developing on GB4
 
 ```bash

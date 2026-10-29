@@ -208,6 +208,26 @@ def test_a_trigger_inside_a_dictation_is_expanded_after_refinement(api):
         assert "Rua das Flores" not in json.dumps(sent)
 
 
+def test_a_failed_refinement_has_a_fallback_with_the_shortcut_expanded(api):
+    rate_limited = (429, {"error": {"message": "Rate limit reached", "code": "rate_limit_exceeded"}})
+    with (
+        FakeServer(lambda *_: (200, {"text": "manda pra meu endereço por favor"})) as stt,
+        FakeServer(lambda *_: rate_limited) as llm,
+    ):
+        _configure(api, stt.base_url, llm.base_url)
+        capture = _dictate(api)
+        assert capture["auto_refine"] is True
+        assert capture["transcript_raw"] == "manda pra meu endereço por favor"
+        # The app pastes this when the refine below fails, not transcript_raw.
+        assert capture["fallback_text"] == f"manda pra {ADDRESS} por favor"
+        assert api.post(f"/captures/{capture['id']}/refine", json={}).status_code == 429
+
+    # Not stored: the capture itself still says it was not refined.
+    stored = api.get(f"/captures/{capture['id']}").json()
+    assert "fallback_text" not in stored
+    assert stored["transcript_refined"] is None
+
+
 def test_with_refinement_off_a_trigger_is_expanded_in_the_delivered_text(api):
     with FakeServer(lambda *_: (200, {"text": "Até logo. Assinatura"})) as stt:
         _configure(api, stt.base_url, auto_refine=False)

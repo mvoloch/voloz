@@ -91,6 +91,9 @@ async def create_capture_endpoint(
         # shortcut's text; refining it would rewrite the saved text.
         auto_refine=bool(saved.auto_refine) and capture.llm_model != SNIPPET_LABEL,
         allow_auto_paste=bool(saved.allow_auto_paste),
+        # With a refinement to follow, triggers inside the transcript are
+        # still unexpanded; the app pastes this if that refinement fails.
+        fallback_text=captures_service.unrefined_text(capture.transcript_raw, saved.snippets),
     )
 
 

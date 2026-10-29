@@ -102,6 +102,14 @@ def _snippet_text(
     return None
 
 
+def unrefined_text(transcript: str, snippets: Optional[list[dict]]) -> str:
+    """``transcript`` as delivered without refinement: shortcuts expanded.
+
+    What the app pastes when the refinement that follows a capture fails.
+    """
+    return expand_snippets(transcript, snippets)
+
+
 async def create_capture(
     *,
     audio_bytes: bytes,
