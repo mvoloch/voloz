@@ -327,6 +327,35 @@ async fn probe_binary_version(exe: &std::path::Path, cwd: &std::path::Path) -> O
     }
 }
 
+/// The Windows server is a PyInstaller onefile build: every start unpacks
+/// it to `%TEMP%\_MEI…` (0.24 GB lite, 1.3 GB studio) and a clean exit
+/// deletes that folder. A server ended by the job object (`server_job.rs`)
+/// or by a crash leaves it behind; on 2026-10-29 one PC had 7.2 GB of them.
+/// The server gets its own TEMP inside the app's local data folder, and
+/// whatever is left there is removed before the next start — only that
+/// folder, never the user's TEMP. Called only once no server is running on
+/// our port (a "Keep server running" server is reused before this point),
+/// so nothing in it is in use.
+#[cfg(windows)]
+fn prepare_server_temp_dir(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let dir = app.path().app_local_data_dir().ok()?.join("server-temp");
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let removed = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            if let Err(e) = removed {
+                eprintln!("Could not remove leftover server file {:?}: {}", path, e);
+            }
+        }
+    }
+    std::fs::create_dir_all(&dir).ok()?;
+    Some(dir)
+}
+
 #[command]
 async fn start_server(
     app: tauri::AppHandle,
@@ -618,6 +647,13 @@ async fn start_server(
     };
 
     println!("Sidecar command created successfully");
+
+    // Windows: the onefile server unpacks into a TEMP of its own, emptied
+    // before each start (see `prepare_server_temp_dir`).
+    #[cfg(windows)]
+    if let Some(dir) = prepare_server_temp_dir(&app) {
+        sidecar = sidecar.env("TMP", &dir).env("TEMP", &dir);
+    }
 
     // Build common args
     let data_dir_str = data_dir
