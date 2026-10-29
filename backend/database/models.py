@@ -232,6 +232,12 @@ class CaptureSettings(Base):
     custom_stt_endpoint = Column(String, nullable=True)
     custom_stt_model = Column(String, nullable=True)
     custom_stt_api_key = Column(String, nullable=True)
+    # Names and jargon the STT model mishears. ``vocabulary`` is a list of
+    # spellings ("Voloz") sent as the Whisper prompt and to refinement;
+    # ``replacements`` is a list of ``{"from": "Valois", "to": "Voloz"}``
+    # rules applied to the raw transcript. See ``services/vocabulary.py``.
+    vocabulary = Column(JSON, nullable=False, default=list)
+    replacements = Column(JSON, nullable=False, default=list)
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

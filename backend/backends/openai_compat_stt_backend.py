@@ -133,13 +133,17 @@ class OpenAICompatSTTBackend:
         audio_path: str,
         language: Optional[str] = None,
         model_size: Optional[str] = None,  # noqa: ARG002 — kept for protocol parity
+        prompt: Optional[str] = None,
     ) -> str:
         """Upload one audio file and return the transcript text.
 
         Mirrors ``STTBackend.transcribe`` so the capture and transcription
         services can swap between local Whisper and a remote endpoint
         transparently. ``model_size`` is ignored: the remote model is
-        pinned at construction time.
+        pinned at construction time. ``prompt`` is sent as Whisper's
+        ``prompt`` field — text that biases decoding toward the names and
+        spellings it contains (Groq and OpenAI honour it; the caller keeps
+        it under Whisper's 224-token limit).
 
         Raises:
             RuntimeError: The remote returned a non-2xx status, could not be
@@ -153,6 +157,8 @@ class OpenAICompatSTTBackend:
         data = {"model": self.model, "response_format": "json"}
         if language:
             data["language"] = language
+        if prompt:
+            data["prompt"] = prompt
         headers = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"

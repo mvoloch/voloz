@@ -45,6 +45,8 @@ import type {
   CaptureReadinessResponse,
   CaptureRefineRequest,
   CaptureRetranscribeRequest,
+  CaptureTranscriptUpdate,
+  CaptureTranscriptUpdateResponse,
   CaptureSettings,
   CaptureSettingsUpdate,
   CaptureSource,
@@ -478,6 +480,16 @@ class ApiClient {
   ): Promise<CaptureResponse> {
     return this.request<CaptureResponse>(`/captures/${captureId}/refine`, {
       method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  async updateCaptureTranscript(
+    captureId: string,
+    body: CaptureTranscriptUpdate,
+  ): Promise<CaptureTranscriptUpdateResponse> {
+    return this.request<CaptureTranscriptUpdateResponse>(`/captures/${captureId}/transcript`, {
+      method: 'PUT',
       body: JSON.stringify(body),
     });
   }

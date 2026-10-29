@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-28 (0.8.2: dictation fixes from testing 0.8.1). Update this file whenever state or decisions change._
+_Last updated: 2026-10-29 (vocabulary and learning from corrections on `feat/vocabulary`). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -124,13 +124,25 @@ keep-alive). Still to confirm in an installed build.
    identifier is a separate install and data dir: uninstall Voicebox 0.6.x
    first (both use port 17493) and reconfigure endpoints/keys
    (`scripts/cloud-dictation/configure-voicebox.ps1`).
-2. Lite edition — built on `feat/lite-edition` (not merged, not built for
-   Windows yet). See "Lite edition" below. Still to do: a first Windows build
-   (`release-lite.yml`), the owner's call on identity and update channel,
-   then merge into `wisprclone`.
-3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Still to do: a
-   vocabulary/prompt setting for names and jargon (Whisper `prompt`; Groq
-   honours it, OpenRouter ignored it).
+2. Lite edition — `feat/lite-edition`, merged into the `light` integration
+   branch (2026-10-29) with autostart, the refinement fix and vocabulary.
+   First Windows build `lite-v0.8.2` (CI run 40851319053) installed and
+   dictating on the owner's PC. New dictation features land on `light`
+   first. Still to do: the owner's call on identity and update channel.
+3. STT: ~~Groq direct~~ (done 2026-10-28, see Decisions). Vocabulary
+   phase 1 is on `feat/vocabulary` (`32f35cb` backend, `31a4dc8` app), merged
+   into `light`: Settings → Dictation → Vocabulary holds words/names and
+   "heard as → write as" rules. Words go to a remote STT endpoint as the
+   Whisper `prompt` and to refinement; rules run on the raw transcript
+   right after STT (so they also cover OpenRouter, which ignored the prompt,
+   and refinement off). The capture transcript is editable; saving a
+   correction offers "Learn: Valois → Voloz?". Local Whisper gets no prompt
+   yet (`services/transcribe.py`). Measured on Groq, 30 s Portuguese
+   dictation, 3 runs each: no prompt "Valois" 3/3; prompt "Voloz" "Voloz"
+   3/3; prompt "Voloz, Log-In, Pascoal" "Voloz" 3/3. On 3 s of silence
+   the prompt "Voloz" came back as the transcript 3/3, so a transcript that
+   is only the prompt is dropped; other silence hallucinations ("E aí",
+   "Legenda por …") remain, as before.
 4. Streaming STT + incremental refinement to approach Wispr's ~0.7 s.
 5. Linux build and test on GB4; then Android.
 6. Studio: cloud TTS/cloning engine (ElevenLabs/Cartesia/Fish Audio).

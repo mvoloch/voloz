@@ -51,7 +51,10 @@
       "refined": "Refined",
       "raw": "Raw",
       "refinedHint": "Refined with {{model}}",
-      "rawHint": "Transcribed with Whisper {{model}}"
+      "rawHint": "Transcribed with Whisper {{model}}",
+      "editedHint": "Edited by you",
+      "editLabel": "Transcript (editable)",
+      "unsaved": "Unsaved changes"
     },
     "actions": {
       "configure": "Configure",
@@ -73,7 +76,9 @@
       "playAsGenerating": "Generating…",
       "playAsStop": "Stop · {{name}}",
       "playAsStopFallback": "Stop · Voice",
-      "playAsDropdownLabel": "Play transcript as"
+      "playAsDropdownLabel": "Play transcript as",
+      "saveEdit": "Save",
+      "discardEdit": "Discard"
     },
     "empty": {
       "noMatches": "No captures match \"{{query}}\"",
@@ -105,7 +110,10 @@
       "shortcutNotArmedDescription_one": "{{names}} still needs to download. Open the Captures tab to start.",
       "shortcutNotArmedDescription_other": "{{names}} still need to download. Open the Captures tab to start.",
       "shortcutNotArmedDescriptionLite_one": "{{names}} is not set yet. Set it up below.",
-      "shortcutNotArmedDescriptionLite_other": "{{names}} are not set yet. Set them up below."
+      "shortcutNotArmedDescriptionLite_other": "{{names}} are not set yet. Set them up below.",
+      "transcriptSaved": "Transcript saved",
+      "transcriptSaveFailed": "Couldn't save the transcript",
+      "learned": "Learned: {{from}} → {{to}}"
     },
     "pill": {
       "recording": "Recording",
@@ -184,6 +192,12 @@
         "rechecking": "Checking…",
         "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voloz after toggling the permission."
       }
+    },
+    "learn": {
+      "description": "Future transcripts will make this correction, and the new spelling joins your vocabulary.",
+      "rule": "Learn: {{from}} → {{to}}?",
+      "confirm": "Learn",
+      "dismiss": "Dismiss"
     }
   },
   "voicesTab": {
@@ -1014,6 +1028,27 @@
         "archive": {
           "title": "Archive audio",
           "description": "Keep the original recording alongside every transcript."
+        }
+      },
+      "vocabulary": {
+        "title": "Vocabulary",
+        "description": "Names and terms transcription gets wrong. Applies to every dictation.",
+        "terms": {
+          "title": "Words and names",
+          "description": "Spelled exactly as written here. Sent as a hint to a custom transcription endpoint and to refinement.",
+          "placeholder": "Voloz, Pascoal, Log-In",
+          "add": "Add",
+          "empty": "No words yet.",
+          "remove": "Remove {{term}}"
+        },
+        "replacements": {
+          "title": "Replacements",
+          "description": "Fixes a word or phrase transcription keeps mishearing, right after transcription and even with refinement off. Matches whole words in any case.",
+          "fromPlaceholder": "Heard as (e.g. Valois)",
+          "toPlaceholder": "Write as (e.g. Voloz)",
+          "add": "Add",
+          "empty": "No replacements yet. Correct a transcript in Captures to learn one.",
+          "remove": "Remove {{from}} → {{to}}"
         }
       },
       "refinement": {
