@@ -915,6 +915,8 @@ export function CapturesTab() {
               <span className="text-xs text-muted-foreground">
                 {showRefined && selected.transcript_refined && selected.llm_model === 'manual'
                   ? t('captures.transcript.editedHint')
+                  : showRefined && selected.transcript_refined && selected.llm_model === 'snippet'
+                  ? t('captures.transcript.snippetHint')
                   : showRefined && selected.transcript_refined
                   ? t('captures.transcript.refinedHint', {
                       // Local refinement stores only the size ("0.6B").

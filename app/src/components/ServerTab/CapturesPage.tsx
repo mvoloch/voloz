@@ -36,6 +36,7 @@ import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/ut
 import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
 import { CustomSttEndpointRow } from './CustomSttEndpointRow';
 import { SettingRow, SettingSection } from './SettingRow';
+import { SnippetsSection } from './SnippetsSection';
 import { VocabularySection } from './VocabularySection';
 
 function ChordPreview({ keys }: { keys: string[] }) {
@@ -444,6 +445,8 @@ export function CapturesPage() {
       </SettingSection>
 
       <VocabularySection settings={settings} update={update} />
+
+      <SnippetsSection settings={settings} update={update} />
 
       <SettingSection
         title={t('settings.captures.refinement.title')}

@@ -14,6 +14,7 @@ from ..services import captures as captures_service
 from ..services import settings as settings_service
 from ..services import warmup as warmup_service
 from ..services.refinement import RefinementFlags
+from ..services.snippets import SNIPPET_LABEL
 from ..services.task_queue import create_background_task
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,8 @@ async def create_capture_endpoint(
             db=db,
             vocabulary=saved.vocabulary,
             replacements=saved.replacements,
+            snippets=saved.snippets,
+            refine_follows=bool(saved.auto_refine),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -66,7 +69,9 @@ async def create_capture_endpoint(
 
     return models.CaptureCreateResponse(
         **capture.model_dump(),
-        auto_refine=bool(saved.auto_refine),
+        # A dictation that was only a shortcut trigger already holds the
+        # shortcut's text; refining it would rewrite the saved text.
+        auto_refine=bool(saved.auto_refine) and capture.llm_model != SNIPPET_LABEL,
         allow_auto_paste=bool(saved.allow_auto_paste),
     )
 
@@ -149,6 +154,7 @@ async def refine_capture_endpoint(
             model_size=resolved_model,
             db=db,
             vocabulary=saved.vocabulary,
+            snippets=saved.snippets,
         )
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)
@@ -304,6 +310,7 @@ async def retranscribe_capture_endpoint(
             db=db,
             vocabulary=saved.vocabulary,
             replacements=saved.replacements,
+            snippets=saved.snippets,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=410, detail=str(e))

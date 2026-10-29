@@ -238,6 +238,10 @@ class CaptureSettings(Base):
     # rules applied to the raw transcript. See ``services/vocabulary.py``.
     vocabulary = Column(JSON, nullable=False, default=list)
     replacements = Column(JSON, nullable=False, default=list)
+    # Text shortcuts: ``{"trigger": "meu endereço", "text": "Rua ..."}``. A
+    # dictation that is only the trigger pastes the text; a trigger inside a
+    # longer one is expanded in place. See ``services/snippets.py``.
+    snippets = Column(JSON, nullable=False, default=list)
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

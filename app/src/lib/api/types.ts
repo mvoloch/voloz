@@ -220,6 +220,16 @@ export interface ReplacementRule {
   to: string;
 }
 
+/**
+ * A spoken shortcut: a dictation that is only ``trigger`` pastes ``text``
+ * verbatim; a trigger inside a longer dictation is expanded in place.
+ * Matching ignores case, accents and punctuation.
+ */
+export interface Snippet {
+  trigger: string;
+  text: string;
+}
+
 export interface CaptureRetranscribeRequest {
   model?: WhisperModelSize;
   language?: LanguageCode;
@@ -276,6 +286,8 @@ export interface CaptureSettings {
   vocabulary: string[];
   /** Applied to the raw transcript right after transcription. A write replaces the whole list. */
   replacements: ReplacementRule[];
+  /** Text shortcuts. A write replaces the whole list. */
+  snippets: Snippet[];
 }
 
 export type CaptureSettingsUpdate = Partial<

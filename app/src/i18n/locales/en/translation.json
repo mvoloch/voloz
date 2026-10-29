@@ -53,6 +53,7 @@
       "refinedHint": "Refined with {{model}}",
       "rawHint": "Transcribed with Whisper {{model}}",
       "editedHint": "Edited by you",
+      "snippetHint": "Text shortcut",
       "editLabel": "Transcript (editable)",
       "unsaved": "Unsaved changes"
     },
@@ -1050,6 +1051,20 @@
           "empty": "No replacements yet. Correct a transcript in Captures to learn one.",
           "remove": "Remove {{from}} → {{to}}"
         }
+      },
+      "snippets": {
+        "title": "Text shortcuts",
+        "description": "Say a short phrase and get saved text: an address, a signature, a link. A dictation that is only the phrase pastes the text as is; inside a longer dictation the phrase is replaced after refinement. Case, accents and punctuation don't matter.",
+        "triggerLabel": "When I say",
+        "triggerPlaceholder": "When I say… (e.g. my address)",
+        "textLabel": "Paste this text",
+        "textPlaceholder": "Paste this text (can have several lines)",
+        "add": "Add",
+        "save": "Save",
+        "edit": "Edit “{{trigger}}”",
+        "remove": "Remove “{{trigger}}”",
+        "empty": "No shortcuts yet.",
+        "replaces": "Replaces the shortcut with the same phrase."
       },
       "refinement": {
         "title": "Refinement",

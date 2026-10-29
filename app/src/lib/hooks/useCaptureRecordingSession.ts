@@ -263,13 +263,12 @@ export function useCaptureRecordingSession(
         refineMutation.mutate({ captureId: capture.id, auto: { capture, context } });
       } else {
         if (pillStateRef.current === 'transcribing') scheduleHidePill();
-        if (capture.transcript_raw) {
-          onFinalTextRef.current?.(
-            capture.transcript_raw,
-            capture,
-            capture.allow_auto_paste,
-            context,
-          );
+        // Without a refine the server may still have produced the final
+        // text: a dictation that was only a shortcut trigger comes back
+        // with the shortcut's text as ``transcript_refined``.
+        const finalText = capture.transcript_refined ?? capture.transcript_raw;
+        if (finalText) {
+          onFinalTextRef.current?.(finalText, capture, capture.allow_auto_paste, context);
         }
       }
     },

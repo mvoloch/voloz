@@ -53,6 +53,7 @@
       "refinedHint": "Refinada com {{model}}",
       "rawHint": "Transcrita com Whisper {{model}}",
       "editedHint": "Editada por você",
+      "snippetHint": "Atalho de texto",
       "editLabel": "Transcrição (editável)",
       "unsaved": "Alterações não salvas"
     },
@@ -1049,6 +1050,20 @@
           "empty": "Nenhuma substituição ainda. Corrija uma transcrição em Capturas para aprender uma.",
           "remove": "Remover {{from}} → {{to}}"
         }
+      },
+      "snippets": {
+        "title": "Atalhos de texto",
+        "description": "Diga uma frase curta e receba um texto salvo: um endereço, uma assinatura, um link. Um ditado que é só a frase cola o texto como está; dentro de um ditado mais longo a frase é trocada depois do refinamento. Maiúsculas, acentos e pontuação não importam.",
+        "triggerLabel": "Quando eu disser",
+        "triggerPlaceholder": "Quando eu disser… (ex.: meu endereço)",
+        "textLabel": "Colar este texto",
+        "textPlaceholder": "Colar este texto (pode ter várias linhas)",
+        "add": "Adicionar",
+        "save": "Salvar",
+        "edit": "Editar “{{trigger}}”",
+        "remove": "Remover “{{trigger}}”",
+        "empty": "Nenhum atalho ainda.",
+        "replaces": "Substitui o atalho com a mesma frase."
       },
       "refinement": {
         "title": "Refinamento",
