@@ -29,9 +29,15 @@ async def create_capture_endpoint(
     source: str = Form("file"),
     language: str | None = Form(None),
     stt_model: str | None = Form(None),
+    target_app: str | None = Form(None),
+    target_title: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
-    """Upload audio, run STT, persist the capture."""
+    """Upload audio, run STT, persist the capture.
+
+    ``target_app`` / ``target_title`` identify the app the dictation is for
+    (exe name or bundle id, window title); refinement adapts its style.
+    """
     chunks = []
     while chunk := await file.read(UPLOAD_CHUNK_SIZE):
         chunks.append(chunk)
@@ -57,6 +63,8 @@ async def create_capture_endpoint(
             db=db,
             vocabulary=saved.vocabulary,
             replacements=saved.replacements,
+            target_app=target_app,
+            target_title=target_title,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -149,9 +157,57 @@ async def refine_capture_endpoint(
             model_size=resolved_model,
             db=db,
             vocabulary=saved.vocabulary,
+            adapt_to_app=bool(saved.adapt_to_app),
         )
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if not capture:
+        raise HTTPException(status_code=404, detail="Capture not found")
+    return capture
+
+
+# Shown in the dictate pill when a voice command has no model to run on.
+NO_LLM_FOR_COMMAND = (
+    "Voice commands need a language model. Set the refinement endpoint in "
+    "Settings → Dictation."
+)
+
+
+@router.post("/captures/{capture_id}/command", response_model=models.CaptureResponse)
+async def capture_command_endpoint(
+    capture_id: str,
+    request: models.CaptureCommandRequest,
+    db: Session = Depends(get_db),
+):
+    """Apply a voice command to the selected text, or draft text from it.
+
+    The capture's transcript is the spoken instruction; ``selection`` is the
+    text selected in the target app (empty drafts new text). The result is
+    stored as the capture's refined text and returned for pasting.
+    """
+    saved = settings_service.get_capture_settings(db)
+    llm_cfg = next(
+        (c for c in get_llm_model_configs() if c.model_size == saved.llm_model),
+        None,
+    )
+    if llm_cfg is None or not _llm_readiness(saved, llm_cfg).ready:
+        raise HTTPException(status_code=409, detail=NO_LLM_FOR_COMMAND)
+
+    try:
+        capture = await captures_service.run_capture_command(
+            capture_id=capture_id,
+            selection=request.selection,
+            db=db,
+            instruction=request.instruction,
+            model_size=saved.llm_model,
+            adapt_to_app=bool(saved.adapt_to_app),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Voice command failed for capture %s", capture_id)
         raise HTTPException(status_code=500, detail=str(e))
 
     if not capture:

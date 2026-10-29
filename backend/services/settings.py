@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..database import CaptureSettings as DBCaptureSettings
 from ..database import GenerationSettings as DBGenerationSettings
 from ..utils.capture_chords import (
+    default_command_chord,
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
@@ -36,6 +37,7 @@ def _get_or_create_capture_row(db: Session) -> DBCaptureSettings:
             id=SINGLETON_ID,
             chord_push_to_talk_keys=default_push_to_talk_chord(),
             chord_toggle_to_talk_keys=default_toggle_to_talk_chord(),
+            chord_command_keys=default_command_chord(),
         )
         db.add(row)
         db.commit()

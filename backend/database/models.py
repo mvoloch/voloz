@@ -1,12 +1,14 @@
 """ORM model definitions for the voicebox SQLite database."""
 
 from datetime import UTC, datetime
+import json
 import uuid
 
 from sqlalchemy import Column, String, Integer, Float, DateTime, Text, ForeignKey, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 
 from ..utils.capture_chords import (
+    default_command_chord,
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
@@ -218,6 +220,17 @@ class CaptureSettings(Base):
     chord_toggle_to_talk_keys = Column(
         JSON, nullable=False, default=default_toggle_to_talk_chord
     )
+    # Held to speak an instruction applied to the selected text (voice command).
+    # Server defaults match what the migration adds to older databases.
+    chord_command_keys = Column(
+        JSON,
+        nullable=False,
+        default=default_command_chord,
+        server_default=json.dumps(default_command_chord()),
+    )
+    # Format refinement for the app the text is pasted into (email, chat,
+    # code editor); see ``services/app_context.py``.
+    adapt_to_app = Column(Boolean, nullable=False, default=True, server_default='1')
     # Optional OpenAI-compatible endpoint that overrides the built-in Qwen3
     # LLM for refinement / personality rewriting. When ``custom_llm_endpoint``
     # is set, the backend layer delegates every LLM call to this URL instead
@@ -312,7 +325,7 @@ class Capture(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     audio_path = Column(String, nullable=False)
-    source = Column(String, nullable=False, default="file")  # dictation | recording | file
+    source = Column(String, nullable=False, default="file")  # dictation | recording | file | command
     language = Column(String, nullable=True)
     duration_ms = Column(Integer, nullable=True)
     transcript_raw = Column(Text, nullable=False, default="")
@@ -320,4 +333,8 @@ class Capture(Base):
     stt_model = Column(String, nullable=True)
     llm_model = Column(String, nullable=True)
     refinement_flags = Column(Text, nullable=True)  # JSON blob
+    # App that had focus when the dictation started: exe name on Windows
+    # ("outlook.exe"), bundle id on macOS, plus its window title.
+    target_app = Column(String, nullable=True)
+    target_title = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC), index=True)

@@ -8,6 +8,7 @@ from datetime import datetime
 
 from .services.vocabulary import normalize_replacements, normalize_vocabulary
 from .utils.capture_chords import (
+    default_command_chord,
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
@@ -204,6 +205,8 @@ class CaptureResponse(BaseModel):
     stt_model: Optional[str] = None
     llm_model: Optional[str] = None
     refinement_flags: Optional[RefinementFlagsModel] = None
+    target_app: Optional[str] = None
+    target_title: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -237,6 +240,18 @@ class CaptureRefineRequest(BaseModel):
 
     flags: Optional[RefinementFlagsModel] = None
     model_size: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")
+
+
+class CaptureCommandRequest(BaseModel):
+    """Run a voice-command capture: its transcript is the instruction.
+
+    ``selection`` is the text selected in the target app (empty drafts new
+    text from the instruction); ``instruction`` replaces the transcript,
+    e.g. after the user corrected it.
+    """
+
+    selection: str = Field(default="", max_length=50_000)
+    instruction: Optional[str] = Field(default=None, max_length=10_000)
 
 
 class CaptureTranscriptUpdate(BaseModel):
@@ -286,6 +301,8 @@ class CaptureSettingsResponse(BaseModel):
     chord_toggle_to_talk_keys: List[str] = Field(
         default_factory=default_toggle_to_talk_chord
     )
+    chord_command_keys: List[str] = Field(default_factory=default_command_chord)
+    adapt_to_app: bool = True
     custom_llm_endpoint: Optional[str] = None
     custom_llm_model: Optional[str] = None
     # Provider credential — write-only. The response reports whether one is
@@ -349,6 +366,8 @@ class CaptureSettingsUpdate(BaseModel):
     hotkey_enabled: Optional[bool] = None
     chord_push_to_talk_keys: Optional[List[str]] = Field(default=None, min_length=1, max_length=6)
     chord_toggle_to_talk_keys: Optional[List[str]] = Field(default=None, min_length=1, max_length=6)
+    chord_command_keys: Optional[List[str]] = Field(default=None, min_length=1, max_length=6)
+    adapt_to_app: Optional[bool] = None
     custom_llm_endpoint: Optional[str] = None
     custom_llm_model: Optional[str] = None
     custom_llm_api_key: Optional[str] = None

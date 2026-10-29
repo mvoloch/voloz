@@ -21,14 +21,21 @@ from .. import config
 from ..database import Capture as DBCapture
 from ..models import CaptureResponse, CaptureTranscriptUpdateResponse, RefinementFlagsModel
 from ..utils.audio import load_audio
+from .app_context import style_for_app
 from .refinement import RefinementFlags, refine_transcript
 from .transcribe import get_whisper_model, resolve_stt_model, transcribe_with_vocabulary
 from .vocabulary import apply_replacements, normalize_replacements, suggest_replacements
+from .voice_commands import run_command
 
 logger = logging.getLogger(__name__)
 
 
-VALID_SOURCES = {"dictation", "recording", "file"}
+# "command": a spoken instruction applied to the text selected in the target
+# app (see ``services/voice_commands.py``); its result is the refined text.
+VALID_SOURCES = {"dictation", "recording", "file", "command"}
+# The window title only matters for telling web apps apart in a browser;
+# a long one is cut rather than stored whole.
+MAX_TARGET_TITLE_CHARS = 200
 # Suffixes whisper's miniaudio loader can read directly. Anything outside
 # this set has to go through librosa for decode + a soundfile transcode
 # before whisper sees it.
@@ -54,8 +61,22 @@ def _to_response(row: DBCapture) -> CaptureResponse:
         stt_model=row.stt_model,
         llm_model=row.llm_model,
         refinement_flags=flags_model,
+        target_app=row.target_app,
+        target_title=row.target_title,
         created_at=row.created_at,
     )
+
+
+def _clean_target(value: Optional[str], limit: int) -> Optional[str]:
+    value = (value or "").strip()
+    return value[:limit] or None
+
+
+def app_style(row: DBCapture, adapt_to_app: bool) -> Optional[str]:
+    """The target app's writing style for ``row``; ``None`` when off or unknown."""
+    if not adapt_to_app:
+        return None
+    return style_for_app(row.target_app, row.target_title)
 
 
 async def create_capture(
@@ -68,11 +89,15 @@ async def create_capture(
     db: Session,
     vocabulary: Optional[list[str]] = None,
     replacements: Optional[list[dict]] = None,
+    target_app: Optional[str] = None,
+    target_title: Optional[str] = None,
 ) -> CaptureResponse:
     """Persist raw audio, run STT, store the row.
 
     ``vocabulary`` biases a remote STT endpoint; ``replacements`` are
     applied to its output before it is stored as ``transcript_raw``.
+    ``target_app`` / ``target_title`` name the app the text is for; they
+    pick its writing style when the capture is refined.
     """
     if source not in VALID_SOURCES:
         raise ValueError(f"Invalid source '{source}'. Must be one of {sorted(VALID_SOURCES)}")
@@ -139,6 +164,8 @@ async def create_capture(
             duration_ms=duration_ms,
             transcript_raw=transcript,
             stt_model=resolved_stt,
+            target_app=_clean_target(target_app, 255),
+            target_title=_clean_target(target_title, MAX_TARGET_TITLE_CHARS),
         )
         db.add(row)
         db.commit()
@@ -197,6 +224,7 @@ async def refine_capture(
     model_size: Optional[str],
     db: Session,
     vocabulary: Optional[list[str]] = None,
+    adapt_to_app: bool = False,
 ) -> Optional[CaptureResponse]:
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
@@ -207,11 +235,50 @@ async def refine_capture(
         flags,
         model_size=model_size,
         vocabulary=vocabulary,
+        app_style=app_style(row, adapt_to_app),
     )
 
     row.transcript_refined = refined
     row.llm_model = llm_size
     row.refinement_flags = json.dumps(flags.to_dict())
+    db.commit()
+    db.refresh(row)
+    return _to_response(row)
+
+
+async def run_capture_command(
+    capture_id: str,
+    selection: str,
+    db: Session,
+    instruction: Optional[str] = None,
+    model_size: Optional[str] = None,
+    adapt_to_app: bool = False,
+) -> Optional[CaptureResponse]:
+    """Apply a command capture's instruction to ``selection``; store the result.
+
+    The instruction is the capture's transcript unless ``instruction`` is
+    given. The result becomes the refined text, so history shows the
+    instruction and what it produced side by side.
+
+    Raises:
+        ValueError: The instruction is empty.
+    """
+    row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
+    if not row:
+        return None
+
+    if instruction is None:
+        instruction = row.transcript_raw or ""
+    text, llm_size = await run_command(
+        instruction,
+        selection,
+        app_style=app_style(row, adapt_to_app),
+        model_size=model_size,
+    )
+
+    row.transcript_refined = text
+    row.llm_model = llm_size
+    row.refinement_flags = None
     db.commit()
     db.refresh(row)
     return _to_response(row)

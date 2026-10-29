@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from . import llm as llm_service
+from .app_context import finish_for_style, style_instruction
 
 
 # A run that repeats this many times gets collapsed before the LLM sees
@@ -192,12 +193,15 @@ When a word in the transcript is clearly a mis-hearing of one of these terms, wr
 def build_refinement_prompt(
     flags: RefinementFlags,
     vocabulary: Optional[Iterable[str]] = None,
+    app_style: Optional[str] = None,
 ) -> str:
     """Assemble the system prompt for a given flag combination.
 
     A non-empty ``vocabulary`` adds a section with the user's spellings,
-    unless every toggle is off (the pass-through prompt must stay a
-    pass-through; replacement rules still run before refinement).
+    and ``app_style`` (see ``services/app_context.py``) one on the format
+    the target app expects — both unless every toggle is off (the
+    pass-through prompt must stay a pass-through; replacement rules still
+    run before refinement).
     """
     sections = [_BASE_INSTRUCTIONS]
 
@@ -216,6 +220,9 @@ def build_refinement_prompt(
         terms = [t.strip() for t in vocabulary or [] if t and t.strip()]
         if terms:
             sections.append(_VOCABULARY.format(terms=", ".join(terms)))
+        style = style_instruction(app_style)
+        if style:
+            sections.append(style)
 
     return "\n\n".join(sections)
 
@@ -322,11 +329,12 @@ async def refine_transcript(
     flags: RefinementFlags,
     model_size: str | None = None,
     vocabulary: Optional[Iterable[str]] = None,
+    app_style: Optional[str] = None,
 ) -> tuple[str, str]:
     """Run the transcript through the LLM with the built system prompt.
 
-    ``vocabulary`` is the user's list of spellings for names and jargon;
-    see :func:`build_refinement_prompt`.
+    ``vocabulary`` is the user's list of spellings for names and jargon and
+    ``app_style`` the target app's style; see :func:`build_refinement_prompt`.
 
     Returns:
         (refined_text, llm_model_size) — so callers can persist which model
@@ -343,7 +351,7 @@ async def refine_transcript(
         # and a local model would make something up, so there is nothing to do.
         return "", resolved_size
 
-    system_prompt = build_refinement_prompt(flags, vocabulary)
+    system_prompt = build_refinement_prompt(flags, vocabulary, app_style)
     examples = REFINEMENT_EXAMPLES
     tagged = _wants_tagged_output(backend)
     if tagged:
@@ -364,4 +372,4 @@ async def refine_transcript(
     )
     if tagged:
         text = extract_tagged_transcript(text)
-    return text.strip(), resolved_size
+    return finish_for_style(text.strip(), app_style), resolved_size
