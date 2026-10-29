@@ -5,12 +5,11 @@ import os
 import signal
 from pathlib import Path
 
-import torch
 from fastapi import APIRouter, Depends
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from .. import config, models
+from .. import config, edition, models
 from ..services import tts
 from ..database import get_db
 from ..utils.platform_detect import get_backend_type, is_amd_rocm_capable
@@ -56,6 +55,24 @@ async def watchdog_disable():
 @router.get("/health", response_model=models.HealthResponse)
 async def health():
     """Health check endpoint."""
+    if edition.is_lite():
+        # No local models and no GPU work: dictation goes to cloud endpoints.
+        return models.HealthResponse(
+            status="healthy",
+            model_loaded=False,
+            model_downloaded=None,
+            model_size=None,
+            gpu_available=False,
+            gpu_type=None,
+            vram_used_mb=None,
+            backend_type=get_backend_type(),
+            backend_variant="cpu",
+            supports_rocm=False,
+            gpu_compatibility_warning=None,
+            cloud_enabled=config.is_cloud_enabled(),
+        )
+
+    import torch
     from huggingface_hub import constants as hf_constants
     from pathlib import Path
 

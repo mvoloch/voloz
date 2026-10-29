@@ -2,11 +2,15 @@
 Voice prompt caching utilities.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
-import torch
 from pathlib import Path
-from typing import Optional, Union, Dict, Any
+from typing import TYPE_CHECKING, Optional, Union, Dict, Any
+
+if TYPE_CHECKING:
+    import torch
 
 from .. import config
 
@@ -64,6 +68,8 @@ def get_cached_voice_prompt(
     cache_file = _get_cache_dir() / f"{cache_key}.prompt"
     if cache_file.exists():
         try:
+            import torch
+
             prompt = torch.load(cache_file, weights_only=True)
             _memory_cache[cache_key] = prompt
             return prompt
@@ -89,6 +95,8 @@ def cache_voice_prompt(
     _memory_cache[cache_key] = voice_prompt
 
     # Store on disk (torch.save can handle both dicts and tensors)
+    import torch
+
     cache_file = _get_cache_dir() / f"{cache_key}.prompt"
     torch.save(voice_prompt, cache_file)
 

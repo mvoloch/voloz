@@ -5,6 +5,12 @@ from fastapi import FastAPI
 
 def register_routers(app: FastAPI) -> None:
     """Include all domain routers on the application."""
+    from .. import edition
+
+    if edition.is_lite():
+        _register_lite_routers(app)
+        return
+
     from .health import router as health_router
     from .profiles import router as profiles_router
     from .channels import router as channels_router
@@ -48,3 +54,25 @@ def register_routers(app: FastAPI) -> None:
     app.include_router(events_router)
     app.include_router(cloud_router)
     app.include_router(openai_compat_router)
+
+
+def _register_lite_routers(app: FastAPI) -> None:
+    """Dictation only: captures, settings, cloud transcription/refinement.
+
+    Voice profiles, generation, stories, effects, local model management,
+    GPU backends, MCP and the Voicebox Cloud login belong to the studio
+    edition and are not served.
+    """
+    from .health import router as health_router
+    from .transcription import router as transcription_router
+    from .llm import router as llm_router
+    from .captures import router as captures_router
+    from .settings import router as settings_router
+    from .tasks import router as tasks_router
+
+    app.include_router(health_router)
+    app.include_router(transcription_router)
+    app.include_router(llm_router)
+    app.include_router(captures_router)
+    app.include_router(settings_router)
+    app.include_router(tasks_router)

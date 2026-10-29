@@ -4,6 +4,7 @@ PyInstaller build script for creating standalone Python server binary.
 Usage:
     python build_binary.py           # Build default (CPU) server binary
     python build_binary.py --cuda    # Build CUDA-enabled server binary
+    python build_binary.py --lite    # Build the dictation-only server (no torch)
 """
 
 import PyInstaller.__main__
@@ -731,6 +732,100 @@ def build_server(cuda=False, rocm=False):
     logger.info("Binary built in %s", backend_dir / "dist" / binary_name)
 
 
+def build_lite_server():
+    """Build the lite edition server: dictation only, without PyTorch.
+
+    Same entry point and binary name as the CPU build, so the desktop app
+    launches it unchanged; the server sees no torch and runs as the lite
+    edition (``backend/edition.py``). Build it from an environment that has
+    only ``requirements-lite.txt`` installed: the excludes below keep a
+    stray ML package out, they do not make a full environment small.
+    """
+    backend_dir = Path(__file__).parent
+
+    args = [
+        "server.py",
+        # A few dozen MB unpacks in a second or two, unlike the 1.3 GB CPU
+        # build, so a single file is fine here.
+        "--onefile",
+        "--name",
+        "voicebox-server",
+        "--hidden-import",
+        "backend",
+        "--hidden-import",
+        "backend.main",
+        "--hidden-import",
+        "backend.edition",
+        "--hidden-import",
+        "backend.backends.openai_compat_backend",
+        "--hidden-import",
+        "backend.backends.openai_compat_stt_backend",
+        "--hidden-import",
+        "backend.backends.anthropic_backend",
+        "--hidden-import",
+        "anthropic",
+        "--hidden-import",
+        "fastapi",
+        "--hidden-import",
+        "uvicorn",
+        "--hidden-import",
+        "sqlalchemy",
+        # librosa reads lazy_loader .pyi stubs at runtime (see build_server).
+        "--collect-all",
+        "lazy_loader",
+        "--collect-all",
+        "librosa",
+        "--hidden-import",
+        "soundfile",
+        "--copy-metadata",
+        "huggingface-hub",
+        "--copy-metadata",
+        "tqdm",
+    ]
+    if platform.system() == "Windows":
+        args.append("--noconsole")
+
+    for module in (
+        "torch",
+        "torchaudio",
+        "transformers",
+        "accelerate",
+        "qwen_tts",
+        "chatterbox",
+        "zipvoice",
+        "linacodec",
+        "tada",
+        "kokoro",
+        "misaki",
+        "spacy",
+        "pedalboard",
+        "mlx",
+        "mlx_audio",
+        "mlx_lm",
+        "fastmcp",
+        "mcp",
+        "PIL",
+    ):
+        args.extend(["--exclude-module", module])
+
+    dist_dir = str(backend_dir / "dist")
+    build_dir = str(backend_dir / "build")
+    args.extend(
+        [
+            "--distpath",
+            dist_dir,
+            "--workpath",
+            build_dir,
+            "--noconfirm",
+            "--clean",
+        ]
+    )
+
+    os.chdir(backend_dir)
+    PyInstaller.__main__.run(args)
+    logger.info("Lite server built: %s", backend_dir / "dist" / "voicebox-server")
+
+
 def build_shim():
     """Build the voicebox-mcp stdio shim as a tiny standalone binary.
 
@@ -834,6 +929,11 @@ if __name__ == "__main__":
         help="Build ROCm-enabled binary (voicebox-server-rocm) for AMD GPUs",
     )
     parser.add_argument(
+        "--lite",
+        action="store_true",
+        help="Build the dictation-only server without PyTorch (voicebox-server)",
+    )
+    parser.add_argument(
         "--shim",
         action="store_true",
         help="Build the voicebox-mcp stdio shim binary instead of the server",
@@ -841,6 +941,8 @@ if __name__ == "__main__":
     cli_args = parser.parse_args()
     if cli_args.shim:
         build_shim()
+    elif cli_args.lite:
+        build_lite_server()
     else:
         build_server(cuda=cli_args.cuda, rocm=cli_args.rocm)
 
