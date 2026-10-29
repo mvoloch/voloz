@@ -33,6 +33,20 @@ Remotes on GB4: `origin` = mvoloch/voloz, `upstream` = jamiepine/voicebox.
   close-to-tray + single instance + main webview freed when hidden
   (`tauri/src-tauri/src/tray.rs`), pooled STT HTTP connection,
   `scripts/cloud-dictation/`, version 0.6.1.
+- `feat/autostart` — start Voloz at login (cut from `wisprclone` at
+  `d5b0621`, not merged): `tauri-plugin-autostart` 2.5 writes the
+  `HKCU\…\Run` entry with `--autostart`; such a launch keeps the main
+  window hidden (it is now created hidden and shown at the end of setup)
+  while its webview starts the server and arms the hotkey. On by default:
+  enabled once on the first release-build launch (marker
+  `.autostart-default-applied` in the app data dir), never again after the
+  user turns it off; an enabled entry is rewritten on each launch so it
+  follows the exe between the MSI and NSIS install paths. Switch in
+  Settings → General. Type-checked and linted only — **not built or run
+  on Windows yet** (to test: the Run value, hidden start with the tray icon
+  and a working hotkey, the switch round-trip). The plugin writes the path
+  unquoted (`C:\Program Files\Voloz\voloz.exe --autostart`), which
+  Windows resolves but is worth checking on the MSI install.
 - The fork also carries ~75 upstream branches inherited at fork time
   (cleanup pending — ask the owner first).
 

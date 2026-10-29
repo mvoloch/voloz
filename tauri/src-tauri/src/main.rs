@@ -4,6 +4,8 @@
 mod accessibility;
 mod audio_capture;
 mod audio_output;
+#[cfg(desktop)]
+mod autostart;
 mod clipboard;
 mod focus_capture;
 #[cfg(desktop)]
@@ -1600,6 +1602,8 @@ pub fn run() {
             {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
                 app.handle().plugin(tauri_plugin_process::init())?;
+                app.handle().plugin(autostart::plugin())?;
+                autostart::apply_default(app.handle());
 
                 // Resolve the active keyboard layout's V keycode now, on
                 // the main thread, and register an observer for layout
@@ -1676,6 +1680,14 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     allow_microphone(&window);
                 }
+            }
+
+            // The main window is created hidden (tauri.conf.json) so a
+            // launch at login can stay in the tray; any other launch shows
+            // it now that it is set up.
+            #[cfg(desktop)]
+            if !autostart::launched_at_login() {
+                tray::show_main_window(app.handle());
             }
 
             Ok(())

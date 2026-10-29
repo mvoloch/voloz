@@ -3,6 +3,7 @@ import { tauriFilesystem } from './filesystem';
 import { tauriUpdater } from './updater';
 import { tauriAudio } from './audio';
 import { tauriLifecycle } from './lifecycle';
+import { tauriAutostart } from './autostart';
 import { tauriMetadata } from './metadata';
 
 export const tauriPlatform: Platform = {
@@ -10,5 +11,6 @@ export const tauriPlatform: Platform = {
   updater: tauriUpdater,
   audio: tauriAudio,
   lifecycle: tauriLifecycle,
+  autostart: tauriAutostart,
   metadata: tauriMetadata,
 };

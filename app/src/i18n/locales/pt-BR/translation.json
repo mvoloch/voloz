@@ -823,6 +823,10 @@
         "runningDescription": "O servidor continuará rodando ao fechar o app",
         "stoppedDescription": "O servidor será parado ao fechar o app"
       },
+      "autostart": {
+        "title": "Iniciar o Voloz junto com o Windows",
+        "description": "Abre na bandeja, com o servidor e o atalho de ditado prontos."
+      },
       "networkAccess": {
         "title": "Permitir acesso à rede",
         "description": "Torna o servidor acessível a partir de outros dispositivos na sua rede. Reinicie o app após alterar.",
