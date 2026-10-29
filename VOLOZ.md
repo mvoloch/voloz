@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-29 (vocabulary and learning from corrections on `feat/vocabulary`). Update this file whenever state or decisions change._
+_Last updated: 2026-10-29 (text shortcuts, audio retention and lite first-run setup on `feat/shortcuts-privacy-onboarding`). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -284,6 +284,52 @@ Owner decisions pending (the build works either way):
 - Known noise: the desktop's speak monitor subscribes to `/events/speak`,
   which lite doesn't serve (it lives with MCP); it retries with backoff
   capped at 30 s, so one log line every 30 s.
+
+## Shortcuts, audio retention, first-run setup (`feat/shortcuts-privacy-onboarding`, 2026-10-29)
+
+Cut from `light` at `a6d149c`, not merged. All three work in lite.
+
+- **Text shortcuts** (Settings → Dictation → Text shortcuts): "meu
+  endereço" → a saved, possibly multi-line text. A dictation that is only
+  the trigger (case, accents, punctuation and fillers like "é", "hum"
+  ignored) pastes the text verbatim and skips refinement. A trigger inside
+  a longer dictation is expanded *after* refinement, on the LLM's output,
+  so the model never sees the saved text (checked live: a 30 s Portuguese
+  dictation refined by Qwen and by Haiku kept a two-line shortcut
+  byte-for-byte). With refinement off it is expanded in the raw text. On
+  Windows the pill converts line breaks to CRLF before the paste (classic
+  edit controls drop a bare LF); the Rust paste code is unchanged.
+- **Keep dictation audio** (Settings → Dictation → Storage): Always (the
+  default, today's behaviour — the owner decides whether to change it),
+  30 days, 7 days, Never. Applied at server startup, after each capture
+  and when the setting changes (a shorter choice asks first). Text history
+  stays; a capture without audio shows "Audio not kept" and its Export →
+  Audio is disabled. The app has no retranscribe button; the API answers
+  410 for such a capture.
+- **Lite first-run setup**: while neither custom STT nor custom LLM is
+  set, lite opens on "Set up Voloz": paste one free Groq key ("Test and
+  save" checks it with `GET /models`) and transcription and refinement go
+  to Groq (`whisper-large-v3-turbo`, refinement model `GROQ_LLM_MODEL` in
+  `backend/services/quick_setup.py`, now `qwen/qwen3.8-27b` — one constant
+  because the default is still being measured). Recommended, optional: an
+  Anthropic key, which moves refinement to `claude-haiku-5-5` (checked with
+  `GET /v1/models/claude-haiku-5-5`, no tokens); STT stays on Groq. "Set up
+  manually" opens the settings for that session. Never shown in studio.
+- **Rate limits**: a 429 from the LLM no longer surfaces as a 500 with the
+  provider's error body. The pill already pasted the raw transcript when
+  refinement failed (`3353597`); now it says "Refinement skipped (rate
+  limit), raw text pasted". **Groq's free tier also caps tokens per day:
+  200 000 for `qwen/qwen3.8-27b`.** One refinement sends ~1.5 k tokens
+  (prompt + examples + transcript, estimated), so a Groq-only user gets on
+  the order of 100+ refinements a day before every dictation pastes raw.
+  On 2026-10-29 the shared key reached 199 048 of 200 000 during these
+  tests and the parallel model comparison. That is a reason to recommend
+  the Anthropic key, or to pick a Groq model with a larger daily budget.
+- **Pre-existing bug fixed** (`0c50d51`): `config.to_storage_path` matched
+  the first path component named `data`, so a data dir under `/mnt/data`
+  stored unusable capture paths (no playback; retention refused to delete
+  them). Installed apps' default data dirs were not affected; rows already
+  stored that way stay broken.
 
 ## Developing on GB4
 
