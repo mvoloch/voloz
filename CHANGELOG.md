@@ -5,6 +5,20 @@
 
 # Changelog
 
+## [0.8.6] - 2026-10-29
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Changed
+
+- **Lighter and faster:** the Lite server no longer carries the heavy audio libraries (librosa and what it pulls in). On our Linux test machine the server went from 158 MB to 63 MB, its unpacked files from 390 MB to 141 MB and its memory from about 330 MB to 150 MB, and the first dictation right after Voloz starts takes about half a second instead of several seconds.
+- **Imported audio** (m4a, webm, mp3, ogg, flac) is converted to WAV inside the app before it is sent.
+- **At login Voloz starts with no window**, only the tray icon and the pill; the main window opens when you click the tray icon.
+
+### Fixed
+
+- **Clipboard:** after a dictation was pasted, what you had copied before was sometimes not put back when another program (a clipboard tool) touched the clipboard; Ctrl+V then pasted the dictation again. Voloz now restores it in that case, and its temporary text no longer shows up in Windows clipboard history (Win+V).
+
 ## [0.8.5] - 2026-10-29
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
