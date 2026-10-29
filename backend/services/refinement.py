@@ -265,6 +265,32 @@ REFINEMENT_EXAMPLES: list[tuple[str, str]] = [
 ]
 
 
+# Claude occasionally follows the cleaned text with a note about its edits
+# ("\n\nCleaning up: ...") — about 1-2% of calls on a Portuguese sentence
+# with "quer dizer", once 3 in 6 — and that note would be pasted. Remote
+# Claude models get the transcript back inside tags and only the tagged
+# text is kept. Local models keep the plain format their prompt was tuned
+# on; small models are poor at tag discipline.
+_TRANSCRIPT_TAG = "transcript"
+_TAGGED_OUTPUT_INSTRUCTION = (
+    f"Return the cleaned transcript inside <{_TRANSCRIPT_TAG}></{_TRANSCRIPT_TAG}> tags "
+    "and nothing outside them."
+)
+_TAGGED_RE = re.compile(rf"<{_TRANSCRIPT_TAG}>(.*?)</{_TRANSCRIPT_TAG}>", re.DOTALL)
+
+
+def _wants_tagged_output(backend) -> bool:
+    from ..backends.anthropic_backend import AnthropicLLMBackend
+
+    return isinstance(backend, AnthropicLLMBackend)
+
+
+def extract_tagged_transcript(text: str) -> str:
+    """Return the text inside the transcript tags, or ``text`` if there are none."""
+    match = _TAGGED_RE.search(text)
+    return match.group(1).strip() if match else text
+
+
 async def refine_transcript(
     transcript: str,
     flags: RefinementFlags,
@@ -288,12 +314,22 @@ async def refine_transcript(
         return "", resolved_size
 
     system_prompt = build_refinement_prompt(flags)
+    examples = REFINEMENT_EXAMPLES
+    tagged = _wants_tagged_output(backend)
+    if tagged:
+        system_prompt = f"{system_prompt}\n\n{_TAGGED_OUTPUT_INSTRUCTION}"
+        examples = [
+            (user, f"<{_TRANSCRIPT_TAG}>{assistant}</{_TRANSCRIPT_TAG}>")
+            for user, assistant in REFINEMENT_EXAMPLES
+        ]
     text = await backend.generate(
         prompt=cleaned_input,
         system=system_prompt,
         max_tokens=2048,
         temperature=0.2,
         model_size=resolved_size,
-        examples=REFINEMENT_EXAMPLES,
+        examples=examples,
     )
+    if tagged:
+        text = extract_tagged_transcript(text)
     return text.strip(), resolved_size

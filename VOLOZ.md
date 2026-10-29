@@ -184,6 +184,17 @@ pill through CDP `Fetch`. Fixed in `5aa3b5b`, shipped in 0.8.2:
   the mic opening and the re-render was dropped. Now it asks the recorder.
   Not reproduced in 12 timed attempts (30–150 ms), so rare.
 
+Refinement echo (found 2026-10-29, fixed on `fix/refine-single-output`,
+not merged): Claude Haiku sometimes returned the transcript followed by a
+note about its edits ("
+
+Cleaning up: ..."), which would be pasted.
+Measured on one Portuguese sentence with "quer dizer": 3 of 6 calls in one
+window, then 3 of 225. Claude now answers inside `<transcript>` tags and
+only the tagged text is kept (local models unchanged): 0 of 300 calls on
+four sentences. A prompt line forbidding notes made it far worse (139 of
+150), so it was dropped.
+
 Still open: Whisper turns silence into "." / "Gracias." / "...", which is
 pasted; after each paste on the Dell the clipboard kept the transcript
 (the restore was skipped; cause not looked at).
