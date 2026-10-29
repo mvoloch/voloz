@@ -58,6 +58,9 @@ const MIN_RECORDING_DURATION_S = 0.5;
 // 10 min stays under the 25 MB upload limit common to hosted Whisper APIs
 // (~13 min of 16 kHz mono WAV).
 const MAX_RECORDING_DURATION_S = 600;
+// The microphone stopped by itself (device removed, headset switching
+// profile, a recorder error): say so, one line.
+const MIC_STOPPED_NOTICE_MS = 3500;
 const shortRecordingMessage = () => i18n.t('captures.pill.tooShort');
 
 export type CapturePillState = PillState | 'hidden';
@@ -153,6 +156,10 @@ export function useCaptureRecordingSession(
   // Mutation callbacks close over stale pillState otherwise.
   const pillStateRef = useRef<CapturePillState>('hidden');
   pillStateRef.current = pillState;
+  // An upload or refine moving on may repaint the pill, except over a newer
+  // recording or a notice still being read.
+  const mayRepaintPill = () =>
+    pillStateRef.current !== 'recording' && pillStateRef.current !== 'error';
 
   const onCaptureCreatedRef = useRef(options.onCaptureCreated);
   onCaptureCreatedRef.current = options.onCaptureCreated;
@@ -327,13 +334,13 @@ export function useCaptureRecordingSession(
           }
           return;
         }
-        if (pillStateRef.current !== 'recording') setPillState('refining');
+        if (mayRepaintPill()) setPillState('refining');
         commandMutation.mutate({ capture, context });
         return;
       }
       // Nothing heard: skip the refine — there is nothing to polish or paste.
       if (capture.auto_refine && capture.transcript_raw?.trim()) {
-        if (pillStateRef.current !== 'recording') setPillState('refining');
+        if (mayRepaintPill()) setPillState('refining');
         refineMutation.mutate({ captureId: capture.id, auto: { capture, context } });
       } else {
         if (pillStateRef.current === 'transcribing') scheduleHidePill();
@@ -376,16 +383,31 @@ export function useCaptureRecordingSession(
     error: recordError,
   } = useAudioRecording({
     maxDurationSeconds: MAX_RECORDING_DURATION_S,
-    onRecordingComplete: (blob, recordedDuration) => {
+    onRecordingEnded: (_reason, recordedDuration) => {
+      // Leave "Recording" as soon as the recorder stops: the audio still has
+      // to be converted, and the timer must not look like it is running.
+      if (
+        pillStateRef.current === 'recording' &&
+        (recordedDuration ?? 0) >= MIN_RECORDING_DURATION_S
+      ) {
+        setFrozenElapsedMs(Math.round((recordedDuration ?? 0) * 1000));
+        setPillState('transcribing');
+      }
+    },
+    onRecordingComplete: (blob, recordedDuration, reason = 'stopped') => {
       const context = contextRef.current;
       const recordingOptions = recordingOptionsRef.current;
       contextRef.current = undefined;
       recordingOptionsRef.current = {};
+      const stoppedByItself = reason !== 'stopped';
       // Trigger-happy tap — MediaRecorder hasn't emitted a usable chunk yet
       // so the blob is empty or unparseable. Surface it as a transient pill
       // so the user sees their recording was recognised and canceled.
       if (!blob.size || (recordedDuration ?? 0) < MIN_RECORDING_DURATION_S) {
-        showError(shortRecordingMessage(), BRIEF_NOTICE_MS);
+        showError(
+          stoppedByItself ? i18n.t('captures.pill.micStoppedEmpty') : shortRecordingMessage(),
+          stoppedByItself ? MIC_STOPPED_NOTICE_MS : BRIEF_NOTICE_MS,
+        );
         return;
       }
       setFrozenElapsedMs(Math.round((recordedDuration ?? 0) * 1000));
@@ -405,6 +427,11 @@ export function useCaptureRecordingSession(
         targetTitle: recordingOptions.targetTitle,
         context,
       });
+      // Nobody asked it to stop: say why the recording ended early. The
+      // upload goes on underneath and pastes as usual.
+      if (stoppedByItself) {
+        showError(i18n.t('captures.pill.micStopped'), MIC_STOPPED_NOTICE_MS);
+      }
     },
   });
 

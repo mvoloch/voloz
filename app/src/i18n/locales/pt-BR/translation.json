@@ -133,7 +133,9 @@
       "commandFailed": "Falha no comando de voz",
       "commandEmpty": "Nenhuma instrução ouvida",
       "refineRateLimited": "Refinamento pulado (limite de uso), texto bruto colado",
-      "transcribeRateLimited": "Falha na transcrição (limite de uso), tente de novo em um minuto"
+      "transcribeRateLimited": "Falha na transcrição (limite de uso), tente de novo em um minuto",
+      "micStopped": "O microfone parou; o que foi gravado foi enviado",
+      "micStoppedEmpty": "O microfone parou antes de gravar algo"
     },
     "chord": {
       "capturing": "Capturando…",

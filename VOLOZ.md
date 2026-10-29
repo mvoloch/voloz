@@ -464,6 +464,33 @@ Cut from `light` at `043c2fe`, not merged. Bugs found by a code review of
   (not that it rewrites or translates) and "about five refinements a
   minute" (was six). Existing installs keep the model they stored.
 
+## Stuck recording (`fix/stuck-recording`, 2026-10-29)
+
+Cut from `light` at `ac00c66` (Lite 0.8.3), not merged. On the owner's PC
+(0.8.2) the pill stayed on "Recording" with the timer running and no
+chord, click or right-click stopped it; only Quit from the tray did. No
+capture reached the server. The trigger is not confirmed (there were no
+logs of chord events or recorder state); the code path that makes it
+unrecoverable is.
+
+- **The recorder can always end.** When the MediaRecorder stopped by
+  itself (its track ended: device removed, Bluetooth profile switch, a
+  Windows audio change; or a recorder error) nothing reset `isRecording`
+  and the timer kept ticking; every later stop, and the 10 min cap, only
+  acted on a recorder that was not `inactive`, so they were all no-ops,
+  and `DictateWindow` ignores `dictate:start` while recording. Now
+  `recorderLifecycle.ts` ends a recording once for any cause (stop
+  request, track `ended`, recorder `stop` or `error` event), leaves the
+  recording state at once, and still delivers what was recorded — on the
+  recorder's `stop` event, or 3 s later with what was collected if that
+  event never comes. A stop request is never a no-op. A stop held while
+  the microphone is opening gives up on that start after 5 s. WAV
+  conversion has a 10 s limit (the WebM is sent instead), and
+  `convertToWav` closes its AudioContext when decoding fails (it leaked
+  one per failure). The pill says "The microphone stopped; what was
+  recorded was sent" when it ended by itself. Tests:
+  `bun test app/tests` (Bun's runner; the app has no JS test runner).
+
 ## Developing on GB4
 
 ```bash

@@ -78,19 +78,20 @@ export async function convertToWav(audioBlob: Blob): Promise<Blob> {
   // Create audio context
   const audioContext = new AudioContext();
 
-  // Read blob as array buffer
-  const arrayBuffer = await audioBlob.arrayBuffer();
+  try {
+    // Read blob as array buffer
+    const arrayBuffer = await audioBlob.arrayBuffer();
 
-  // Decode audio data
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    // Decode audio data
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-  // Convert to WAV
-  const wavBlob = audioBufferToWav(audioBuffer);
-
-  // Close audio context to free resources
-  await audioContext.close();
-
-  return wavBlob;
+    // Convert to WAV
+    return audioBufferToWav(audioBuffer);
+  } finally {
+    // Close audio context to free resources — also when decoding fails
+    // (an empty or cut-off recording), or each failure leaks one.
+    audioContext.close().catch(() => {});
+  }
 }
 
 /**

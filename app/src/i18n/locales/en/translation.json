@@ -133,7 +133,9 @@
       "commandFailed": "Voice command failed",
       "commandEmpty": "No instruction heard",
       "refineRateLimited": "Refinement skipped (rate limit), raw text pasted",
-      "transcribeRateLimited": "Transcription failed (rate limit), try again in a minute"
+      "transcribeRateLimited": "Transcription failed (rate limit), try again in a minute",
+      "micStopped": "The microphone stopped; what was recorded was sent",
+      "micStoppedEmpty": "The microphone stopped before anything was recorded"
     },
     "chord": {
       "capturing": "Capturing…",
