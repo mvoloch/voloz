@@ -72,7 +72,10 @@ export function canonicalKeyFromEvent(event: KeyboardEvent): string | null {
 const PLATFORM_IS_MAC =
   typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 
-export function defaultChordKeys(mode: 'push' | 'toggle'): string[] {
+export function defaultChordKeys(mode: 'push' | 'toggle' | 'command'): string[] {
+  // Voice command: the three left-hand modifiers on every platform (matches
+  // backend/utils/capture_chords.py).
+  if (mode === 'command') return ['ControlLeft', 'AltLeft', 'MetaLeft'];
   const base = PLATFORM_IS_MAC
     ? ['MetaRight', 'AltGr']
     : ['ControlRight', 'ShiftRight'];

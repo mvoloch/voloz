@@ -184,19 +184,31 @@ mod win {
 
 #[cfg(target_os = "windows")]
 pub fn send_paste() -> Result<(), String> {
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        SendInput, INPUT, VK_CONTROL, VK_V,
-    };
+    send_ctrl_accelerator(windows::Win32::UI::Input::KeyboardAndMouse::VK_V)
+}
 
-    // Four-event Ctrl+V sequence. Matches the macOS CGEvent pattern: the
+/// Ctrl+C, so the focused app copies its selection (voice commands read
+/// the selection this way when UIAutomation can't).
+#[cfg(target_os = "windows")]
+pub fn send_copy() -> Result<(), String> {
+    send_ctrl_accelerator(windows::Win32::UI::Input::KeyboardAndMouse::VK_C)
+}
+
+#[cfg(target_os = "windows")]
+fn send_ctrl_accelerator(
+    key: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY,
+) -> Result<(), String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{SendInput, INPUT, VK_CONTROL};
+
+    // Four-event Ctrl+<key> sequence. Matches the macOS CGEvent pattern: the
     // modifier brackets the letter so the target app sees a fully formed
-    // accelerator rather than a lone V. `dwExtraInfo` is zero — we're not
-    // tagging these as "ours" because no consumer in the paste path needs
-    // to distinguish synthetic events from hardware ones.
+    // accelerator rather than a lone letter. `dwExtraInfo` is zero — we're
+    // not tagging these as "ours" because no consumer in the paste path
+    // needs to distinguish synthetic events from hardware ones.
     let events = [
         win::make_key(VK_CONTROL, false),
-        win::make_key(VK_V, false),
-        win::make_key(VK_V, true),
+        win::make_key(key, false),
+        win::make_key(key, true),
         win::make_key(VK_CONTROL, true),
     ];
 
@@ -237,4 +249,9 @@ pub fn modifiers_held() -> bool {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn send_paste() -> Result<(), String> {
     Err("synthetic paste is not yet implemented on this platform".into())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn send_copy() -> Result<(), String> {
+    Err("synthetic copy is not yet implemented on this platform".into())
 }

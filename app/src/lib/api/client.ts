@@ -41,6 +41,7 @@ import type {
   WhisperModelSize,
   CaptureListResponse,
   CaptureResponse,
+  CaptureCommandRequest,
   CaptureCreateResponse,
   CaptureReadinessResponse,
   CaptureRefineRequest,
@@ -449,6 +450,9 @@ class ApiClient {
       source?: CaptureSource;
       language?: LanguageCode;
       sttModel?: WhisperModelSize;
+      /** App the text is for (exe name / bundle id) and its window title. */
+      targetApp?: string | null;
+      targetTitle?: string | null;
     },
   ): Promise<CaptureCreateResponse> {
     const formData = new FormData();
@@ -456,6 +460,8 @@ class ApiClient {
     formData.append('source', options?.source ?? 'file');
     if (options?.language) formData.append('language', options.language);
     if (options?.sttModel) formData.append('stt_model', options.sttModel);
+    if (options?.targetApp) formData.append('target_app', options.targetApp);
+    if (options?.targetTitle) formData.append('target_title', options.targetTitle);
 
     const url = `${this.getBaseUrl()}/captures`;
     const response = await fetch(url, { method: 'POST', body: formData });
@@ -482,6 +488,32 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  }
+
+  /**
+   * Run a voice-command capture on the selected text; the result comes back
+   * as the refined text. The thrown error carries ``status`` (409: no
+   * language model configured).
+   */
+  async runCaptureCommand(
+    captureId: string,
+    body: CaptureCommandRequest,
+  ): Promise<CaptureResponse> {
+    const response = await fetch(`${this.getBaseUrl()}/captures/${captureId}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        detail: response.statusText,
+      }));
+      throw Object.assign(
+        new Error(formatErrorDetail(error.detail, `HTTP error! status: ${response.status}`)),
+        { status: response.status },
+      );
+    }
+    return response.json();
   }
 
   async updateCaptureTranscript(

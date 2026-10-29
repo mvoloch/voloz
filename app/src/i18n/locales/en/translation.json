@@ -45,7 +45,8 @@
     "source": {
       "dictation": "Dictation",
       "recording": "Recording",
-      "file": "File"
+      "file": "File",
+      "command": "Voice command"
     },
     "transcript": {
       "refined": "Refined",
@@ -126,7 +127,10 @@
       "errorCopyTooltip": "Click to copy error",
       "tooShort": "Recording too short, canceled",
       "refineFailed": "Refinement failed",
-      "uploadFailed": "Upload failed"
+      "uploadFailed": "Upload failed",
+      "commandNoLlm": "Voice commands need a language model. Set the refinement endpoint in Settings → Dictation.",
+      "commandFailed": "Voice command failed",
+      "commandEmpty": "No instruction heard"
     },
     "chord": {
       "capturing": "Capturing…",
@@ -198,7 +202,8 @@
       "rule": "Learn: {{from}} → {{to}}?",
       "confirm": "Learn",
       "dismiss": "Dismiss"
-    }
+    },
+    "targetApp": "In {{app}}"
   },
   "voicesTab": {
     "title": "Voices",
@@ -960,7 +965,10 @@
           "pttTitle": "Set push-to-talk shortcut",
           "pttDescription": "Hold the keys you want to use, then release and click Save. The right-hand modifier badge shows whether a key is the left or right variant.",
           "toggleTitle": "Set toggle shortcut",
-          "toggleDescription": "Hold the keys you want to use, then release and click Save. Pick something distinct from your push-to-talk chord."
+          "toggleDescription": "Hold the keys you want to use, then release and click Save. Pick something distinct from your push-to-talk chord.",
+          "commandTitle": "Set voice command shortcut",
+          "commandDescription": "Hold the keys you want to use, then release and click Save. Pick something distinct from your dictation shortcuts.",
+          "conflict": "That shortcut is already used by another dictation shortcut."
         },
         "preview": {
           "title": "Preview",
@@ -973,6 +981,11 @@
         "autoPaste": {
           "title": "Auto-paste into focused text field",
           "description": "If a text input is focused in another app, paste directly into it. Voloz saves and restores whatever was on your clipboard."
+        },
+        "command": {
+          "title": "Voice command shortcut",
+          "description": "Select text, hold the shortcut and say what to do with it (\"make it more formal\", \"translate to English\"); the result replaces the selection. With nothing selected, Voloz writes new text from what you say.",
+          "change": "Change"
         }
       },
       "transcription": {
@@ -1100,6 +1113,10 @@
           "statusBuiltin": "Using the built-in Qwen3 model selected above.",
           "statusRemote": "Sending every refinement and personality rewrite to {{endpoint}}.",
           "statusUnset": "Not set: with automatic refinement on, dictation stays off until the endpoint and model are filled in."
+        },
+        "adaptToApp": {
+          "title": "Adapt style to the app",
+          "description": "Emails get full sentences and paragraphs, chat messages stay short and casual, code editors and terminals keep names exactly as spoken. Other apps are unchanged."
         }
       },
       "playback": {

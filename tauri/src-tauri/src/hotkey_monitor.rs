@@ -43,11 +43,13 @@ use crate::DICTATE_WINDOW_LABEL;
 
 /// Semantic action a chord can be bound to. `PushToTalk` = hold chord to
 /// record, release to stop. `ToggleToTalk` = press chord to start recording,
-/// press again to stop.
+/// press again to stop. `Command` = hold to speak an instruction applied to
+/// the selected text (or a draft when nothing is selected), release to stop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChordAction {
     PushToTalk,
     ToggleToTalk,
+    Command,
 }
 
 /// Effect produced after the chord matcher resolves an event. Hosts
@@ -184,6 +186,11 @@ fn build_matcher(bindings: &Bindings) -> Result<ChordMatcher<ChordAction>, keyta
             );
         }
     }
+    if let Some(keys) = bindings.get(&ChordAction::Command) {
+        if !keys.is_empty() {
+            builder = builder.add(ChordAction::Command, Chord::of(keys.iter().copied()));
+        }
+    }
     builder.build()
 }
 
@@ -249,12 +256,17 @@ fn process_event(
 
 fn apply_effect(app: &AppHandle, effect: Effect) {
     match effect {
-        Effect::StartRecording(_) => {
+        Effect::StartRecording(action) => {
             // Snapshot focus BEFORE we touch the window — any AppKit
             // reshuffle triggered by set_position / show could in principle
             // steal key focus and poison the reading. In practice those
             // calls leave keyWindow alone, but capturing first is free.
             let focus = focus_capture::capture_focus().ok();
+            // A voice command works on the selection. UIAutomation reads it
+            // now; `None` (no TextPattern) makes the pill fall back to a
+            // synthetic copy once the chord is released.
+            let command = action == ChordAction::Command;
+            let selection = if command { focus_capture::read_selection() } else { None };
 
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
                 // The previous hide-cycle parked the window off-screen and
@@ -289,7 +301,11 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
                 // it out of whatever app the user was typing in, which is
                 // the opposite of what a dictation overlay should do.
                 let _ = window.show();
-                let payload = serde_json::json!({ "focus": focus });
+                let payload = serde_json::json!({
+                    "focus": focus,
+                    "mode": if command { "command" } else { "dictation" },
+                    "selection": selection,
+                });
                 let _ = window.emit("dictate:start", payload);
             }
         }

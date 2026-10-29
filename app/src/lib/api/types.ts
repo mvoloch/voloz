@@ -142,7 +142,8 @@ export type WhisperModelSize = 'base' | 'small' | 'medium' | 'large' | 'turbo';
 
 export type Qwen3ModelSize = '0.6B' | '1.7B' | '4B';
 
-export type CaptureSource = 'dictation' | 'recording' | 'file';
+/** ``command``: a spoken instruction applied to the selected text (voice command). */
+export type CaptureSource = 'dictation' | 'recording' | 'file' | 'command';
 
 /**
  * Snapshot of the accessibility-focused UI element at chord-start. Emitted
@@ -155,6 +156,8 @@ export interface FocusSnapshot {
   role: string | null;
   /** Windows: the focused window's HWND, so the paste returns to it. */
   window?: number | null;
+  /** Windows: the focused window's title (tells web apps apart in a browser). */
+  title?: string | null;
 }
 
 export interface RefinementFlags {
@@ -174,6 +177,9 @@ export interface CaptureResponse {
   stt_model?: string | null;
   llm_model?: string | null;
   refinement_flags?: RefinementFlags | null;
+  /** App the dictation was for: exe name on Windows, bundle id on macOS. */
+  target_app?: string | null;
+  target_title?: string | null;
   created_at: string;
 }
 
@@ -220,6 +226,15 @@ export interface ReplacementRule {
   to: string;
 }
 
+/**
+ * Body of ``POST /captures/{id}/command``. The capture's transcript is the
+ * spoken instruction; ``selection`` is the selected text (empty drafts).
+ */
+export interface CaptureCommandRequest {
+  selection: string;
+  instruction?: string;
+}
+
 export interface CaptureRetranscribeRequest {
   model?: WhisperModelSize;
   language?: LanguageCode;
@@ -242,6 +257,10 @@ export interface CaptureSettings {
   chord_push_to_talk_keys: string[];
   /** keytap key names. Toggle adds Space to the platform-specific PTT chord. */
   chord_toggle_to_talk_keys: string[];
+  /** keytap key names held to speak a voice command on the selected text. */
+  chord_command_keys: string[];
+  /** Adapt refinement to the app the text goes into (email, chat, code). */
+  adapt_to_app: boolean;
   /**
    * Optional OpenAI-compatible endpoint that overrides the built-in Qwen3
    * LLM for refinement / personality rewriting. When set, backend calls hit

@@ -677,6 +677,24 @@ pub fn write_text(text: &str) -> Result<i64, String> {
     Ok(win::sequence_number() as i64)
 }
 
+/// The clipboard's plain text (CF_UNICODETEXT), or `None` when it holds none.
+#[cfg(target_os = "windows")]
+pub fn read_text() -> Result<Option<String>, String> {
+    let _guard = win::ClipboardGuard::open()?;
+    if !win::enumerate_formats().contains(&win::CF_UNICODETEXT) {
+        return Ok(None);
+    }
+    let Some(bytes) = win::read_format_bytes(win::CF_UNICODETEXT)? else {
+        return Ok(None);
+    };
+    let units: Vec<u16> = bytes
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .take_while(|&unit| unit != 0)
+        .collect();
+    Ok(Some(String::from_utf16_lossy(&units)))
+}
+
 #[cfg(target_os = "windows")]
 pub fn restore_clipboard(snapshot: &ClipboardSnapshot) -> Result<(), String> {
     let _guard = win::ClipboardGuard::open()?;
@@ -715,4 +733,9 @@ pub fn write_text(_text: &str) -> Result<i64, String> {
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn restore_clipboard(_snapshot: &ClipboardSnapshot) -> Result<(), String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn read_text() -> Result<Option<String>, String> {
+    Err("reading the clipboard is not yet implemented on this platform".into())
 }

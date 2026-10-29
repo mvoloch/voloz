@@ -65,6 +65,10 @@ function ChordPreview({ keys }: { keys: string[] }) {
   );
 }
 
+function sameChord(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((k) => b.includes(k));
+}
+
 const isWindows =
   typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
 
@@ -145,6 +149,8 @@ export function CapturesPage() {
   const hotkeyEnabled = settings?.hotkey_enabled ?? false;
   const pushToTalkKeys = settings?.chord_push_to_talk_keys ?? defaultChordKeys('push');
   const toggleToTalkKeys = settings?.chord_toggle_to_talk_keys ?? defaultChordKeys('toggle');
+  const commandKeys = settings?.chord_command_keys ?? defaultChordKeys('command');
+  const adaptToApp = settings?.adapt_to_app ?? true;
   const customLlmEndpointSaved = settings?.custom_llm_endpoint ?? '';
   const customLlmModelSaved = settings?.custom_llm_model ?? '';
   // The server no longer returns the API key value; it reports whether one
@@ -155,7 +161,7 @@ export function CapturesPage() {
   const customSttEndpointSaved = settings?.custom_stt_endpoint ?? '';
   const customSttActive = Boolean(customSttEndpointSaved && settings?.custom_stt_model);
 
-  const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | null>(null);
+  const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | 'command' | null>(null);
   const [opening, setOpening] = useState(false);
   const [capturesPath, setCapturesPath] = useState<string | null>(null);
   // Drafts persist to the server on blur so we don't fire a PUT + optimistic
@@ -328,6 +334,25 @@ export function CapturesPage() {
           }
         />
 
+        <SettingRow
+          title={t('settings.captures.dictation.command.title')}
+          description={t('settings.captures.dictation.command.description')}
+          action={
+            <div className="flex items-center gap-2">
+              <ChordPreview keys={commandKeys} />
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hotkeyEnabled}
+                onClick={() => setChordEditor('command')}
+              >
+                <Keyboard className="h-3.5 w-3.5 mr-1.5" />
+                {t('settings.captures.dictation.command.change')}
+              </Button>
+            </div>
+          }
+        />
+
         <ChordPicker
           open={chordEditor === 'push'}
           title={t('settings.captures.dictation.chordPicker.pttTitle')}
@@ -348,6 +373,27 @@ export function CapturesPage() {
           onCancel={() => setChordEditor(null)}
           onSave={(keys) => {
             update({ chord_toggle_to_talk_keys: keys });
+            setChordEditor(null);
+          }}
+        />
+
+        <ChordPicker
+          open={chordEditor === 'command'}
+          title={t('settings.captures.dictation.chordPicker.commandTitle')}
+          description={t('settings.captures.dictation.chordPicker.commandDescription')}
+          initialKeys={commandKeys}
+          onCancel={() => setChordEditor(null)}
+          onSave={(keys) => {
+            // The same keys as a dictation chord would make one press start
+            // both; keytap can't tell them apart.
+            if (sameChord(keys, pushToTalkKeys) || sameChord(keys, toggleToTalkKeys)) {
+              toast({
+                title: t('settings.captures.dictation.chordPicker.conflict'),
+                variant: 'destructive',
+              });
+              return;
+            }
+            update({ chord_command_keys: keys });
             setChordEditor(null);
           }}
         />
@@ -520,6 +566,20 @@ export function CapturesPage() {
               checked={selfCorrection}
               onCheckedChange={(v) => update({ self_correction: v })}
               disabled={!autoRefine}
+            />
+          }
+        />
+
+        {/* Not tied to auto-refine: voice commands use the style too */}
+        <SettingRow
+          title={t('settings.captures.refinement.adaptToApp.title')}
+          description={t('settings.captures.refinement.adaptToApp.description')}
+          htmlFor="adaptToApp"
+          action={
+            <Toggle
+              id="adaptToApp"
+              checked={adaptToApp}
+              onCheckedChange={(v) => update({ adapt_to_app: v })}
             />
           }
         />

@@ -1101,6 +1101,39 @@ const PASTE_CONSUME_MS: u64 = 400;
 /// push-to-talk chord of the next dictation, held for as long as it lasts.
 const MODIFIER_RELEASE_TIMEOUT_S: u64 = 600;
 
+/// Longest wait for the target app to put its selection on the clipboard
+/// after the synthetic Ctrl+C. No change by then means nothing was selected.
+const COPY_WAIT_MS: u64 = 500;
+
+/// Apps where Ctrl+C is not "copy" when nothing is selected: in a terminal
+/// it interrupts the running program. The voice command treats them as
+/// having no selection unless UIAutomation reported one.
+const NO_SYNTHETIC_COPY: &[&str] = &[
+    "windowsterminal.exe",
+    "openconsole.exe",
+    "conhost.exe",
+    "cmd.exe",
+    "powershell.exe",
+    "pwsh.exe",
+    "wezterm-gui.exe",
+    "alacritty.exe",
+    "mintty.exe",
+];
+
+/// Wait until the user lets go of Win/Ctrl/Shift/Alt, so a synthetic
+/// accelerator isn't combined with keys they still hold.
+async fn wait_for_modifier_release(action: &str) -> Result<(), String> {
+    let deadline = std::time::Instant::now()
+        + std::time::Duration::from_secs(MODIFIER_RELEASE_TIMEOUT_S);
+    while synthetic_keys::modifiers_held() {
+        if std::time::Instant::now() >= deadline {
+            return Err(format!("Modifier keys still held; {action} skipped."));
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    Ok(())
+}
+
 /// Reports whether the process currently has macOS Accessibility trust.
 /// Used by the settings UI and the paste debug harness to decide whether
 /// synthetic key events will actually land.
@@ -1136,6 +1169,7 @@ pub struct HotkeyState {
 fn build_chord_bindings(
     push_to_talk: &[String],
     toggle_to_talk: &[String],
+    command: &[String],
 ) -> Result<hotkey_monitor::Bindings, String> {
     use hotkey_monitor::{Bindings, ChordAction};
     use keytap::Key;
@@ -1160,6 +1194,10 @@ fn build_chord_bindings(
     let mut bindings = Bindings::new();
     bindings.insert(ChordAction::PushToTalk, push_chord);
     bindings.insert(ChordAction::ToggleToTalk, toggle_chord);
+    // Optional: an empty list leaves voice commands unbound.
+    if !command.is_empty() {
+        bindings.insert(ChordAction::Command, build_chord("voice command", command)?);
+    }
     Ok(bindings)
 }
 
@@ -1178,8 +1216,10 @@ fn enable_hotkey(
     state: State<'_, HotkeyState>,
     push_to_talk: Vec<String>,
     toggle_to_talk: Vec<String>,
+    command: Option<Vec<String>>,
 ) -> Result<(), String> {
-    let bindings = build_chord_bindings(&push_to_talk, &toggle_to_talk)?;
+    let bindings =
+        build_chord_bindings(&push_to_talk, &toggle_to_talk, &command.unwrap_or_default())?;
 
     // Fire the Input Monitoring TCC prompt explicitly from the user's
     // toggle click, before keytap's Tap would do it implicitly via
@@ -1241,8 +1281,10 @@ fn update_chord_bindings(
     state: State<'_, HotkeyState>,
     push_to_talk: Vec<String>,
     toggle_to_talk: Vec<String>,
+    command: Option<Vec<String>>,
 ) -> Result<(), String> {
-    let bindings = build_chord_bindings(&push_to_talk, &toggle_to_talk)?;
+    let bindings =
+        build_chord_bindings(&push_to_talk, &toggle_to_talk, &command.unwrap_or_default())?;
     let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
     if let Some(monitor) = slot.as_mut() {
         monitor.update_bindings(bindings);
@@ -1354,14 +1396,7 @@ async fn paste_final_text(
     // Win+Ctrl+V and the like (Windows opens its sound-output flyout) and
     // the text is lost. Wait for the keys first; activating the target
     // earlier would also pull focus away from where the user is dictating.
-    let deadline = std::time::Instant::now()
-        + std::time::Duration::from_secs(MODIFIER_RELEASE_TIMEOUT_S);
-    while synthetic_keys::modifiers_held() {
-        if std::time::Instant::now() >= deadline {
-            return Err("Modifier keys still held; paste skipped.".into());
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
+    wait_for_modifier_release("paste").await?;
 
     focus_capture::activate(&focus)?;
     tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
@@ -1386,6 +1421,59 @@ async fn paste_final_text(
 
     paste_result?;
     Ok(true)
+}
+
+/// Read the text selected in the app that had focus when a voice command
+/// started, by sending it Ctrl+C. The fallback for controls UIAutomation
+/// can't read (the chord-start payload carries the UIA result).
+///
+/// Waits for the chord's modifiers to be released (Ctrl+Alt+Win+C would be
+/// something else), saves the user's clipboard, copies, reads the text and
+/// puts the user's clipboard back. Returns an empty string when the
+/// clipboard did not change within [`COPY_WAIT_MS`] (nothing selected), or
+/// for terminals, where Ctrl+C would interrupt the running program.
+#[command]
+async fn copy_selection(focus: focus_capture::FocusSnapshot) -> Result<String, String> {
+    let app = focus.bundle_id.as_deref().unwrap_or("");
+    if app == VOICEBOX_BUNDLE_ID || NO_SYNTHETIC_COPY.contains(&app) {
+        return Ok(String::new());
+    }
+    if !accessibility::is_trusted() {
+        return Err(
+            "Accessibility permission required to read the selection. Open System Settings → Privacy & Security → Accessibility and enable Voloz."
+                .into(),
+        );
+    }
+
+    wait_for_modifier_release("copy").await?;
+    focus_capture::activate(&focus)?;
+    tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
+
+    let snapshot = clipboard::save_clipboard()?;
+    let before = clipboard::current_change_count()?;
+    synthetic_keys::send_copy()?;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(COPY_WAIT_MS);
+    let mut copied = false;
+    while std::time::Instant::now() < deadline {
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        if !matches!(clipboard::current_change_count(), Ok(now) if now == before) {
+            copied = true;
+            break;
+        }
+    }
+    if !copied {
+        // The app ignored Ctrl+C: nothing selected, and the clipboard is
+        // still the user's own.
+        return Ok(String::new());
+    }
+
+    // An app writes several formats one after another; let it finish.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let text = clipboard::read_text();
+    // Put the user's clipboard back even when reading failed.
+    clipboard::restore_clipboard(&snapshot)?;
+    Ok(text?.unwrap_or_default())
 }
 
 /// Inspect the currently focused UI element. Returns the owning app's PID,
@@ -1713,6 +1801,7 @@ pub fn run() {
             open_accessibility_settings,
             open_input_monitoring_settings,
             paste_final_text,
+            copy_selection,
             enable_hotkey,
             disable_hotkey,
             update_chord_bindings,

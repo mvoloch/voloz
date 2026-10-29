@@ -66,6 +66,18 @@ interface AutoRefine {
   context: unknown;
 }
 
+/** How a recording is uploaded; defaults to a plain dictation. */
+export interface RecordingOptions {
+  /**
+   * ``command``: the transcript is an instruction applied to the selected
+   * text (``getCommandSelection``) instead of being refined.
+   */
+  source?: CaptureSource;
+  /** App the text is for (exe name / bundle id) and its window title. */
+  targetApp?: string | null;
+  targetTitle?: string | null;
+}
+
 export interface UseCaptureRecordingSessionOptions {
   /**
    * Fired after a capture row is created on the server. Callers can use this
@@ -91,6 +103,11 @@ export interface UseCaptureRecordingSessionOptions {
     allowAutoPaste: boolean,
     context: unknown,
   ) => void;
+  /**
+   * The text a voice command works on, for a ``command`` recording's
+   * ``context``. Empty drafts new text from the instruction.
+   */
+  getCommandSelection?: (context: unknown) => Promise<string>;
 }
 
 export interface UseCaptureRecordingSessionResult {
@@ -100,7 +117,7 @@ export interface UseCaptureRecordingSessionResult {
   isRecording: boolean;
   isUploading: boolean;
   isRefining: boolean;
-  startRecording: (context?: unknown) => void;
+  startRecording: (context?: unknown, options?: RecordingOptions) => void;
   stopRecording: () => void;
   toggleRecording: () => void;
   dismissError: () => void;
@@ -141,9 +158,14 @@ export function useCaptureRecordingSession(
   const onFinalTextRef = useRef(options.onFinalText);
   onFinalTextRef.current = options.onFinalText;
 
-  // Context of the recording in progress; moved into the upload's variables
-  // when it stops, so it follows that capture through transcribe and refine.
+  const getCommandSelectionRef = useRef(options.getCommandSelection);
+  getCommandSelectionRef.current = options.getCommandSelection;
+
+  // Context and options of the recording in progress; moved into the
+  // upload's variables when it stops, so they follow that capture through
+  // transcribe and refine.
   const contextRef = useRef<unknown>(undefined);
+  const recordingOptionsRef = useRef<RecordingOptions>({});
 
   const clearRestTimer = useCallback(() => {
     if (restTimerRef.current !== null) {
@@ -239,15 +261,46 @@ export function useCaptureRecordingSession(
     },
   });
 
+  // A voice command: read the selection (the pill may fall back to a
+  // synthetic copy here), then let the LLM apply the spoken instruction.
+  // Unlike a refine, a failure delivers nothing — pasting the instruction
+  // over the user's selection would destroy it.
+  const commandMutation = useMutation({
+    mutationFn: async ({ capture, context }: AutoRefine) => {
+      const selection = (await getCommandSelectionRef.current?.(context)) ?? '';
+      return apiClient.runCaptureCommand(capture.id, { selection });
+    },
+    onSuccess: (data, { capture, context }) => {
+      queryClient.invalidateQueries({ queryKey: ['captures'] });
+      broadcastUpdated(data.id);
+      if (pillStateRef.current === 'refining') scheduleHidePill();
+      if (data.transcript_refined) {
+        onFinalTextRef.current?.(data.transcript_refined, data, capture.allow_auto_paste, context);
+      }
+    },
+    onError: (err: Error & { status?: number }) => {
+      if (pillStateRef.current === 'recording') return;
+      showError(
+        err.status === 409
+          ? i18n.t('captures.pill.commandNoLlm')
+          : err.message || i18n.t('captures.pill.commandFailed'),
+      );
+    },
+  });
+
   const uploadMutation = useMutation({
     mutationFn: async ({
       file,
       source,
+      targetApp,
+      targetTitle,
     }: {
       file: File;
       source: CaptureSource;
+      targetApp?: string | null;
+      targetTitle?: string | null;
       context?: unknown;
-    }) => apiClient.createCapture(file, { source }),
+    }) => apiClient.createCapture(file, { source, targetApp, targetTitle }),
     onSuccess: (capture, { context }) => {
       queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
         if (!prev) return prev;
@@ -257,6 +310,17 @@ export function useCaptureRecordingSession(
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastCreated(capture);
       onCaptureCreatedRef.current?.(capture);
+      if (capture.source === 'command') {
+        if (!capture.transcript_raw?.trim()) {
+          if (pillStateRef.current !== 'recording') {
+            showError(i18n.t('captures.pill.commandEmpty'), BRIEF_NOTICE_MS);
+          }
+          return;
+        }
+        if (pillStateRef.current !== 'recording') setPillState('refining');
+        commandMutation.mutate({ capture, context });
+        return;
+      }
       // Nothing heard: skip the refine — there is nothing to polish or paste.
       if (capture.auto_refine && capture.transcript_raw?.trim()) {
         if (pillStateRef.current !== 'recording') setPillState('refining');
@@ -299,7 +363,9 @@ export function useCaptureRecordingSession(
     maxDurationSeconds: MAX_RECORDING_DURATION_S,
     onRecordingComplete: (blob, recordedDuration) => {
       const context = contextRef.current;
+      const recordingOptions = recordingOptionsRef.current;
       contextRef.current = undefined;
+      recordingOptionsRef.current = {};
       // Trigger-happy tap — MediaRecorder hasn't emitted a usable chunk yet
       // so the blob is empty or unparseable. Surface it as a transient pill
       // so the user sees their recording was recognised and canceled.
@@ -317,7 +383,13 @@ export function useCaptureRecordingSession(
       const file = new File([blob], `dictation-${Date.now()}.${extension}`, {
         type: blob.type,
       });
-      uploadMutation.mutate({ file, source: 'dictation', context });
+      uploadMutation.mutate({
+        file,
+        source: recordingOptions.source ?? 'dictation',
+        targetApp: recordingOptions.targetApp,
+        targetTitle: recordingOptions.targetTitle,
+        context,
+      });
     },
   });
 
@@ -328,9 +400,10 @@ export function useCaptureRecordingSession(
   }, [recordError, showError]);
 
   const startRecording = useCallback(
-    (context?: unknown) => {
+    (context?: unknown, options: RecordingOptions = {}) => {
       if (isRecording) return;
       contextRef.current = context;
+      recordingOptionsRef.current = options;
       clearRestTimer();
       // A notice still on screen (e.g. "too short" from a quick tap) would
       // otherwise fire its hide timer mid-recording and tuck the pill away
@@ -378,7 +451,7 @@ export function useCaptureRecordingSession(
     errorMessage,
     isRecording,
     isUploading: uploadMutation.isPending,
-    isRefining: refineMutation.isPending,
+    isRefining: refineMutation.isPending || commandMutation.isPending,
     startRecording,
     stopRecording,
     toggleRecording,
