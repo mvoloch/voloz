@@ -491,9 +491,9 @@ unrecoverable is.
   recorded was sent" when it ended by itself. Tests:
   `bun test app/tests` (Bun's runner; the app has no JS test runner).
 - **Stop always works, and shows.** The pill's stop control was the 8 px
-  dot; it is now a 24 px button with a stop square (aria-label, tooltip
-  "Stop recording (Esc)"), pulled into the padding so the pill keeps its
-  size. Esc stops a recording dictation and transcribes it: a second raw
+  dot; it is now a 24 px button with a stop square ■ (aria-label, tooltip
+  "Stop recording (Esc)") after the timer, pulled into the right padding.
+  Esc stops a recording dictation and transcribes it: a second raw
   `keytap::Tap` in `hotkey_monitor.rs` (`EscapeWatcher`) watches for
   Esc key-down while the pill reports a recording
   (`set_dictation_recording`), and sends `dictate:stop` with
@@ -537,6 +537,32 @@ unrecoverable is.
   carries it too. The pill reads "Hands Free" (in every language, the
   owner's call: the name of the mode, like a brand term) instead of
   "Recording", timer and stop button unchanged; the switch is logged.
+- **The pill's bars are a level meter while recording.** They used to
+  animate whatever the microphone heard. `PillLevelBars` reads the
+  recording's own MediaStream through a Web Audio `AnalyserNode` (RMS per
+  animation frame, linear in dB from -55 dBFS — below it the bars stay
+  flat — to -15 dBFS, fast rise and gentle fall) and writes the heights
+  straight to the DOM. Its AudioContext is closed when the recording
+  ends. Same five bars and size; the other states (transcribing, agent
+  speech, the settings preview) keep their animation. The pill had no
+  reduced-motion handling, so none was added. Mapping tested in
+  `app/tests/vuMeter.test.ts`. Not seen on a real microphone yet; the
+  knobs are `NOISE_FLOOR_DB` / `FULL_SCALE_DB` in
+  `app/src/components/CapturePill/vuMeter.ts`.
+- **The pill is in English, with standard symbols.** Owner's call: the
+  pill reads like a phone's status pill in every app language. Its
+  strings are read through `pillT` (`i18n.getFixedT('en')`,
+  `app/src/i18n/index.ts`), so the `captures.pill` entries of the other
+  locales are no longer used by it (left in place). Microphone errors
+  (`common.microphone.*`, shared with the voice-profile forms) and server
+  error details stay as they were. Symbols (lucide-react, already
+  shipped): recording and Hands Free a gently pulsing red dot; stop a ■
+  button after the timer; transcribing/refining a spinner (`Loader2`);
+  done a check; agent speech a speaker (`Volume2`); errors and notices a
+  warning triangle (`TriangleAlert`, was a circled "!"). The level-meter
+  bars stay next to the timer. The pill is about 34 px wider while
+  recording (14 px symbol slot instead of the 8 px dot, plus the stop
+  button); height, shape and colours unchanged.
 
 ## Developing on GB4
 

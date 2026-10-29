@@ -119,13 +119,11 @@
     },
     "pill": {
       "recording": "Gravando",
-      "handsFree": "Hands Free",
       "transcribing": "Transcrevendo",
       "refining": "Refinando",
       "speaking": "Falando",
       "completed": "Concluído",
       "stopAria": "Parar gravação",
-      "stopEscTitle": "Parar gravação (Esc)",
       "errorFallback": "Algo deu errado",
       "errorCopyTooltip": "Clique para copiar o erro",
       "tooShort": "Gravação muito curta, cancelada",
@@ -135,9 +133,7 @@
       "commandFailed": "Falha no comando de voz",
       "commandEmpty": "Nenhuma instrução ouvida",
       "refineRateLimited": "Refinamento pulado (limite de uso), texto bruto colado",
-      "transcribeRateLimited": "Falha na transcrição (limite de uso), tente de novo em um minuto",
-      "micStopped": "O microfone parou; o que foi gravado foi enviado",
-      "micStoppedEmpty": "O microfone parou antes de gravar algo"
+      "transcribeRateLimited": "Falha na transcrição (limite de uso), tente de novo em um minuto"
     },
     "chord": {
       "capturing": "Capturando…",

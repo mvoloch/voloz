@@ -52,4 +52,11 @@ i18n
     },
   });
 
+/**
+ * The dictate pill speaks English in every app language, like a phone's
+ * status pill (the owner's call). Its strings live under ``captures.pill``
+ * in ``en``; read them through this instead of ``t``.
+ */
+export const pillT = i18n.getFixedT('en');
+
 export default i18n;

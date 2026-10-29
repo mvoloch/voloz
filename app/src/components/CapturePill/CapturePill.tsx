@@ -1,7 +1,15 @@
 import { motion } from 'framer-motion';
-import { AlertCircle } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Check, Loader2, TriangleAlert, Volume2 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { pillT } from '@/i18n';
 import { cn } from '@/lib/utils/cn';
+import {
+  BAR_MIN_PX,
+  barHeights,
+  levelFromRms,
+  rms,
+  smoothLevel,
+} from './vuMeter';
 
 /**
  * Pill state machine shared between the settings preview and the live
@@ -59,6 +67,98 @@ export function PillAudioBars({ mode }: { mode: 'generating' | 'playing' | 'idle
   );
 }
 
+/**
+ * The recording's level meter: the same five bars, driven by the
+ * microphone's actual level (Web Audio ``AnalyserNode``, RMS per animation
+ * frame). Flat in silence, moving only with sound. Heights are written to
+ * the DOM directly so the meter doesn't re-render React 60 times a second.
+ * The AudioContext is closed when the stream goes away (recording ended)
+ * or the pill unmounts, so nothing carries over to the next dictation.
+ */
+/** One per entry of ``BAR_WEIGHTS``, as stable React keys. */
+const LEVEL_BAR_IDS = ['outer-left', 'left', 'center', 'right', 'outer-right'] as const;
+
+export function PillLevelBars({ stream }: { stream: MediaStream | null }) {
+  const barsRef = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    const paint = (level: number) => {
+      const heights = barHeights(level);
+      barsRef.current.forEach((bar, i) => {
+        if (bar) bar.style.height = `${heights[i]}px`;
+      });
+    };
+    paint(0);
+    if (!stream || stream.getAudioTracks().length === 0) return;
+
+    let context: AudioContext;
+    try {
+      context = new AudioContext();
+    } catch {
+      return; // no Web Audio: the bars stay flat
+    }
+    const source = context.createMediaStreamSource(stream);
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+    // Not connected to the destination: nothing is played back.
+    context.resume().catch(() => {});
+
+    const samples = new Float32Array(analyser.fftSize);
+    let level = 0;
+    let frame = requestAnimationFrame(function tick() {
+      analyser.getFloatTimeDomainData(samples);
+      level = smoothLevel(level, levelFromRms(rms(samples)));
+      paint(level);
+      frame = requestAnimationFrame(tick);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      source.disconnect();
+      analyser.disconnect();
+      context.close().catch(() => {});
+    };
+  }, [stream]);
+
+  return (
+    <div className="flex items-center gap-[2px] h-5 shrink-0">
+      {LEVEL_BAR_IDS.map((id, i) => (
+        <div
+          key={id}
+          ref={(el) => {
+            barsRef.current[i] = el;
+          }}
+          className="w-[3px] rounded-full bg-accent"
+          style={{ height: `${BAR_MIN_PX}px` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The leading status symbol, in the vocabulary of phone status pills: a red
+ * dot while recording (hands-free too), a spinner while the text is being
+ * made, a speaker for agent speech, a check when done.
+ */
+function PillSymbol({ state }: { state: Exclude<PillState, 'error'> }) {
+  if (state === 'recording') {
+    return (
+      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+      </span>
+    );
+  }
+  if (state === 'transcribing' || state === 'refining') {
+    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />;
+  }
+  if (state === 'speaking') {
+    return <Volume2 className="h-3.5 w-3.5 shrink-0" aria-hidden />;
+  }
+  return <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} aria-hidden />;
+}
+
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(total / 60);
@@ -67,7 +167,7 @@ function formatElapsed(ms: number): string {
 }
 
 /**
- * Floating pill shown during capture. `state` drives the label, dot animation,
+ * Floating pill shown during capture. `state` drives the label, symbol,
  * and bar motion; `elapsedMs` freezes at whatever the caller last passed in
  * (recording advances the timer, transcribing/refining hold the final value).
  * The ``error`` state renders a destructive variant — a clickable pill that
@@ -79,6 +179,7 @@ export function CapturePill({
   onStop,
   stopTitle,
   handsFree,
+  levelStream,
   errorMessage,
   onDismiss,
   className,
@@ -90,11 +191,17 @@ export function CapturePill({
   stopTitle?: string;
   /** A hands-free recording: labelled so, since only the chord or stop ends it. */
   handsFree?: boolean;
+  /**
+   * The recording's microphone stream. When given (null while the mic is
+   * opening), the recording bars are a level meter instead of an animation.
+   */
+  levelStream?: MediaStream | null;
   errorMessage?: string | null;
   onDismiss?: () => void;
   className?: string;
 }) {
-  const { t } = useTranslation();
+  // English in every app language, like a phone's status pill.
+  const t = pillT;
 
   if (state === 'error') {
     return (
@@ -116,29 +223,19 @@ export function CapturePill({
   );
   const barMode = barModeFor(state);
 
-  const dot = (
-    <span className="relative flex h-2 w-2 shrink-0">
-      {state === 'recording' && (
-        <span className="absolute inset-0 rounded-full bg-accent animate-ping opacity-70" />
-      )}
-      <span className="relative rounded-full h-2 w-2 bg-accent" />
-    </span>
-  );
-
-  // While recording, the dot becomes a stop button: a 24 px target with a
-  // stop square, pulled into the padding by negative margins so the pill
-  // keeps the dot's footprint and size.
+  // While recording, a stop button (■, the universal stop) closes the pill
+  // after the timer: a 24 px target pulled into the right padding.
   const stopButton = onStop && state === 'recording' ? (
     <button
       type="button"
       onClick={onStop}
       aria-label={t('captures.pill.stopAria')}
       title={stopTitle ?? t('captures.pill.stopAria')}
-      className="-mx-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent/15 transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className="-mr-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent/15 transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       <span className="h-2.5 w-2.5 rounded-[2px] bg-accent" />
     </button>
-  ) : dot;
+  ) : null;
 
   // Completed gets an inset accent stroke (via box-shadow, not Tailwind's
   // ring — ring utility doesn't compose with arbitrary shadow-[…]) to mark
@@ -160,14 +257,19 @@ export function CapturePill({
         className,
       )}
     >
-      {stopButton}
+      <PillSymbol state={state} />
       <span className="text-sm font-medium shrink-0" style={{ minWidth: '104px' }}>
         {labelText}
       </span>
-      <PillAudioBars mode={barMode} />
+      {state === 'recording' && levelStream !== undefined ? (
+        <PillLevelBars stream={levelStream} />
+      ) : (
+        <PillAudioBars mode={barMode} />
+      )}
       <span className="text-xs tabular-nums text-accent/70 font-medium shrink-0 -ml-1">
         {formatElapsed(elapsedMs)}
       </span>
+      {stopButton}
     </div>
   );
 }
@@ -181,7 +283,7 @@ function ErrorPill({
   onDismiss?: () => void;
   className?: string;
 }) {
-  const { t } = useTranslation();
+  const t = pillT;
   const handleClick = async () => {
     try {
       await navigator.clipboard.writeText(message);
@@ -206,7 +308,7 @@ function ErrorPill({
         className,
       )}
     >
-      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+      <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
       <span className="text-sm font-medium truncate">{message}</span>
     </button>
   );

@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { emit as tauriEmit } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PillState } from '@/components/CapturePill/CapturePill';
-import i18n from '@/i18n';
+import { pillT } from '@/i18n';
 import { apiClient } from '@/lib/api/client';
 import type {
   CaptureCreateResponse,
@@ -62,7 +62,7 @@ const MAX_RECORDING_DURATION_S = 600;
 // The microphone stopped by itself (device removed, headset switching
 // profile, a recorder error): say so, one line.
 const MIC_STOPPED_NOTICE_MS = 3500;
-const shortRecordingMessage = () => i18n.t('captures.pill.tooShort');
+const shortRecordingMessage = () => pillT('captures.pill.tooShort');
 
 export type CapturePillState = PillState | 'hidden';
 
@@ -121,6 +121,8 @@ export interface UseCaptureRecordingSessionResult {
   pillElapsedMs: number;
   errorMessage: string | null;
   isRecording: boolean;
+  /** The microphone stream while recording (for the pill's level meter). */
+  recordingStream: MediaStream | null;
   isUploading: boolean;
   isRefining: boolean;
   startRecording: (context?: unknown, options?: RecordingOptions) => void;
@@ -274,10 +276,10 @@ export function useCaptureRecordingSession(
       // A provider rate limit (Groq's free tier) is expected and passes: say
       // so briefly instead of showing the provider's error body.
       if ((err as { status?: number }).status === 429) {
-        showError(i18n.t('captures.pill.refineRateLimited'), RATE_LIMIT_NOTICE_MS);
+        showError(pillT('captures.pill.refineRateLimited'), RATE_LIMIT_NOTICE_MS);
         return;
       }
-      showError(err.message || i18n.t('captures.pill.refineFailed'));
+      showError(err.message || pillT('captures.pill.refineFailed'));
     },
   });
 
@@ -304,8 +306,8 @@ export function useCaptureRecordingSession(
       if (pillStateRef.current === 'recording') return;
       showError(
         err.status === 409
-          ? i18n.t('captures.pill.commandNoLlm')
-          : err.message || i18n.t('captures.pill.commandFailed'),
+          ? pillT('captures.pill.commandNoLlm')
+          : err.message || pillT('captures.pill.commandFailed'),
       );
     },
   });
@@ -341,7 +343,7 @@ export function useCaptureRecordingSession(
       if (capture.source === 'command') {
         if (!capture.transcript_raw?.trim()) {
           if (pillStateRef.current !== 'recording') {
-            showError(i18n.t('captures.pill.commandEmpty'), BRIEF_NOTICE_MS);
+            showError(pillT('captures.pill.commandEmpty'), BRIEF_NOTICE_MS);
           }
           return;
         }
@@ -371,7 +373,7 @@ export function useCaptureRecordingSession(
       // The speech-to-text provider's rate limit (Groq's free tier): say so
       // briefly instead of showing the provider's error body.
       if ((err as { status?: number }).status === 429) {
-        showError(i18n.t('captures.pill.transcribeRateLimited'), RATE_LIMIT_NOTICE_MS);
+        showError(pillT('captures.pill.transcribeRateLimited'), RATE_LIMIT_NOTICE_MS);
         return;
       }
       // Backend's librosa-audioread fallback returns a 400 with this shape
@@ -382,7 +384,7 @@ export function useCaptureRecordingSession(
       if (/could not decode/i.test(msg) || /empty or corrupt/i.test(msg)) {
         showError(shortRecordingMessage(), BRIEF_NOTICE_MS);
       } else {
-        showError(msg || i18n.t('captures.pill.uploadFailed'));
+        showError(msg || pillT('captures.pill.uploadFailed'));
       }
     },
   });
@@ -393,6 +395,7 @@ export function useCaptureRecordingSession(
     startRecording: beginAudioRecording,
     stopRecording,
     error: recordError,
+    stream: recordingStream,
   } = useAudioRecording({
     maxDurationSeconds: MAX_RECORDING_DURATION_S,
     log: dictationLog,
@@ -418,7 +421,7 @@ export function useCaptureRecordingSession(
       // so the user sees their recording was recognised and canceled.
       if (!blob.size || (recordedDuration ?? 0) < MIN_RECORDING_DURATION_S) {
         showError(
-          stoppedByItself ? i18n.t('captures.pill.micStoppedEmpty') : shortRecordingMessage(),
+          stoppedByItself ? pillT('captures.pill.micStoppedEmpty') : shortRecordingMessage(),
           stoppedByItself ? MIC_STOPPED_NOTICE_MS : BRIEF_NOTICE_MS,
         );
         return;
@@ -443,7 +446,7 @@ export function useCaptureRecordingSession(
       // Nobody asked it to stop: say why the recording ended early. The
       // upload goes on underneath and pastes as usual.
       if (stoppedByItself) {
-        showError(i18n.t('captures.pill.micStopped'), MIC_STOPPED_NOTICE_MS);
+        showError(pillT('captures.pill.micStopped'), MIC_STOPPED_NOTICE_MS);
       }
     },
   });
@@ -509,6 +512,7 @@ export function useCaptureRecordingSession(
     pillElapsedMs,
     errorMessage,
     isRecording,
+    recordingStream,
     isUploading: uploadMutation.isPending,
     isRefining: refineMutation.isPending || commandMutation.isPending,
     startRecording,

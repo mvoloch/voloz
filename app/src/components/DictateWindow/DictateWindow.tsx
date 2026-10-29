@@ -1,8 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { CapturePill } from '@/components/CapturePill/CapturePill';
+import { pillT } from '@/i18n';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
 import { useCaptureRecordingSession } from '@/lib/hooks/useCaptureRecordingSession';
@@ -79,7 +79,6 @@ function toPlatformLineEndings(text: string): string {
  *      ``dictate:hide`` so Rust tucks the window away.
  */
 export function DictateWindow() {
-  const { t } = useTranslation();
   // Force the host document chrome to be transparent so the Tauri window
   // takes on the pill's own shape.
   useEffect(() => {
@@ -420,8 +419,9 @@ export function DictateWindow() {
           errorMessage={session.errorMessage}
           onDismiss={session.dismissError}
           onStop={session.isRecording ? session.stopRecording : undefined}
-          stopTitle={t('captures.pill.stopEscTitle')}
+          stopTitle={pillT('captures.pill.stopEscTitle')}
           handsFree={handsFree}
+          levelStream={session.recordingStream}
         />
       ) : null}
     </div>

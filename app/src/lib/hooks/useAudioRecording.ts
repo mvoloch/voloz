@@ -77,6 +77,8 @@ export function useAudioRecording({
   const [isRecording, setIsRecording] = useState(false);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // The microphone stream while recording, for a level meter.
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const takeRef = useRef<Take | null>(null);
   const lifecycleRef = useRef<RecordingLifecycle | null>(null);
   const timerRef = useRef<number | null>(null);
@@ -198,6 +200,7 @@ export function useAudioRecording({
         onLeave: (reason) => {
           clearTimer();
           setIsRecording(false);
+          setStream(null);
           take.duration = take.startedAt ? (Date.now() - take.startedAt) / 1000 : undefined;
           writeLog(`recording ended (${reason}) after ${(take.duration ?? 0).toFixed(1)} s`);
           onEndedRef.current?.(reason, take.duration);
@@ -264,6 +267,7 @@ export function useAudioRecording({
       // exactly one dataavailable on stop() with a valid container.
       mediaRecorder.start();
       setIsRecording(true);
+      setStream(stream);
       take.startedAt = Date.now();
       startingRef.current = false;
 
@@ -353,6 +357,7 @@ export function useAudioRecording({
     const lifecycle = lifecycleRef.current;
     if (lifecycle && !lifecycle.ended) lifecycle.end('stopped');
     setIsRecording(false);
+    setStream(null);
     setDuration(0);
     clearTimer();
 
@@ -378,6 +383,7 @@ export function useAudioRecording({
     isRecording,
     duration,
     error,
+    stream,
     startRecording,
     stopRecording,
     cancelRecording,
