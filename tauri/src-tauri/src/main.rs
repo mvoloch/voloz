@@ -1447,15 +1447,17 @@ fn open_input_monitoring_settings(app: tauri::AppHandle) -> Result<(), String> {
 /// clipboard → write `text` → fire ⌘V → wait for the target to consume it
 /// → conditionally restore the original clipboard.
 ///
-/// The restore is conditional on `NSPasteboard.changeCount` (or the
-/// Windows sequence number) matching the value captured right after
-/// `write_text`: if something else wrote to the clipboard during the
-/// paste-consume window — the user's own ⌘C in the target app, a
-/// clipboard history tool (Paste, Pastebot, Maccy), Universal Clipboard
-/// sync, 1Password inserting a secret — their newer content takes
-/// priority over our snapshot and is preserved. A
-/// [`clipboard::current_change_count`] read failure is treated the same
-/// way: unknown state is safer than an unconditional overwrite.
+/// The restore is conditional ([`clipboard::restore_decision`]): it runs
+/// when `NSPasteboard.changeCount` (or the Windows sequence number) still
+/// matches the value captured right after `write_text`, or when the
+/// clipboard still holds exactly the text we wrote — a clipboard monitor
+/// (QuickTextPaste, Plaud, Grammarly) writing it again bumps the count
+/// without the user copying anything. If it holds other content — the
+/// user's own ⌘C in the target app, 1Password inserting a secret — that
+/// newer content takes priority over our snapshot and is preserved, and an
+/// unreadable clipboard is treated the same way: unknown state is safer
+/// than an unconditional overwrite. Each outcome goes to `dictation.log`
+/// with the process that owns the clipboard (never its contents).
 ///
 /// `send_paste` failure is isolated from the restore decision: we always
 /// attempt the conditional restore before propagating the paste error,
@@ -1502,18 +1504,53 @@ async fn paste_final_text(
     let paste_result = synthetic_keys::send_paste();
     tokio::time::sleep(std::time::Duration::from_millis(PASTE_CONSUME_MS)).await;
 
-    let safe_to_restore = matches!(
-        clipboard::current_change_count(),
-        Ok(current) if current == after_write
-    );
-    if safe_to_restore {
-        clipboard::restore_clipboard(&snapshot)?;
+    // Apps that watch the clipboard (QuickTextPaste, Plaud, Grammarly…)
+    // can write it again after us, which bumps the change count; the text
+    // tells that apart from the user copying something new.
+    let seq_now = clipboard::current_change_count().ok();
+    let mut unreadable = None;
+    let text_now = if seq_now == Some(after_write) {
+        None
     } else {
-        eprintln!(
-            "[voicebox] clipboard mutated during paste window — skipping restore to preserve newer content"
-        );
-    }
+        clipboard::read_text().unwrap_or_else(|e| {
+            unreadable = Some(e);
+            None
+        })
+    };
+    let decision = clipboard::restore_decision(after_write, seq_now, &text, text_now.as_deref());
+    let changes = seq_now.map_or("?".to_string(), |now| (now - after_write).to_string());
+    let owner = || clipboard::owner_exe().unwrap_or_else(|| "unknown".into());
+    let restored = match decision {
+        clipboard::RestoreDecision::Skip => {
+            let why = if unreadable.is_some() {
+                "it could not be read back"
+            } else if text_now.is_none() {
+                "it no longer holds text"
+            } else {
+                "it holds other text"
+            };
+            dictation_log::log(&format!(
+                "[rust] paste: clipboard not restored, changed {changes}x during the paste and {why} (owner now {})",
+                owner()
+            ));
+            Ok(())
+        }
+        clipboard::RestoreDecision::Restore | clipboard::RestoreDecision::RestoreRewritten => {
+            let result = clipboard::restore_clipboard(&snapshot);
+            let how = if decision == clipboard::RestoreDecision::Restore {
+                String::new()
+            } else {
+                format!(" (rewritten {changes}x with the same text, owner {})", owner())
+            };
+            match &result {
+                Ok(()) => dictation_log::log(&format!("[rust] paste: clipboard restored{how}")),
+                Err(e) => dictation_log::log(&format!("[rust] paste: clipboard restore failed{how}: {e}")),
+            }
+            result
+        }
+    };
 
+    restored?;
     paste_result?;
     Ok(true)
 }

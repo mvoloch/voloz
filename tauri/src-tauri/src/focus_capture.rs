@@ -582,6 +582,16 @@ pub fn capture_focus() -> Result<FocusSnapshot, String> {
     }
 }
 
+/// Lowercased exe name of the process that owns `hwnd` (`"plaud.exe"`).
+#[cfg(target_os = "windows")]
+pub fn window_exe_name(hwnd: windows::Win32::Foundation::HWND) -> Option<String> {
+    let pid = unsafe { win::hwnd_pid(hwnd) };
+    if pid == 0 {
+        return None;
+    }
+    win::exe_basename(pid)
+}
+
 /// Text selected in the focused control: `Some` (possibly empty) when the
 /// control exposes it through UIAutomation, `None` when the caller has to
 /// fall back to a synthetic copy.

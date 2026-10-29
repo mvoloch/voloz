@@ -21,6 +21,8 @@
 //! clipboard guard. CF_UNICODETEXT, CF_HDROP, CF_DIB (bitmap data in
 //! memory, not a handle), CF_DIBV5, and every registered format (HTML
 //! Format, Rich Text Format, FileGroupDescriptor, etc.) all survive.
+//! Every write Voloz makes also carries the formats that keep it out of
+//! clipboard history, the cloud clipboard and clipboard managers.
 //!
 //! On **macOS** every entry point manages its own `NSAutoreleasePool`
 //! because the Tauri command runtime threads don't have one by default —
@@ -311,7 +313,7 @@ mod win {
     use windows::Win32::Foundation::{GlobalFree, HANDLE, HGLOBAL, HWND};
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData,
-        GetClipboardFormatNameW, GetClipboardSequenceNumber, OpenClipboard,
+        GetClipboardFormatNameW, GetClipboardOwner, GetClipboardSequenceNumber, OpenClipboard,
         RegisterClipboardFormatW, SetClipboardData,
     };
     use windows::Win32::System::Memory::{
@@ -613,6 +615,34 @@ mod win {
         unsafe { GetClipboardSequenceNumber() }
     }
 
+    /// Registered formats that tell Windows clipboard history, the cloud
+    /// clipboard and clipboard managers to leave this content alone. Set
+    /// with every write Voloz makes (the dictation staged for the paste and
+    /// the user's clipboard put back), so neither shows up as a new entry.
+    /// <https://learn.microsoft.com/windows/win32/dataxchg/clipboard-formats#cloud-clipboard-and-clipboard-history-formats>
+    const PRIVATE_MARKERS: [(&str, &[u8]); 3] = [
+        ("ExcludeClipboardContentFromMonitorProcessing", &[0]),
+        ("CanIncludeInClipboardHistory", &[0, 0, 0, 0]),
+        ("CanUploadToCloudClipboard", &[0, 0, 0, 0]),
+    ];
+
+    /// Add [`PRIVATE_MARKERS`] to the currently open clipboard. Best effort:
+    /// a marker that can't be set must not fail the paste.
+    pub fn put_private_markers() {
+        for (name, bytes) in PRIVATE_MARKERS {
+            if let Ok(id) = resolve_format_id(name) {
+                let _ = put_format(id, bytes);
+            }
+        }
+    }
+
+    /// Exe name of the process whose window owns the clipboard (the last
+    /// one to empty it), when it has a window.
+    pub fn owner_exe() -> Option<String> {
+        let hwnd = unsafe { GetClipboardOwner() }.ok()?;
+        crate::focus_capture::window_exe_name(hwnd)
+    }
+
     pub fn empty() -> Result<(), String> {
         unsafe { EmptyClipboard().map_err(|e| format!("EmptyClipboard failed: {e}")) }
     }
@@ -672,6 +702,7 @@ pub fn write_text(text: &str) -> Result<i64, String> {
     let _guard = win::ClipboardGuard::open()?;
     win::empty()?;
     win::put_unicode_text(text)?;
+    win::put_private_markers();
     // `GetClipboardSequenceNumber` reflects the post-write value as soon
     // as `SetClipboardData` returns.
     Ok(win::sequence_number() as i64)
@@ -712,7 +743,88 @@ pub fn restore_clipboard(snapshot: &ClipboardSnapshot) -> Result<(), String> {
             let _ = win::put_format(id, bytes);
         }
     }
+    // The user's content is already in clipboard history from when they
+    // copied it; putting it back must not add it again.
+    win::put_private_markers();
     Ok(())
+}
+
+/// Exe name of the process that owns the clipboard now, for the log.
+#[cfg(target_os = "windows")]
+pub fn owner_exe() -> Option<String> {
+    win::owner_exe()
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn owner_exe() -> Option<String> {
+    None
+}
+
+/// What to do with the user's saved clipboard once the paste has landed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestoreDecision {
+    /// Nothing wrote to the clipboard after Voloz did.
+    Restore,
+    /// Something wrote to it again, with exactly the text Voloz wrote: a
+    /// clipboard monitor re-writing it, not the user copying something new.
+    RestoreRewritten,
+    /// It now holds other content (the user copied during the paste);
+    /// putting the old clipboard back would lose that.
+    Skip,
+}
+
+/// Decide whether to restore the user's clipboard after a paste.
+///
+/// `seq_after_write` is the change count right after Voloz wrote `written`;
+/// `seq_now` and `text_now` are read when the paste has been consumed
+/// (`None` when they couldn't be read). A changed count alone used to skip
+/// the restore, which left the dictation on the clipboard whenever an app
+/// that watches the clipboard re-wrote it.
+pub fn restore_decision(
+    seq_after_write: i64,
+    seq_now: Option<i64>,
+    written: &str,
+    text_now: Option<&str>,
+) -> RestoreDecision {
+    if seq_now == Some(seq_after_write) {
+        RestoreDecision::Restore
+    } else if text_now == Some(written) {
+        RestoreDecision::RestoreRewritten
+    } else {
+        RestoreDecision::Skip
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{restore_decision, RestoreDecision};
+
+    #[test]
+    fn untouched_clipboard_is_restored() {
+        assert_eq!(restore_decision(7, Some(7), "olá", None), RestoreDecision::Restore);
+    }
+
+    #[test]
+    fn same_text_rewritten_by_a_monitor_is_restored() {
+        assert_eq!(
+            restore_decision(7, Some(9), "olá\r\nmundo", Some("olá\r\nmundo")),
+            RestoreDecision::RestoreRewritten
+        );
+    }
+
+    #[test]
+    fn new_content_copied_during_the_paste_is_kept() {
+        assert_eq!(restore_decision(7, Some(8), "olá", Some("other")), RestoreDecision::Skip);
+        // Not text at all (an image), or the clipboard couldn't be read.
+        assert_eq!(restore_decision(7, Some(8), "olá", None), RestoreDecision::Skip);
+        assert_eq!(restore_decision(7, None, "olá", None), RestoreDecision::Skip);
+    }
+
+    #[test]
+    fn text_is_compared_exactly() {
+        assert_eq!(restore_decision(7, Some(8), "olá", Some("olá ")), RestoreDecision::Skip);
+        assert_eq!(restore_decision(7, Some(8), "olá", Some("Olá")), RestoreDecision::Skip);
+    }
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
