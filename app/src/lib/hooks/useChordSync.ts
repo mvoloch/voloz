@@ -52,20 +52,26 @@ export function hotkeyCommand(
  *    prompt on first opt-in. Re-runs whenever a gate flips green (e.g. the
  *    user finishes downloading Whisper in another tab) so the chord
  *    auto-arms without making the user toggle off/on.
+ *  - Nothing is sent until readiness has loaded. The main window's settings
+ *    often load first, and `canRecord` is false until readiness does: each
+ *    time the window opened, the chords were torn down (`disable_hotkey`)
+ *    and rebuilt a moment later, dropping a chord the user was holding.
+ *    Rust also keeps the matcher when the chords sent are the ones armed.
  *
  * Call once from the main app shell.
  */
 export function useChordSync() {
   const platform = usePlatform();
   const { settings } = useCaptureSettings();
-  const { canRecord } = useDictationReadiness();
+  const { canRecord, stt } = useDictationReadiness();
+  const readinessLoaded = stt !== undefined;
   const enabled = settings?.hotkey_enabled;
   const pushKeys = settings?.chord_push_to_talk_keys;
   const toggleKeys = settings?.chord_toggle_to_talk_keys;
   const commandKeys = settings?.chord_command_keys;
 
   useEffect(() => {
-    if (!platform.metadata.isTauri) return;
+    if (!platform.metadata.isTauri || !readinessLoaded) return;
     const sync = hotkeyCommand(settings, canRecord);
     if (!sync) return;
     invoke(sync.command, sync.args).catch((err) => {
@@ -76,6 +82,7 @@ export function useChordSync() {
   }, [
     platform.metadata.isTauri,
     enabled,
+    readinessLoaded,
     canRecord,
     // Stringify so a referentially-new array with the same content
     // doesn't fire a redundant invoke on every settings refetch.

@@ -20,6 +20,12 @@
 //!
 //! Esc stops a recording dictation (see [`EscapeWatcher`]).
 //!
+//! The chord in progress is tracked here too ([`ChordState`]), not only in
+//! keytap: rebuilding the matcher drops keytap's state, and with it the
+//! release of a chord still held. A rebuild while a chord is in progress
+//! ends that dictation with a stop; on Windows a push-to-talk release
+//! that never arrives is caught by polling the keys ([`watch_release`]).
+//!
 //! Left- and right-hand modifier variants are kept distinct all the way
 //! down to the OS event tap (keytap's core promise). Defaults bind to
 //! right-hand Cmd + right-hand Option on macOS / right-hand Ctrl +
@@ -28,7 +34,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -92,7 +98,11 @@ struct Active {
 impl HotkeyMonitor {
     /// Build the monitor with initial bindings. Equivalent to constructing
     /// an empty monitor and calling [`Self::update_bindings`] once.
-    pub fn spawn(app: AppHandle, bindings: Bindings) -> Self {
+    pub fn spawn(app: AppHandle, bindings: Bindings, caller: &str) -> Self {
+        dictation_log::log(&format!(
+            "[rust] hotkey: spawn (from {caller}, chord active={})",
+            describe(active_chord())
+        ));
         let mut m = Self {
             app,
             active: None,
@@ -107,8 +117,36 @@ impl HotkeyMonitor {
     /// `ChordMatcher` (which stops keytap's chord worker thread and
     /// closes the OS tap) and spawns a new one. No-op for the "all
     /// empty" case so "disable hotkey" doesn't keep a tap running for
-    /// no reason.
-    pub fn update_bindings(&mut self, bindings: Bindings) {
+    /// no reason, and when the bindings are the ones already armed: the
+    /// main window sends them again each time it opens.
+    ///
+    /// A rebuild while a chord is in progress ends that dictation with a
+    /// stop. The new matcher never saw the chord pressed, so it would
+    /// ignore its release (and a hands-free chord pressed again would start
+    /// a second dictation instead of stopping this one); keytap can't be
+    /// handed the keys already held.
+    pub fn update_bindings(&mut self, bindings: Bindings, caller: &str) {
+        let in_progress = active_chord();
+        let armed = self.active.is_some() || bindings.values().all(|set| set.is_empty());
+        if bindings == self.bindings && armed {
+            dictation_log::log(&format!(
+                "[rust] hotkey: update_bindings (from {caller}, chord active={}): unchanged, matcher kept",
+                describe(in_progress)
+            ));
+            return;
+        }
+        dictation_log::log(&format!(
+            "[rust] hotkey: update_bindings (from {caller}, chord active={}): rebuilding",
+            describe(in_progress)
+        ));
+        if let Some(action) = in_progress {
+            if end_chord(None) {
+                send_stop(&self.app, "rebuild");
+                dictation_log::log(&format!(
+                    "[rust] hotkey: {action:?} in progress during the rebuild: dictate:stop sent"
+                ));
+            }
+        }
         self.apply(bindings);
     }
 
@@ -117,8 +155,14 @@ impl HotkeyMonitor {
     /// keytap until it is pressed again, and suppresses push-to-talk
     /// meanwhile — so a recording stopped another way (the pill's stop
     /// button, the length cap) would leave the next push-to-talk press
-    /// ignored.
-    pub fn reset(&mut self) {
+    /// ignored. The recording has already ended, so the chord in progress
+    /// is forgotten without a stop.
+    pub fn reset(&mut self, caller: &str) {
+        dictation_log::log(&format!(
+            "[rust] hotkey: reset (from {caller}, chord active={})",
+            describe(active_chord())
+        ));
+        end_chord(None);
         let bindings = self.bindings.clone();
         self.apply(bindings);
     }
@@ -155,7 +199,7 @@ impl HotkeyMonitor {
         let app = self.app.clone();
         let dispatcher = thread::Builder::new()
             .name("voicebox-hotkey-dispatcher".into())
-            .spawn(move || dispatcher_loop(app, matcher, shutdown_for_thread))
+            .spawn(move || dispatcher_loop(app, matcher, bindings, shutdown_for_thread))
             .expect("spawn hotkey dispatcher thread");
 
         self.active = Some(Active { dispatcher, shutdown });
@@ -252,14 +296,148 @@ impl Drop for EscapeWatcher {
     }
 }
 
-/// Stop the dictation like a chord release would. `source` tells the pill
-/// it was not a chord, so it resets a hands-free toggle left on in keytap.
 fn stop_on_escape(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
-        let _ = window.emit("dictate:stop", serde_json::json!({ "source": "escape" }));
+    if send_stop(app, "escape") {
         dictation_log::log("[rust] Esc while recording: dictate:stop sent");
     }
 }
+
+/// Stop the dictation like a chord release would. `source` tells the pill
+/// it was not a chord, so it resets the chord state left in keytap (a
+/// hands-free toggle still on, or keys it still thinks are held).
+fn send_stop(app: &AppHandle, source: &str) -> bool {
+    match app.get_webview_window(DICTATE_WINDOW_LABEL) {
+        Some(window) => {
+            let _ = window.emit("dictate:stop", serde_json::json!({ "source": source }));
+            true
+        }
+        None => false,
+    }
+}
+
+// ========================================================================
+// The chord in progress
+// ========================================================================
+
+/// The chord whose `dictate:start` went out and whose stop hasn't. Kept
+/// across matcher rebuilds, which drop keytap's own state.
+struct ChordState {
+    action: Option<ChordAction>,
+    /// Bumped on every start, end and restart, so a [`watch_release`]
+    /// started for one chord press can tell it is out of date.
+    generation: u64,
+}
+
+static CHORD: Mutex<ChordState> = Mutex::new(ChordState { action: None, generation: 0 });
+
+fn chord_state() -> std::sync::MutexGuard<'static, ChordState> {
+    CHORD.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn active_chord() -> Option<ChordAction> {
+    chord_state().action
+}
+
+/// Record a chord start (or the action a restart switched to); returns its
+/// generation.
+fn begin_chord(action: ChordAction) -> u64 {
+    let mut state = chord_state();
+    state.action = Some(action);
+    state.generation += 1;
+    state.generation
+}
+
+/// Forget the chord in progress — only if it is still the press of
+/// `generation`, when given. Returns whether one was in progress.
+fn end_chord(generation: Option<u64>) -> bool {
+    let mut state = chord_state();
+    if generation.is_some_and(|g| g != state.generation) {
+        return false;
+    }
+    let was = state.action.take().is_some();
+    state.generation += 1;
+    was
+}
+
+fn describe(action: Option<ChordAction>) -> String {
+    action.map_or_else(|| "none".to_string(), |a| format!("{a:?}"))
+}
+
+/// Push-to-talk and voice commands end when the chord is released;
+/// hands-free runs until its chord is pressed again.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn ends_on_release(action: ChordAction) -> bool {
+    matches!(action, ChordAction::PushToTalk | ChordAction::Command)
+}
+
+/// How often [`watch_release`] reads the keys, and how long all of them
+/// must be up before it stops the dictation itself. keytap's release
+/// normally arrives within milliseconds, well before this.
+#[cfg(target_os = "windows")]
+const RELEASE_POLL: Duration = Duration::from_millis(100);
+#[cfg(target_os = "windows")]
+const RELEASE_GRACE: Duration = Duration::from_millis(300);
+
+/// Safety net for a lost release: while a hold-to-talk chord is in
+/// progress, read the physical state of its keys every 100 ms. If none of
+/// them has been down for 300 ms and keytap still hasn't reported the
+/// release, stop the dictation. Ends as soon as the chord ends, turns into
+/// hands-free, or the recording stops another way; nothing runs between
+/// dictations. Windows only (`GetAsyncKeyState`); elsewhere a no-op.
+#[cfg(target_os = "windows")]
+fn watch_release(app: &AppHandle, action: ChordAction, keys: Option<&HashSet<Key>>, generation: u64) {
+    use std::time::Instant;
+
+    if !ends_on_release(action) {
+        return;
+    }
+    // A key without a virtual-key code can't be read; the others are
+    // enough, since releasing any key of the chord ends it.
+    let vks: Vec<u16> = keys
+        .into_iter()
+        .flatten()
+        .filter_map(|key| crate::key_codes::windows_vk(*key))
+        .collect();
+    if vks.is_empty() {
+        return;
+    }
+    let app = app.clone();
+    let spawned = thread::Builder::new()
+        .name("voloz-chord-release-watch".into())
+        .spawn(move || {
+            let mut last_down = Instant::now();
+            let mut seen_recording = false;
+            loop {
+                thread::sleep(RELEASE_POLL);
+                if chord_state().generation != generation {
+                    return;
+                }
+                // Stopped another way (the pill's button, Esc, the cap):
+                // nothing left to stop.
+                if DICTATION_RECORDING.load(Ordering::Relaxed) {
+                    seen_recording = true;
+                } else if seen_recording {
+                    return;
+                }
+                if crate::synthetic_keys::any_key_down(&vks) {
+                    last_down = Instant::now();
+                } else if last_down.elapsed() >= RELEASE_GRACE {
+                    if end_chord(Some(generation)) && send_stop(&app, "safety") {
+                        dictation_log::log(&format!(
+                            "[rust] safety stop: chord keys released but no release event ({action:?}): dictate:stop sent"
+                        ));
+                    }
+                    return;
+                }
+            }
+        });
+    if let Err(err) = spawned {
+        eprintln!("HotkeyMonitor: release watch thread failed ({err}).");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn watch_release(_app: &AppHandle, _action: ChordAction, _keys: Option<&HashSet<Key>>, _generation: u64) {}
 
 // ========================================================================
 // Matcher construction + dispatch
@@ -294,11 +472,12 @@ fn build_matcher(bindings: &Bindings) -> Result<ChordMatcher<ChordAction>, keyta
 fn dispatcher_loop(
     app: AppHandle,
     matcher: ChordMatcher<ChordAction>,
+    bindings: Bindings,
     shutdown: Arc<AtomicBool>,
 ) {
     while !shutdown.load(Ordering::Relaxed) {
         match matcher.recv_timeout(Duration::from_millis(100)) {
-            Ok(event) => process_event(&app, &matcher, event),
+            Ok(event) => process_event(&app, &matcher, &bindings, event),
             Err(RecvTimeoutError::Timeout) => continue,
             Err(RecvTimeoutError::Disconnected) => break,
         }
@@ -312,11 +491,12 @@ fn dispatcher_loop(
 fn process_event(
     app: &AppHandle,
     matcher: &ChordMatcher<ChordAction>,
+    bindings: &Bindings,
     event: ChordEvent<ChordAction>,
 ) {
     match event {
         ChordEvent::Start { id, .. } => {
-            apply_effect(app, Effect::StartRecording(id));
+            apply_effect(app, bindings, Effect::StartRecording(id));
         }
         ChordEvent::End { id: end_id, time: end_time } => {
             // Peek for an immediately-following Start. keytap emits
@@ -329,18 +509,18 @@ fn process_event(
                 Ok(ChordEvent::Start { id: start_id, time: start_time })
                     if start_time == end_time =>
                 {
-                    apply_effect(app, Effect::RestartRecording(start_id));
+                    apply_effect(app, bindings, Effect::RestartRecording(start_id));
                 }
                 Ok(other) => {
-                    apply_effect(app, Effect::StopRecording(end_id));
+                    apply_effect(app, bindings, Effect::StopRecording(end_id));
                     // The peeked event wasn't a transition partner;
                     // process it in its own right. Recursion depth is
                     // bounded by the number of back-to-back chord
                     // events, in practice 1–2.
-                    process_event(app, matcher, other);
+                    process_event(app, matcher, bindings, other);
                 }
                 Err(_) => {
-                    apply_effect(app, Effect::StopRecording(end_id));
+                    apply_effect(app, bindings, Effect::StopRecording(end_id));
                 }
             }
         }
@@ -351,9 +531,10 @@ fn process_event(
 // Effect → Tauri
 // ========================================================================
 
-fn apply_effect(app: &AppHandle, effect: Effect) {
+fn apply_effect(app: &AppHandle, bindings: &Bindings, effect: Effect) {
     match effect {
         Effect::StartRecording(action) => {
+            let generation = begin_chord(action);
             // Snapshot focus BEFORE we touch the window — any AppKit
             // reshuffle triggered by set_position / show could in principle
             // steal key focus and poison the reading. In practice those
@@ -407,17 +588,24 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
                 });
                 let _ = window.emit("dictate:start", payload);
                 dictation_log::log(&format!("[rust] chord start ({action:?}): dictate:start sent"));
+                watch_release(app, action, bindings.get(&action), generation);
             } else {
+                end_chord(Some(generation));
                 dictation_log::log(&format!("[rust] chord start ({action:?}): no dictate window"));
             }
         }
         Effect::StopRecording(action) => {
+            end_chord(None);
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
                 let _ = window.emit("dictate:stop", ());
                 dictation_log::log(&format!("[rust] chord stop ({action:?}): dictate:stop sent"));
             }
         }
         Effect::RestartRecording(action) => {
+            // The release watch of the push-to-talk press ends here; a
+            // hands-free chord gets none.
+            let generation = begin_chord(action);
+            watch_release(app, action, bindings.get(&action), generation);
             if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
                 // Holding push-to-talk and adding the rest of the hands-free
                 // chord upgrades the recording in progress; the pill shows
@@ -429,5 +617,29 @@ fn apply_effect(app: &AppHandle, effect: Effect) {
                 dictation_log::log(&format!("[rust] chord restart ({action:?}): dictate:restart sent"));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chord_state_follows_the_press_in_progress() {
+        let push = begin_chord(ChordAction::PushToTalk);
+        assert_eq!(active_chord(), Some(ChordAction::PushToTalk));
+        // Upgraded to hands-free: the push-to-talk press's release watch is
+        // out of date and can no longer end it.
+        let hands_free = begin_chord(ChordAction::ToggleToTalk);
+        assert!(hands_free > push);
+        assert!(!end_chord(Some(push)));
+        assert_eq!(active_chord(), Some(ChordAction::ToggleToTalk));
+        assert!(end_chord(None));
+        assert_eq!(active_chord(), None);
+        assert!(!end_chord(None));
+
+        assert!(ends_on_release(ChordAction::PushToTalk));
+        assert!(ends_on_release(ChordAction::Command));
+        assert!(!ends_on_release(ChordAction::ToggleToTalk));
     }
 }

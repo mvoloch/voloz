@@ -76,6 +76,7 @@ fn rebuild_main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R
         Ok(window) => {
             #[cfg(target_os = "linux")]
             crate::allow_microphone(&window);
+            crate::dictation_log::log("[rust] main window created");
             Some(window)
         }
         Err(e) => {

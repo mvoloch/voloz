@@ -25,9 +25,13 @@ interface DictateRestartPayload {
   hands_free?: boolean;
 }
 
-/** Rust's ``dictate:stop`` payload: null from a chord, ``escape`` from Esc. */
+/**
+ * Rust's ``dictate:stop`` payload: null from a chord release. Otherwise
+ * ``escape`` (Esc), ``safety`` (the chord's keys are up but no release
+ * came) or ``rebuild`` (the chords were re-armed while one was held).
+ */
 interface DictateStopPayload {
-  source?: 'escape';
+  source?: 'escape' | 'safety' | 'rebuild';
 }
 
 /** What rides along with one recording, from chord-start to paste. */
@@ -189,8 +193,9 @@ export function DictateWindow() {
     unlistens.push(
       listen<DictateStopPayload | null>('dictate:stop', (event) => {
         dictationLog(`dictate:stop received (${event.payload?.source ?? 'chord'})`);
-        // Esc is not a chord: the toggle it may leave on is reset above.
-        chordStoppedRef.current = event.payload?.source !== 'escape';
+        // Not a chord release: the chord state it may leave in keytap (a
+        // toggle still on, keys it thinks are held) is reset above.
+        chordStoppedRef.current = !event.payload?.source;
         // A command chord just released: copy the selection now (once the
         // keys are up), while the instruction is being transcribed.
         const context = currentContextRef.current;

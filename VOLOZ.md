@@ -643,6 +643,44 @@ both windows and the dictate window doesn't boot. Windows (WebView2
 memory, MSI/NSIS, the first dictation after login on the Dell) is not
 measured yet.
 
+## Lost release, lost first words (`feat/lite-087`, 2026-10-29)
+
+From the owner's `dictation.log` (Lite 0.8.6, Windows): one push-to-talk
+dictation logged `chord start` and never `chord stop`, and ran 39 s until
+the pill's stop button (the first dictation after closing the main window
+to the tray); and after a Bluetooth headset was turned off the time from
+`chord start` to the recorder's `onstart` went from 0.2–0.4 s to 0.74–2.7 s,
+so the first words were not recorded.
+
+- **A chord release can't be lost.** Cause not proven (no log of hotkey
+  changes then). What the code shows: every time the main window opened,
+  `useChordSync` tore the matcher down and rebuilt it — `disable_hotkey`
+  when capture settings loaded before readiness (`canRecord` false until
+  then), then `enable_hotkey` with the same chords, and `enable_hotkey`
+  always rebuilt. A matcher rebuilt while a chord is held never saw the
+  press and ignores the release. A key-up the low-level hook missed
+  (Windows skips a hook that answers late under load) would look the
+  same in the log. Now: `useChordSync` waits for readiness; Rust keeps
+  the matcher when the chords sent are the ones armed; a rebuild while a
+  chord is in progress ends that dictation with `dictate:stop`
+  (`source: rebuild` — keytap can't be told which keys are already held,
+  so carrying the chord over would mean tracking releases outside
+  keytap); and on Windows, while a push-to-talk or voice-command chord is
+  in progress, a thread reads its keys with `GetAsyncKeyState` every
+  100 ms and, if none has been down for 300 ms and no release came,
+  sends `dictate:stop` (`source: safety`) and logs `[rust] safety stop:
+  chord keys released but no release event`. It ends with the chord, on a
+  hands-free upgrade (no safety stop in hands-free), or when the
+  recording stops another way; nothing runs between dictations. A
+  non-chord stop makes the pill reset keytap (`reset_hotkey_state`), which
+  also clears keys a missed key-up left "held". The log now has every
+  spawn/update/reset of the chords with its caller and the chord in
+  progress (`[rust] hotkey: update_bindings (from enable_hotkey, chord
+  active=PushToTalk): …`), and `[rust] main window created/destroyed`.
+  Compiled and clippy-checked for Windows; the polling and the release
+  timing are not run on Windows yet. Knobs: `RELEASE_POLL` /
+  `RELEASE_GRACE` in `hotkey_monitor.rs`.
+
 ## Developing on GB4
 
 ```bash

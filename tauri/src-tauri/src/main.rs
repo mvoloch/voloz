@@ -1324,9 +1324,9 @@ fn enable_hotkey(
 
     let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
     match slot.as_mut() {
-        Some(monitor) => monitor.update_bindings(bindings),
+        Some(monitor) => monitor.update_bindings(bindings, "enable_hotkey"),
         None => {
-            *slot = Some(hotkey_monitor::HotkeyMonitor::spawn(app, bindings));
+            *slot = Some(hotkey_monitor::HotkeyMonitor::spawn(app, bindings, "enable_hotkey"));
         }
     }
     Ok(())
@@ -1341,7 +1341,7 @@ fn enable_hotkey(
 fn disable_hotkey(state: State<'_, HotkeyState>) -> Result<(), String> {
     let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
     if let Some(monitor) = slot.as_mut() {
-        monitor.update_bindings(hotkey_monitor::Bindings::new());
+        monitor.update_bindings(hotkey_monitor::Bindings::new(), "disable_hotkey");
     }
     Ok(())
 }
@@ -1367,7 +1367,7 @@ fn update_chord_bindings(
         build_chord_bindings(&push_to_talk, &toggle_to_talk, &command.unwrap_or_default())?;
     let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
     if let Some(monitor) = slot.as_mut() {
-        monitor.update_bindings(bindings);
+        monitor.update_bindings(bindings, "update_chord_bindings");
     }
     Ok(())
 }
@@ -1381,7 +1381,7 @@ fn update_chord_bindings(
 fn reset_hotkey_state(state: State<'_, HotkeyState>) -> Result<(), String> {
     let mut slot = state.monitor.lock().map_err(|e| e.to_string())?;
     if let Some(monitor) = slot.as_mut() {
-        monitor.reset();
+        monitor.reset("reset_hotkey_state");
     }
     Ok(())
 }
@@ -1913,6 +1913,9 @@ pub fn run() {
             // no main webview until the user opens Voloz from the tray. The
             // dictate window then starts the server and arms the hotkey
             // (`useBootWithoutMainWindow`).
+            if app.get_webview_window("main").is_some() {
+                dictation_log::log("[rust] main window created (from the app config)");
+            }
             #[cfg(desktop)]
             if !autostart::launched_at_login() {
                 tray::show_main_window(app.handle());
@@ -1953,6 +1956,11 @@ pub fn run() {
         .on_window_event({
             let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
             move |window, event| {
+            // Opening the main window re-sends the chords (`useChordSync`);
+            // the log shows when it came and went.
+            if matches!(event, WindowEvent::Destroyed) && window.label() == "main" {
+                dictation_log::log("[rust] main window destroyed");
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 // Only the main window owns the quit flow below. Alt+F4 on the
                 // dictate pill would otherwise stop the server (and exit the

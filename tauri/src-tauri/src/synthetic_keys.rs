@@ -246,6 +246,17 @@ pub fn modifiers_held() -> bool {
     false
 }
 
+/// Whether any of these virtual keys is physically down right now
+/// (`GetAsyncKeyState` reads the hardware state, whatever window has focus).
+#[cfg(target_os = "windows")]
+pub fn any_key_down(vks: &[u16]) -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::GetAsyncKeyState;
+
+    vks.iter()
+        // High bit set = key is down.
+        .any(|&vk| unsafe { GetAsyncKeyState(vk as i32) } < 0)
+}
+
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn send_paste() -> Result<(), String> {
     Err("synthetic paste is not yet implemented on this platform".into())
