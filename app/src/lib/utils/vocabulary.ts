@@ -1,4 +1,4 @@
-import type { ReplacementRule } from '@/lib/api/types';
+import type { ReplacementRule, Snippet } from '@/lib/api/types';
 
 /** Trim and collapse inner whitespace, as the server does. */
 export function cleanTerm(value: string): string {
@@ -33,5 +33,20 @@ export function mergeReplacementRules(
   return [
     ...existing.filter((rule) => !addedKeys.has(cleanTerm(rule.from).toLocaleLowerCase())),
     ...added.map((rule) => ({ from: cleanTerm(rule.from), to: cleanTerm(rule.to) })),
+  ];
+}
+
+/** Trigger key as the server compares it: case, accents and punctuation ignored. */
+export function snippetKey(trigger: string): string {
+  const folded = trigger.normalize('NFKD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+  return (folded.match(/[\p{L}\p{N}_]+/gu) ?? []).join(' ');
+}
+
+/** Add a shortcut; one with the same trigger key replaces the old one. */
+export function mergeSnippets(existing: Snippet[], added: Snippet): Snippet[] {
+  const key = snippetKey(added.trigger);
+  return [
+    ...existing.filter((snippet) => snippetKey(snippet.trigger) !== key),
+    { trigger: cleanTerm(added.trigger), text: added.text.replace(/\r\n?/g, '\n').trim() },
   ];
 }

@@ -34,8 +34,10 @@ import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
 import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
+import { AudioRetentionRow } from './AudioRetentionRow';
 import { CustomSttEndpointRow } from './CustomSttEndpointRow';
 import { SettingRow, SettingSection } from './SettingRow';
+import { SnippetsSection } from './SnippetsSection';
 import { VocabularySection } from './VocabularySection';
 
 function ChordPreview({ keys }: { keys: string[] }) {
@@ -491,6 +493,8 @@ export function CapturesPage() {
 
       <VocabularySection settings={settings} update={update} />
 
+      <SnippetsSection settings={settings} update={update} />
+
       <SettingSection
         title={t('settings.captures.refinement.title')}
         description={t(
@@ -772,6 +776,7 @@ export function CapturesPage() {
             </Button>
           }
         />
+        <AudioRetentionRow value={settings?.audio_retention ?? 'always'} update={update} />
       </SettingSection>
       </div>
 

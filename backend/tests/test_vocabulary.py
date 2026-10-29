@@ -259,6 +259,8 @@ def test_migration_adds_vocabulary_columns_to_an_old_database(tmp_path):
         # A database from before this feature: settings row, no vocabulary columns.
         conn.execute(text("ALTER TABLE capture_settings DROP COLUMN vocabulary"))
         conn.execute(text("ALTER TABLE capture_settings DROP COLUMN replacements"))
+        # Newer than vocabulary; an old database has none of the three.
+        conn.execute(text("ALTER TABLE capture_settings DROP COLUMN snippets"))
         conn.execute(
             text(
                 "INSERT INTO capture_settings (id, stt_model, language, auto_refine, llm_model, "

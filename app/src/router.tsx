@@ -4,10 +4,12 @@ import {
   createRouter,
   Outlet,
   redirect,
+  useNavigate,
 } from '@tanstack/react-router';
 import { AppFrame } from '@/components/AppFrame/AppFrame';
 import { CapturesTab } from '@/components/CapturesTab/CapturesTab';
 import { EffectsTab } from '@/components/EffectsTab/EffectsTab';
+import { LiteSetupScreen, useLiteSetupGate } from '@/components/LiteSetup/LiteSetup';
 import { MainEditor } from '@/components/MainEditor/MainEditor';
 import { ModelsTab } from '@/components/ModelsTab/ModelsTab';
 import { AboutPage } from '@/components/ServerTab/AboutPage';
@@ -39,17 +41,33 @@ function RootLayout() {
   // Subscribe to SSE for pending generations — handles completion, auto-play, and history refresh
   useGenerationProgress();
 
+  // Lite first run: one Groq key instead of the transcription and
+  // refinement settings. Studio never shows it.
+  const liteSetup = useLiteSetupGate();
+  const navigate = useNavigate();
+
   return (
     <AppFrame>
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        <Sidebar isMacOS={isMacOS()} />
+      {liteSetup.show ? (
+        <LiteSetupScreen
+          onManual={() => {
+            liteSetup.skip();
+            navigate({ to: '/settings/captures' });
+          }}
+        />
+      ) : liteSetup.pending ? (
+        <div className="flex-1" />
+      ) : (
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <Sidebar isMacOS={isMacOS()} />
 
-        <main className="flex-1 ml-[14.5rem] overflow-hidden flex flex-col">
-          <div className="container mx-auto px-8 max-w-[1800px] h-full overflow-hidden flex flex-col">
-            <Outlet />
-          </div>
-        </main>
-      </div>
+          <main className="flex-1 ml-[14.5rem] overflow-hidden flex flex-col">
+            <div className="container mx-auto px-8 max-w-[1800px] h-full overflow-hidden flex flex-col">
+              <Outlet />
+            </div>
+          </main>
+        </div>
+      )}
 
       {/* Show download toasts for any active downloads (from anywhere) */}
       {activeDownloads.map((download) => {

@@ -54,6 +54,7 @@
       "refinedHint": "Refinada com {{model}}",
       "rawHint": "Transcrita com Whisper {{model}}",
       "editedHint": "Editada por você",
+      "snippetHint": "Atalho de texto",
       "editLabel": "Transcrição (editável)",
       "unsaved": "Alterações não salvas"
     },
@@ -130,7 +131,8 @@
       "uploadFailed": "Falha no envio",
       "commandNoLlm": "Comandos de voz precisam de um modelo de linguagem. Configure o endpoint de refinamento em Configurações → Ditado.",
       "commandFailed": "Falha no comando de voz",
-      "commandEmpty": "Nenhuma instrução ouvida"
+      "commandEmpty": "Nenhuma instrução ouvida",
+      "refineRateLimited": "Refinamento pulado (limite de uso), texto bruto colado"
     },
     "chord": {
       "capturing": "Capturando…",
@@ -203,7 +205,11 @@
       "confirm": "Aprender",
       "dismiss": "Dispensar"
     },
-    "targetApp": "Em {{app}}"
+    "targetApp": "Em {{app}}",
+    "audioNotKept": {
+      "title": "Áudio não guardado",
+      "description": "Apagado pela opção “Guardar o áudio dos ditados”. A transcrição fica; não dá para ouvir nem transcrever de novo."
+    }
   },
   "voicesTab": {
     "title": "Vozes",
@@ -1063,6 +1069,20 @@
           "remove": "Remover {{from}} → {{to}}"
         }
       },
+      "snippets": {
+        "title": "Atalhos de texto",
+        "description": "Diga uma frase curta e receba um texto salvo: um endereço, uma assinatura, um link. Um ditado que é só a frase cola o texto como está; dentro de um ditado mais longo a frase é trocada depois do refinamento. Maiúsculas, acentos e pontuação não importam.",
+        "triggerLabel": "Quando eu disser",
+        "triggerPlaceholder": "Quando eu disser… (ex.: meu endereço)",
+        "textLabel": "Colar este texto",
+        "textPlaceholder": "Colar este texto (pode ter várias linhas)",
+        "add": "Adicionar",
+        "save": "Salvar",
+        "edit": "Editar “{{trigger}}”",
+        "remove": "Remover “{{trigger}}”",
+        "empty": "Nenhum atalho ainda.",
+        "replaces": "Substitui o atalho com a mesma frase."
+      },
       "refinement": {
         "title": "Refinamento",
         "description": "Opcionalmente, rode um LLM local sobre as transcrições para limpar palavras de preenchimento, pontuação e autocorreções.",
@@ -1139,6 +1159,20 @@
           "d90": "90 dias",
           "d30": "30 dias",
           "d7": "7 dias"
+        },
+        "audioRetention": {
+          "title": "Guardar o áudio dos ditados",
+          "description": "As transcrições ficam sempre. Áudio mais antigo que isso é apagado da pasta de capturas.",
+          "options": {
+            "always": "Sempre",
+            "30d": "30 dias",
+            "7d": "7 dias",
+            "never": "Nunca"
+          },
+          "confirmTitle": "Apagar o áudio antigo?",
+          "confirmOlder": "O áudio dos ditados com mais de {{period}} será apagado agora e daqui em diante. As transcrições ficam. Não dá para desfazer.",
+          "confirmNever": "O áudio de todos os ditados será apagado agora, e os próximos ditados guardarão só o texto. Não dá para desfazer.",
+          "confirm": "Apagar áudio"
         },
         "folder": {
           "title": "Pasta de capturas",
@@ -1408,6 +1442,33 @@
     },
     "failed": "Falha ao iniciar o servidor",
     "retry": "Tentar de novo"
+  },
+  "setup": {
+    "quick": {
+      "title": "Configurar o Voloz",
+      "intro": "O Voloz transforma sua fala em texto e arruma o texto, na nuvem. Por padrão, uma chave grátis do Groq faz as duas coisas.",
+      "groqStep": "Crie uma chave grátis no Groq. Leva um minuto e não pede cartão.",
+      "groqCreate": "Criar chave grátis no Groq",
+      "groqPaste": "Cole a chave do Groq aqui:",
+      "claudeTitle": "Recomendado: refinar com o Claude",
+      "optional": "(opcional)",
+      "claudeWhy": "Com uma chave da Anthropic, o refinamento usa o Claude Haiku, que fica mais fiel às suas palavras; o modelo grátis do Groq às vezes reescreve uma frase ou traduz um trecho com ruído. Custa alguns centavos por mês. A transcrição continua no Groq.",
+      "claudeCreate": "Pegar uma chave da Anthropic",
+      "claudePaste": "Chave da Anthropic",
+      "submit": "Testar e salvar",
+      "testing": "Testando as chaves…",
+      "noteGroq": "O plano grátis do Groq permite uns seis refinamentos por minuto. Passando disso, o Voloz cola o texto bruto.",
+      "noteClaude": "Transcrição no Groq (grátis), refinamento no Claude Haiku (pago pelo uso).",
+      "manual": "Configurar manualmente",
+      "errors": {
+        "invalidKey": {
+          "groq": "O Groq não aceitou esta chave. Copie de novo em console.groq.com/keys.",
+          "anthropic": "A Anthropic não aceitou esta chave. Copie de novo em console.anthropic.com."
+        },
+        "network": "Não deu para falar com o provedor. Confira a internet e tente de novo.",
+        "other": "Não deu para terminar a configuração: {{detail}}"
+      }
+    }
   },
   "home": {
     "today": "Hoje",

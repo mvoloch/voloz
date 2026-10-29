@@ -339,6 +339,19 @@ async def _run_startup(application: FastAPI) -> None:
     finally:
         db.close()
 
+    # Delete capture audio past the user's retention window (no-op for the
+    # default "always").
+    db = next(get_db())
+    try:
+        from .services.audio_retention import purge_expired_audio
+        from .services.settings import get_capture_settings
+
+        purge_expired_audio(db, get_capture_settings(db).audio_retention)
+    except Exception as e:
+        logger.warning("Could not apply capture audio retention: %s", e)
+    finally:
+        db.close()
+
     backend_type = get_backend_type()
     logger.info("Backend: %s", backend_type.upper())
     logger.info("GPU: %s", _get_gpu_status())

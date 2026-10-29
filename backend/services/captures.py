@@ -23,6 +23,7 @@ from ..models import CaptureResponse, CaptureTranscriptUpdateResponse, Refinemen
 from ..utils.audio import load_audio
 from .app_context import style_for_app
 from .refinement import RefinementFlags, refine_transcript
+from .snippets import SNIPPET_LABEL, expand_snippets, match_whole_snippet
 from .transcribe import get_whisper_model, resolve_stt_model, transcribe_with_vocabulary
 from .vocabulary import apply_replacements, normalize_replacements, suggest_replacements
 from .voice_commands import run_command
@@ -50,9 +51,11 @@ def _to_response(row: DBCapture) -> CaptureResponse:
         except (ValueError, TypeError):
             flags_model = None
 
+    audio = config.resolve_storage_path(row.audio_path)
     return CaptureResponse(
         id=row.id,
         audio_path=row.audio_path,
+        audio_available=audio is not None and audio.exists(),
         source=row.source,
         language=row.language,
         duration_ms=row.duration_ms,
@@ -79,6 +82,26 @@ def app_style(row: DBCapture, adapt_to_app: bool) -> Optional[str]:
     return style_for_app(row.target_app, row.target_title)
 
 
+def _snippet_text(
+    transcript: str, snippets: Optional[list[dict]], expand_inline: bool
+) -> Optional[str]:
+    """Text the user's shortcuts turn ``transcript`` into, or ``None``.
+
+    A transcript that is only a trigger always becomes its text. Triggers
+    inside a longer transcript are expanded only when ``expand_inline`` —
+    i.e. when no refinement follows; otherwise :func:`refine_capture`
+    expands them in the LLM's output, so the model never rewrites them.
+    """
+    whole = match_whole_snippet(transcript, snippets)
+    if whole is not None:
+        return whole
+    if expand_inline:
+        expanded = expand_snippets(transcript, snippets)
+        if expanded != transcript:
+            return expanded
+    return None
+
+
 async def create_capture(
     *,
     audio_bytes: bytes,
@@ -91,6 +114,8 @@ async def create_capture(
     replacements: Optional[list[dict]] = None,
     target_app: Optional[str] = None,
     target_title: Optional[str] = None,
+    snippets: Optional[list[dict]] = None,
+    refine_follows: bool = False,
 ) -> CaptureResponse:
     """Persist raw audio, run STT, store the row.
 
@@ -98,6 +123,11 @@ async def create_capture(
     applied to its output before it is stored as ``transcript_raw``.
     ``target_app`` / ``target_title`` name the app the text is for; they
     pick its writing style when the capture is refined.
+    When ``snippets`` turn the transcript into a shortcut's text, that text
+    is stored as the refined transcript with ``llm_model`` set to
+    ``SNIPPET_LABEL``, and the caller must not refine it.
+    ``refine_follows`` says whether an automatic refinement comes next
+    (see :func:`_snippet_text`).
     """
     if source not in VALID_SOURCES:
         raise ValueError(f"Invalid source '{source}'. Must be one of {sorted(VALID_SOURCES)}")
@@ -155,6 +185,7 @@ async def create_capture(
             whisper, str(audio_path), language, resolved_stt, vocabulary
         )
         transcript = apply_replacements(transcript, replacements)
+        shortcut = _snippet_text(transcript, snippets, expand_inline=not refine_follows)
 
         row = DBCapture(
             id=capture_id,
@@ -163,9 +194,11 @@ async def create_capture(
             language=language,
             duration_ms=duration_ms,
             transcript_raw=transcript,
+            transcript_refined=shortcut,
             stt_model=resolved_stt,
             target_app=_clean_target(target_app, 255),
             target_title=_clean_target(target_title, MAX_TARGET_TITLE_CHARS),
+            llm_model=SNIPPET_LABEL if shortcut is not None else None,
         )
         db.add(row)
         db.commit()
@@ -225,10 +258,26 @@ async def refine_capture(
     db: Session,
     vocabulary: Optional[list[str]] = None,
     adapt_to_app: bool = False,
+    snippets: Optional[list[dict]] = None,
 ) -> Optional[CaptureResponse]:
+    """Refine a capture's raw transcript and store the result.
+
+    A transcript that is only a shortcut trigger gets the shortcut's text
+    without calling the LLM. Otherwise triggers are expanded in the LLM's
+    output, after refinement, so the saved text is pasted verbatim.
+    """
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
         return None
+
+    whole = match_whole_snippet(row.transcript_raw or "", snippets)
+    if whole is not None:
+        row.transcript_refined = whole
+        row.llm_model = SNIPPET_LABEL
+        row.refinement_flags = None
+        db.commit()
+        db.refresh(row)
+        return _to_response(row)
 
     refined, llm_size = await refine_transcript(
         row.transcript_raw or "",
@@ -238,7 +287,7 @@ async def refine_capture(
         app_style=app_style(row, adapt_to_app),
     )
 
-    row.transcript_refined = refined
+    row.transcript_refined = expand_snippets(refined, snippets)
     row.llm_model = llm_size
     row.refinement_flags = json.dumps(flags.to_dict())
     db.commit()
@@ -333,6 +382,7 @@ async def retranscribe_capture(
     db: Session,
     vocabulary: Optional[list[str]] = None,
     replacements: Optional[list[dict]] = None,
+    snippets: Optional[list[dict]] = None,
 ) -> Optional[CaptureResponse]:
     row = db.query(DBCapture).filter(DBCapture.id == capture_id).first()
     if not row:
@@ -353,9 +403,11 @@ async def retranscribe_capture(
     row.stt_model = resolved_stt
     if language:
         row.language = language
-    # Refined text is stale after a fresh STT pass — force a re-refine.
-    row.transcript_refined = None
-    row.llm_model = None
+    # Refined text is stale after a fresh STT pass — force a re-refine,
+    # unless the new transcript is just a shortcut trigger.
+    shortcut = _snippet_text(transcript, snippets, expand_inline=False)
+    row.transcript_refined = shortcut
+    row.llm_model = SNIPPET_LABEL if shortcut is not None else None
     row.refinement_flags = None
     db.commit()
     db.refresh(row)

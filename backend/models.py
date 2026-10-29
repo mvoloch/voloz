@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 
+from .services.snippets import normalize_snippets
 from .services.vocabulary import normalize_replacements, normalize_vocabulary
 from .utils.capture_chords import (
     default_command_chord,
@@ -208,6 +209,9 @@ class CaptureResponse(BaseModel):
     target_app: Optional[str] = None
     target_title: Optional[str] = None
     created_at: datetime
+    # False once the audio file is gone (deleted by the audio-retention
+    # setting, or missing on disk): the transcript stays, nothing to play.
+    audio_available: bool = True
 
     class Config:
         from_attributes = True
@@ -318,6 +322,10 @@ class CaptureSettingsResponse(BaseModel):
     # the raw transcript (see ``services/vocabulary.py``).
     vocabulary: List[str] = Field(default_factory=list)
     replacements: List[Dict[str, str]] = Field(default_factory=list)
+    # Text shortcuts, ``{"trigger", "text"}`` (see ``services/snippets.py``).
+    snippets: List[Dict[str, str]] = Field(default_factory=list)
+    # How long captures keep their audio (see ``services/audio_retention.py``).
+    audio_retention: str = "always"
 
     @model_validator(mode="before")
     @classmethod
@@ -378,6 +386,10 @@ class CaptureSettingsUpdate(BaseModel):
     # empties dropped and duplicates merged case-insensitively.
     vocabulary: Optional[List[str]] = None
     replacements: Optional[List[Dict[str, str]]] = None
+    # Replaces the stored list whole; triggers are trimmed and deduplicated
+    # ignoring case and accents, a text keeps its line breaks.
+    snippets: Optional[List[Dict[str, str]]] = None
+    audio_retention: Optional[str] = Field(default=None, pattern="^(always|7d|30d|never)$")
 
     @field_validator("vocabulary")
     @classmethod
@@ -395,6 +407,29 @@ class CaptureSettingsUpdate(BaseModel):
             if set(rule) != {"from", "to"}:
                 raise ValueError('Each replacement rule needs exactly "from" and "to"')
         return normalize_replacements(value)
+
+    @field_validator("snippets")
+    @classmethod
+    def _normalize_snippets(
+        cls, value: Optional[List[Dict[str, str]]]
+    ) -> Optional[List[Dict[str, str]]]:
+        if value is None:
+            return None
+        for snippet in value:
+            if set(snippet) != {"trigger", "text"}:
+                raise ValueError('Each shortcut needs exactly "trigger" and "text"')
+        return normalize_snippets(value)
+
+
+class QuickSetupRequest(BaseModel):
+    """``POST /settings/captures/quick-setup``: the lite first-run keys.
+
+    The Groq key covers transcription and, without an Anthropic key,
+    refinement too.
+    """
+
+    groq_api_key: str = Field(..., min_length=1, max_length=500)
+    anthropic_api_key: Optional[str] = Field(default=None, max_length=500)
 
 
 class GenerationSettingsResponse(BaseModel):

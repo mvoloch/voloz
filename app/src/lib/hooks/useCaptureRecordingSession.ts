@@ -45,6 +45,8 @@ const ERROR_PILL_VISIBLE_MS = 6000;
 // Short self-explanatory notices (e.g. "Recording too short, canceled") —
 // there's nothing to read or copy, so clear out quickly.
 const BRIEF_NOTICE_MS = 2000;
+// "Refinement skipped: rate limit" — one line, a little longer to read.
+const RATE_LIMIT_NOTICE_MS = 3500;
 // MediaRecorder.start(100) emits its first chunk ~100ms in, but the webm
 // container header isn't guaranteed to be finalised that quickly — anything
 // under half a second tends to produce a blob neither AudioContext.decode
@@ -257,6 +259,12 @@ export function useCaptureRecordingSession(
       }
       // A newer recording owns the pill; don't paint an old error over it.
       if (pillStateRef.current === 'recording') return;
+      // A provider rate limit (Groq's free tier) is expected and passes: say
+      // so briefly instead of showing the provider's error body.
+      if ((err as { status?: number }).status === 429) {
+        showError(i18n.t('captures.pill.refineRateLimited'), RATE_LIMIT_NOTICE_MS);
+        return;
+      }
       showError(err.message || i18n.t('captures.pill.refineFailed'));
     },
   });
@@ -327,13 +335,12 @@ export function useCaptureRecordingSession(
         refineMutation.mutate({ captureId: capture.id, auto: { capture, context } });
       } else {
         if (pillStateRef.current === 'transcribing') scheduleHidePill();
-        if (capture.transcript_raw) {
-          onFinalTextRef.current?.(
-            capture.transcript_raw,
-            capture,
-            capture.allow_auto_paste,
-            context,
-          );
+        // Without a refine the server may still have produced the final
+        // text: a dictation that was only a shortcut trigger comes back
+        // with the shortcut's text as ``transcript_refined``.
+        const finalText = capture.transcript_refined ?? capture.transcript_raw;
+        if (finalText) {
+          onFinalTextRef.current?.(finalText, capture, capture.allow_auto_paste, context);
         }
       }
     },

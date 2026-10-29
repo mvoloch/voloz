@@ -38,6 +38,17 @@ function commandSelection(context: DictationContext): Promise<string> {
   return context.selection;
 }
 
+const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+
+/**
+ * Line breaks as the target app expects them. Windows text controls read
+ * CRLF from the clipboard; a bare LF (a multi-line shortcut) shows up as
+ * nothing in classic edit controls, merging the lines.
+ */
+function toPlatformLineEndings(text: string): string {
+  return isWindows ? text.replace(/\r?\n/g, '\r\n') : text;
+}
+
 /**
  * Floating dictate surface shown in a separate transparent Tauri window.
  * Mounted when the URL contains ``?view=dictate``. The main window bypasses
@@ -82,7 +93,7 @@ export function DictateWindow() {
       if (!allowAutoPaste) return;
       if (!focus || !text.trim()) return;
       try {
-        await invoke('paste_final_text', { text, focus });
+        await invoke('paste_final_text', { text: toPlatformLineEndings(text), focus });
       } catch (err) {
         // Surface accessibility failures to the main window so it can prompt
         // the user to grant permission. Other errors stay swallowed —

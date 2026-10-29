@@ -54,6 +54,7 @@
       "refinedHint": "Refined with {{model}}",
       "rawHint": "Transcribed with Whisper {{model}}",
       "editedHint": "Edited by you",
+      "snippetHint": "Text shortcut",
       "editLabel": "Transcript (editable)",
       "unsaved": "Unsaved changes"
     },
@@ -130,7 +131,8 @@
       "uploadFailed": "Upload failed",
       "commandNoLlm": "Voice commands need a language model. Set the refinement endpoint in Settings → Dictation.",
       "commandFailed": "Voice command failed",
-      "commandEmpty": "No instruction heard"
+      "commandEmpty": "No instruction heard",
+      "refineRateLimited": "Refinement skipped (rate limit), raw text pasted"
     },
     "chord": {
       "capturing": "Capturing…",
@@ -203,7 +205,11 @@
       "confirm": "Learn",
       "dismiss": "Dismiss"
     },
-    "targetApp": "In {{app}}"
+    "targetApp": "In {{app}}",
+    "audioNotKept": {
+      "title": "Audio not kept",
+      "description": "Deleted by the “Keep dictation audio” setting. The transcript stays; it can't be played or transcribed again."
+    }
   },
   "voicesTab": {
     "title": "Voices",
@@ -1064,6 +1070,20 @@
           "remove": "Remove {{from}} → {{to}}"
         }
       },
+      "snippets": {
+        "title": "Text shortcuts",
+        "description": "Say a short phrase and get saved text: an address, a signature, a link. A dictation that is only the phrase pastes the text as is; inside a longer dictation the phrase is replaced after refinement. Case, accents and punctuation don't matter.",
+        "triggerLabel": "When I say",
+        "triggerPlaceholder": "When I say… (e.g. my address)",
+        "textLabel": "Paste this text",
+        "textPlaceholder": "Paste this text (can have several lines)",
+        "add": "Add",
+        "save": "Save",
+        "edit": "Edit “{{trigger}}”",
+        "remove": "Remove “{{trigger}}”",
+        "empty": "No shortcuts yet.",
+        "replaces": "Replaces the shortcut with the same phrase."
+      },
       "refinement": {
         "title": "Refinement",
         "description": "Optionally run a local LLM over transcripts to clean filler words, punctuation, and self-corrections.",
@@ -1140,6 +1160,20 @@
           "d90": "90 days",
           "d30": "30 days",
           "d7": "7 days"
+        },
+        "audioRetention": {
+          "title": "Keep dictation audio",
+          "description": "Transcripts are always kept. Audio older than this is deleted from the captures folder.",
+          "options": {
+            "always": "Always",
+            "30d": "30 days",
+            "7d": "7 days",
+            "never": "Never"
+          },
+          "confirmTitle": "Delete older audio?",
+          "confirmOlder": "Audio of dictations older than {{period}} will be deleted now and from then on. Transcripts stay. This can't be undone.",
+          "confirmNever": "The audio of every dictation will be deleted now, and new dictations will keep only their text. This can't be undone.",
+          "confirm": "Delete audio"
         },
         "folder": {
           "title": "Captures folder",
@@ -1438,6 +1472,33 @@
     },
     "failed": "Server startup failed",
     "retry": "Retry"
+  },
+  "setup": {
+    "quick": {
+      "title": "Set up Voloz",
+      "intro": "Voloz turns your speech into text and tidies it up, in the cloud. By default one free Groq key does both.",
+      "groqStep": "Create a free key on Groq. It takes a minute and needs no card.",
+      "groqCreate": "Create a free key on Groq",
+      "groqPaste": "Paste the Groq key here:",
+      "claudeTitle": "Recommended: refine with Claude",
+      "optional": "(optional)",
+      "claudeWhy": "With an Anthropic key, refinement uses Claude Haiku, which stays closer to your words; the free Groq model sometimes rewrites a sentence or translates a noisy one. It costs a few cents a month. Transcription stays on Groq.",
+      "claudeCreate": "Get an Anthropic key",
+      "claudePaste": "Anthropic key",
+      "submit": "Test and save",
+      "testing": "Testing the keys…",
+      "noteGroq": "Groq's free tier allows about six refinements a minute. Past that, Voloz pastes the raw transcript.",
+      "noteClaude": "Transcription on Groq (free), refinement on Claude Haiku (paid by use).",
+      "manual": "Set up manually",
+      "errors": {
+        "invalidKey": {
+          "groq": "Groq didn't accept this key. Copy it again from console.groq.com/keys.",
+          "anthropic": "Anthropic didn't accept this key. Copy it again from console.anthropic.com."
+        },
+        "network": "Couldn't reach the provider. Check the internet connection and try again.",
+        "other": "Couldn't finish the setup: {{detail}}"
+      }
+    }
   },
   "home": {
     "today": "Today",

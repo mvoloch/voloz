@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 import anthropic
 import httpx2
 
-from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE
+from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,8 @@ class AnthropicLLMBackend:
             logger.error(
                 "Claude API %s returned %d: %s", self.endpoint, exc.status_code, exc.message
             )
-            raise RuntimeError(
+            error_cls = LLMRateLimitError if exc.status_code == 429 else RuntimeError
+            raise error_cls(
                 f"Claude API {self.endpoint} returned HTTP {exc.status_code}: {exc.message}"
             ) from exc
         except anthropic.APIConnectionError as exc:

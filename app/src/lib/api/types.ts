@@ -181,6 +181,8 @@ export interface CaptureResponse {
   target_app?: string | null;
   target_title?: string | null;
   created_at: string;
+  /** False once the audio was deleted by the retention setting or is missing on disk. */
+  audio_available?: boolean;
 }
 
 export interface CaptureListResponse {
@@ -233,6 +235,16 @@ export interface ReplacementRule {
 export interface CaptureCommandRequest {
   selection: string;
   instruction?: string;
+}
+
+/**
+ * A spoken shortcut: a dictation that is only ``trigger`` pastes ``text``
+ * verbatim; a trigger inside a longer dictation is expanded in place.
+ * Matching ignores case, accents and punctuation.
+ */
+export interface Snippet {
+  trigger: string;
+  text: string;
 }
 
 export interface CaptureRetranscribeRequest {
@@ -295,7 +307,14 @@ export interface CaptureSettings {
   vocabulary: string[];
   /** Applied to the raw transcript right after transcription. A write replaces the whole list. */
   replacements: ReplacementRule[];
+  /** Text shortcuts. A write replaces the whole list. */
+  snippets: Snippet[];
+  /** How long captures keep their audio; transcripts are always kept. */
+  audio_retention: AudioRetention;
 }
+
+/** ``never`` deletes a dictation's audio once its transcript is stored. */
+export type AudioRetention = 'always' | '7d' | '30d' | 'never';
 
 export type CaptureSettingsUpdate = Partial<
   Omit<CaptureSettings, 'custom_llm_api_key_configured' | 'custom_stt_api_key_configured'>
