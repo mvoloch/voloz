@@ -2,10 +2,27 @@
 Audio processing utilities.
 """
 
+from pathlib import Path
+from typing import Tuple, Optional
+
 import numpy as np
 import soundfile as sf
-import librosa
-from typing import Tuple, Optional
+
+# librosa (with numba and scipy) is imported only where it is needed: the
+# lite edition ships without it, and the dictation path never needs it.
+
+# librosa.load's default resampler; load_audio uses the same so its output
+# matches what librosa returned before.
+RESAMPLE_QUALITY = "soxr_hq"
+
+
+class UnsupportedAudioError(ValueError):
+    """The audio is in a format this server can't decode.
+
+    soundfile (libsndfile) reads WAV, FLAC, OGG and MP3. Other formats
+    (m4a, webm…) need librosa's audioread/ffmpeg fallback, which the lite
+    edition doesn't ship; the lite app converts imported files to WAV first.
+    """
 
 
 def normalize_audio(
@@ -50,18 +67,86 @@ def load_audio(
     mono: bool = True,
 ) -> Tuple[np.ndarray, int]:
     """
-    Load audio file with normalization.
-    
+    Load audio file as float32, resampled to ``sample_rate``.
+
+    Takes the steps ``librosa.load`` takes for a file soundfile can read
+    (decode, average the channels, resample with soxr at ``soxr_hq``,
+    fix the length), so the samples are the same, without importing
+    librosa. Other formats go through ``librosa.load`` and its audioread
+    fallback when librosa is installed (studio).
+
     Args:
         path: Path to audio file
-        sample_rate: Target sample rate
+        sample_rate: Target sample rate (``None`` keeps the file's)
         mono: Convert to mono
-        
+
     Returns:
         Tuple of (audio_array, sample_rate)
+
+    Raises:
+        UnsupportedAudioError: soundfile can't read the file and librosa
+            isn't installed (lite edition).
     """
-    audio, sr = librosa.load(path, sr=sample_rate, mono=mono)
-    return audio, sr
+    try:
+        with sf.SoundFile(path) as f:
+            native_sr = f.samplerate
+            audio = f.read(dtype="float32", always_2d=False).T
+    except sf.SoundFileRuntimeError as exc:
+        try:
+            import librosa
+        except ImportError:
+            suffix = Path(str(path)).suffix.lower()
+            kind = f"{suffix} " if suffix else ""
+            raise UnsupportedAudioError(
+                f"Unsupported or unreadable {kind}audio: this server reads WAV, FLAC, OGG and MP3"
+            ) from exc
+        return librosa.load(path, sr=sample_rate, mono=mono)
+
+    if mono and audio.ndim > 1:
+        audio = np.mean(audio, axis=tuple(range(audio.ndim - 1)))
+    if sample_rate is None:
+        return audio, native_sr
+    return resample_audio(audio, native_sr, sample_rate), sample_rate
+
+
+def resample_audio(audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+    """Resample along the last axis like ``librosa.resample`` (soxr_hq, fixed length)."""
+    if orig_sr == target_sr:
+        return audio
+    import soxr
+
+    n_samples = int(np.ceil(audio.shape[-1] * float(target_sr) / orig_sr))
+    resampled = np.apply_along_axis(
+        soxr.resample,
+        axis=-1,
+        arr=audio,
+        in_rate=orig_sr,
+        out_rate=target_sr,
+        quality=RESAMPLE_QUALITY,
+    )
+    # soxr may return a sample more or less than the exact ratio; librosa
+    # pads with zeros or trims to ceil(n * ratio).
+    current = resampled.shape[-1]
+    if current > n_samples:
+        resampled = resampled[..., :n_samples]
+    elif current < n_samples:
+        pad = [(0, 0)] * (resampled.ndim - 1) + [(0, n_samples - current)]
+        resampled = np.pad(resampled, pad, mode="constant")
+    return np.asarray(resampled, dtype=audio.dtype)
+
+
+def audio_duration(path: str) -> float:
+    """Length of an audio file in seconds, read from its header when possible.
+
+    Falls back to decoding with :func:`load_audio` (which raises
+    :class:`UnsupportedAudioError` for a format the lite edition can't read).
+    """
+    try:
+        info = sf.info(str(path))
+    except sf.SoundFileRuntimeError:
+        audio, sr = load_audio(path)
+        return len(audio) / sr
+    return info.frames / info.samplerate
 
 
 def save_audio(
@@ -301,6 +386,8 @@ def preprocess_reference_audio(
         return audio
 
     audio = audio - float(np.mean(audio))
+
+    import librosa
 
     trimmed, _ = librosa.effects.trim(audio, top_db=trim_top_db)
     if 0 < trimmed.size < audio.size:

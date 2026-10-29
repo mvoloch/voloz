@@ -88,20 +88,58 @@ def test_lite_health_skips_local_models(lite, monkeypatch):
 
 
 def test_app_imports_and_starts_without_ml_packages():
-    """Block torch & co. in a fresh interpreter, build the app, hit /health."""
+    """Block torch, librosa & co. in a fresh interpreter, build the app,
+    hit /health and run a dictation through a fake STT endpoint."""
     script = """
 import sys
-for name in ("torch", "torchaudio", "transformers", "qwen_tts", "pedalboard", "fastmcp"):
+BLOCKED = ("torch", "torchaudio", "transformers", "qwen_tts", "pedalboard", "fastmcp",
+           "librosa", "numba", "llvmlite", "scipy", "audioread", "resampy")
+for name in BLOCKED:
     sys.modules[name] = None  # any import of them raises ImportError
-import tempfile
+import io, tempfile, time, wave
+import numpy as np
+import soundfile as sf
 from backend import config
 config.set_data_dir(tempfile.mkdtemp())
 from starlette.testclient import TestClient
 from backend.app import create_app
-with TestClient(create_app()) as client:
-    assert client.get("/health").json()["gpu_available"] is False
-    assert client.get("/captures?limit=1").status_code == 200
-    assert client.get("/profiles").status_code == 404
+from backend.tests.test_cloud_dictation import FakeServer
+
+# What the webview records: 48 kHz stereo 16-bit WAV, 1 s.
+t = np.arange(48_000) / 48_000
+tone = 0.3 * np.sin(2 * np.pi * 440 * t)
+buf = io.BytesIO()
+sf.write(buf, np.stack([tone, tone], axis=1), 48_000, format="WAV", subtype="PCM_16")
+
+with FakeServer(lambda *_: (200, {"text": "hello"})) as stt:
+    with TestClient(create_app()) as client:
+        assert client.get("/health").json()["gpu_available"] is False
+        assert client.get("/captures?limit=1").status_code == 200
+        assert client.get("/profiles").status_code == 404
+        assert client.put("/settings/captures", json={
+            "custom_stt_endpoint": stt.base_url, "custom_stt_model": "m",
+            "custom_stt_api_key": "k", "auto_refine": False,
+        }).status_code == 200
+        res = client.post("/captures", data={"source": "dictation"},
+                          files={"file": ("d.wav", buf.getvalue(), "audio/wav")})
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["transcript_raw"] == "hello" and body["duration_ms"] == 1000, body
+        # Lite decodes with soundfile only: a format it can't read is a 415.
+        res = client.post("/captures", data={"source": "file"},
+                          files={"file": ("a.m4a", b"\\x00\\x00\\x00\\x18ftypM4A " + bytes(64), "audio/mp4")})
+        assert res.status_code == 415, res.text
+        assert "WAV" in res.json()["detail"]
+        assert client.get("/captures").json()["total"] == 1
+
+    uploads = [r for r in stt.requests if r["path"].endswith("/audio/transcriptions")]
+    assert len(uploads) == 1
+    raw = uploads[0]["raw"]
+    start = raw.index(b"RIFF")
+    size = int.from_bytes(raw[start + 4 : start + 8], "little") + 8
+    with wave.open(io.BytesIO(raw[start : start + size])) as w:
+        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16_000, 1, 2)
+        assert w.getnframes() == 16_000
 print("ok")
 """
     env = {**os.environ, "VOICEBOX_EDITION": "lite"}
@@ -138,3 +176,53 @@ def test_lite_readiness_needs_endpoints_even_with_cached_models(lite, monkeypatc
     saved.custom_stt_endpoint = "https://api.groq.com/openai/v1"
     saved.custom_stt_model = "whisper-large-v3-turbo"
     assert captures_route._stt_readiness(saved, cfg).ready is True
+
+
+# ── Audio without librosa ─────────────────────────────────────────────────
+
+
+def _stereo_wav(path, rate=48_000, seconds=1.0):
+    import numpy as np
+    import soundfile as sf
+
+    t = np.arange(int(rate * seconds)) / rate
+    left = 0.3 * np.sin(2 * np.pi * 440 * t)
+    sf.write(path, np.stack([left, 0.5 * left], axis=1), rate, subtype="PCM_16")
+
+
+@pytest.mark.parametrize("target", [16_000, 24_000, None])
+@pytest.mark.parametrize("mono", [True, False])
+def test_load_audio_matches_librosa(tmp_path, target, mono):
+    """soundfile + soxr_hq gives librosa.load's samples, bit for bit."""
+    librosa = pytest.importorskip("librosa")
+    import numpy as np
+
+    from backend.utils.audio import load_audio
+
+    path = tmp_path / "d.wav"
+    _stereo_wav(path)
+    expected, expected_sr = librosa.load(path, sr=target, mono=mono)
+    audio, sr = load_audio(str(path), sample_rate=target, mono=mono)
+    assert sr == expected_sr
+    assert audio.dtype == expected.dtype and audio.shape == expected.shape
+    assert np.array_equal(audio, expected)
+
+
+def test_load_audio_without_librosa_rejects_what_soundfile_cannot_read(tmp_path, monkeypatch):
+    import sys
+
+    from backend.utils.audio import UnsupportedAudioError, audio_duration, load_audio
+
+    monkeypatch.setitem(sys.modules, "librosa", None)
+    wav = tmp_path / "d.wav"
+    _stereo_wav(wav, seconds=0.5)
+    audio, sr = load_audio(str(wav), sample_rate=16_000)
+    assert (sr, audio.shape) == (16_000, (8_000,))
+    assert audio_duration(str(wav)) == 0.5
+
+    m4a = tmp_path / "a.m4a"
+    m4a.write_bytes(b"\x00\x00\x00\x18ftypM4A " + bytes(64))
+    with pytest.raises(UnsupportedAudioError, match=r"\.m4a"):
+        load_audio(str(m4a))
+    with pytest.raises(UnsupportedAudioError):
+        audio_duration(str(m4a))

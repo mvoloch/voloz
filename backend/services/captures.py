@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from .. import config
 from ..database import Capture as DBCapture
 from ..models import CaptureResponse, CaptureTranscriptUpdateResponse, RefinementFlagsModel
-from ..utils.audio import load_audio
+from ..utils.audio import UnsupportedAudioError, audio_duration, load_audio
 from .app_context import style_for_app
 from .refinement import RefinementFlags, refine_transcript
 from .snippets import (
@@ -44,8 +44,8 @@ VALID_SOURCES = {"dictation", "recording", "file", "command"}
 # a long one is cut rather than stored whole.
 MAX_TARGET_TITLE_CHARS = 200
 # Suffixes whisper's miniaudio loader can read directly. Anything outside
-# this set has to go through librosa for decode + a soundfile transcode
-# before whisper sees it.
+# this set has to be decoded (load_audio; librosa's fallback in studio) and
+# transcoded with soundfile before whisper sees it.
 WHISPER_NATIVE_FORMATS = (".wav", ".mp3", ".flac", ".ogg")
 
 
@@ -160,13 +160,22 @@ async def create_capture(
         raw_path.write_bytes(audio_bytes)
         written_files.append(raw_path)
 
-        # Decode once with librosa — its audioread fallback handles webm/opus
-        # via ffmpeg, which miniaudio (used inside mlx-audio's whisper) can't.
-        # The decoded array gives us an accurate duration and becomes the
-        # canonical WAV we hand to whisper.
+        # A WAV (every dictation, and every file the lite app imports) goes
+        # to whisper as it is; its header gives the duration. Anything else
+        # is decoded once — soundfile reads FLAC/OGG/MP3, and in studio
+        # librosa's audioread fallback handles webm/opus via ffmpeg, which
+        # miniaudio (used inside mlx-audio's whisper) can't — and the decoded
+        # array becomes the canonical WAV we hand to whisper.
+        audio, sr = None, None
         try:
-            audio, sr = load_audio(str(raw_path))
-            duration_ms = int((len(audio) / sr) * 1000) if sr else None
+            if suffix == ".wav":
+                duration_ms = int(audio_duration(str(raw_path)) * 1000)
+            else:
+                audio, sr = load_audio(str(raw_path))
+                duration_ms = int((len(audio) / sr) * 1000) if sr else None
+        except UnsupportedAudioError:
+            # Lite: no decoder for this format; the route answers 415.
+            raise
         except Exception as decode_err:
             logger.warning(
                 "Could not decode capture %s (%s): %r", capture_id, suffix, decode_err
@@ -174,7 +183,9 @@ async def create_capture(
             audio, sr = None, None
             duration_ms = None
 
-        if audio is None or sr is None:
+        if suffix == ".wav":
+            audio_path = raw_path
+        elif audio is None or sr is None:
             # Decode failed. Only pass the file straight to whisper if the
             # source is a format its miniaudio loader can still read — webm,
             # m4a, etc. would just 500 later. Surface a clean error instead.
@@ -182,8 +193,6 @@ async def create_capture(
                 raise ValueError(
                     f"Could not decode {suffix} audio — the recording may be empty or corrupt"
                 )
-            audio_path = raw_path
-        elif suffix == ".wav":
             audio_path = raw_path
         else:
             # Transcode to WAV so downstream loaders (miniaudio, soundfile) work

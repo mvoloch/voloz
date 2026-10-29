@@ -14,13 +14,12 @@ alembic>=1.13.0
 # huggingface_hub is imported by the offline patch and startup cache setup
 huggingface_hub>=0.20.0
 
-# Audio decoding for captures (librosa.load) and 16 kHz upload
-audioop-lts>=0.2.1; python_version >= "3.13"
-librosa>=0.10.0
+# Audio for captures: soundfile reads the WAV, soxr resamples it to 16 kHz
+# for upload (utils/audio.load_audio). No librosa, so no numba, llvmlite or
+# scipy: the app sends WAV, and other formats get a 415.
 soundfile>=0.12.0
+soxr>=0.3.2
 numpy>=1.24.0,<2.0
-numba>=0.60.0,<0.61.0; python_version < "3.13"
-numba>=0.61.0; python_version >= "3.13"
 
 # Cloud endpoints
 httpx>=0.27.0

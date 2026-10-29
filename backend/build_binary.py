@@ -770,13 +770,11 @@ def build_lite_server():
         "uvicorn",
         "--hidden-import",
         "sqlalchemy",
-        # librosa reads lazy_loader .pyi stubs at runtime (see build_server).
-        "--collect-all",
-        "lazy_loader",
-        "--collect-all",
-        "librosa",
+        # Captures decode with soundfile and resample with soxr; no librosa.
         "--hidden-import",
         "soundfile",
+        "--hidden-import",
+        "soxr",
         "--copy-metadata",
         "huggingface-hub",
         "--copy-metadata",
@@ -805,6 +803,19 @@ def build_lite_server():
         "fastmcp",
         "mcp",
         "PIL",
+        # librosa and what only it pulls in: the lite server reads WAV with
+        # soundfile and resamples with soxr (utils/audio.load_audio).
+        "librosa",
+        "lazy_loader",
+        "numba",
+        "llvmlite",
+        "scipy",
+        "sklearn",
+        "joblib",
+        "audioread",
+        "resampy",
+        "pooch",
+        "msgpack",
     ):
         args.extend(["--exclude-module", module])
 

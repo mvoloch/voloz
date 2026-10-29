@@ -71,6 +71,8 @@ unidic-lite>=1.0.8
 audioop-lts>=0.2.1; python_version >= "3.13"
 librosa>=0.10.0
 soundfile>=0.12.0
+# utils/audio.load_audio resamples with soxr directly (librosa uses it too)
+soxr>=0.3.2
 numpy>=1.24.0,<2.0
 # numba 0.60.x ships no cp313 wheel, so on Python 3.13 pip falls back to a
 # source build that refuses to compile ("only versions >=3.9,<3.13 are

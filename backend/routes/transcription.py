@@ -9,6 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from .. import models
 from ..services import transcribe
 from ..services.task_queue import create_background_task
+from ..utils.audio import UnsupportedAudioError
 from ..utils.tasks import get_task_manager
 
 router = APIRouter()
@@ -46,8 +47,9 @@ async def transcribe_audio(
         # The STT backend (mlx_audio.stt -> miniaudio) only decodes
         # WAV/FLAC/MP3/Vorbis, so browser recordings uploaded as WebM/Opus
         # fail with "unsupported file format" (issue: web-mode dictation).
-        # librosa already decoded the file above (it falls back to
-        # audioread/ffmpeg for exotic containers), so re-encode that PCM to a
+        # load_audio already decoded the file above (in studio, librosa's
+        # audioread/ffmpeg fallback handles exotic containers; lite answers
+        # 415 for them), so re-encode that PCM to a
         # temp WAV and hand *that* to Whisper. WAV inputs pass through
         # unchanged.
         if file_suffix != ".wav":
@@ -99,6 +101,8 @@ async def transcribe_audio(
 
     except HTTPException:
         raise
+    except UnsupportedAudioError as e:
+        raise HTTPException(status_code=415, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:

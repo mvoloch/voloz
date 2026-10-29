@@ -37,13 +37,15 @@ jobs:
           pip install pyinstaller
           pip install -r backend/requirements-lite.txt
 
-      - name: Check the environment has no PyTorch
+      - name: Check the environment has no PyTorch or librosa
         shell: bash
         run: |
-          if python -c "import torch" 2>/dev/null; then
-            echo "::error::torch is installed; the lite server must be built without it"
-            exit 1
-          fi
+          for pkg in torch librosa; do
+            if python -c "import $pkg" 2>/dev/null; then
+              echo "::error::$pkg is installed; the lite server must be built without it"
+              exit 1
+            fi
+          done
 
       - name: Build Python server (lite)
         shell: bash

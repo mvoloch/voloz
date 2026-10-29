@@ -22,6 +22,7 @@ from ..services import warmup as warmup_service
 from ..services.refinement import RefinementFlags
 from ..services.snippets import SNIPPET_LABEL
 from ..services.task_queue import create_background_task
+from ..utils.audio import UnsupportedAudioError
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,9 @@ async def create_capture_endpoint(
             snippets=saved.snippets,
             refine_follows=bool(saved.auto_refine),
         )
+    except UnsupportedAudioError as e:
+        # Lite has no decoder beyond soundfile; its app sends WAV.
+        raise HTTPException(status_code=415, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except STTRateLimitError as e:

@@ -2,13 +2,15 @@
 Warm-up for the dictation path.
 
 The first capture after the server starts paid one-off costs later captures
-don't: loading the audio-decoding stack (librosa / soundfile and their native
-libraries — measured ~1.4 s on Linux and ~3.9 s on Windows from source, more
-in the frozen Windows app) and, with remote endpoints, the first TLS handshake
-to the STT and LLM providers (~1.5–2 s on the first call). In the installed
-app the first dictation took ~15 s against ~2 s for the next ones.
+don't: loading the audio-decoding stack (it was librosa / soundfile and their
+native libraries — measured ~1.4 s on Linux and ~3.9 s on Windows from source,
+more in the frozen Windows app; now soundfile and soxr only) and, with remote
+endpoints, the first TLS handshake to the STT and LLM providers (~1.5–2 s on
+the first call). In the installed app the first dictation took ~15 s against
+~2 s for the next ones.
 
-- ``warm_audio_decoder`` decodes a short silent WAV once, at startup.
+- ``warm_audio_decoder`` decodes and resamples a short silent WAV once, at
+  startup.
 - ``warm_remote_backends`` opens the pooled connections of remote STT / LLM
   backends. It runs at startup and again whenever recording starts
   (``POST /capture/warmup``), so the handshake overlaps the user's speech
