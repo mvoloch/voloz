@@ -262,7 +262,11 @@ Two dictation features, both in Lite (they live in the captures router).
   casual, no final period on a single short sentence; code (VS Code,
   Cursor, Windsurf, Zed, Sublime, Visual Studio, JetBrains, Windows
   Terminal, PowerShell, cmd) → identifiers and casing kept, no prose
-  restyling. Other apps, or the "Adapt style to the app" switch off
+  restyling; AI assistants (Claude and ChatGPT desktop, and Claude,
+  ChatGPT, Gemini, Perplexity, Copilot tabs) → a prompt: never answered,
+  shortened or summarized, paragraphs when long (added 2026-10-29: on the
+  owner's 4 longest real dictations, Haiku went from 1 paragraph to 2-7
+  with the same words kept and no question answered). Other apps, or the "Adapt style to the app" switch off
   (Settings → Dictation → Refinement, on by default): the prompt is
   byte-for-byte the old one. Both Claude Haiku and Qwen 3.8 27B kept the
   final period on "Beleza, valeu." despite the prompt line (the few-shot

@@ -20,6 +20,7 @@ from backend.backends.anthropic_backend import AnthropicLLMBackend
 from backend.services import llm as llm_service
 from backend.services import refinement, voice_commands
 from backend.services.app_context import (
+    ASSISTANT,
     CHAT,
     CODE,
     EMAIL,
@@ -62,6 +63,14 @@ def _clean_backends():
         ("msedge.exe", "Mail - Marcus Voloch - Outlook", EMAIL),
         ("chrome.exe", "(2) WhatsApp", CHAT),
         ("firefox.exe", "Chat | Microsoft Teams", CHAT),
+        ("Claude.exe", "Claude", ASSISTANT),
+        ("ChatGPT.exe", None, ASSISTANT),
+        ("com.anthropic.claudefordesktop", None, ASSISTANT),
+        ("chrome.exe", "ChatGPT - Resumo do contrato", ASSISTANT),
+        ("msedge.exe", "Claude", ASSISTANT),
+        ("chrome.exe", "Google Gemini", ASSISTANT),
+        # An email about Claude stays an email: email titles are checked first.
+        ("chrome.exe", "Claude pricing - marcus@gmail.com - Gmail", EMAIL),
         ("chrome.exe", "Google Docs", None),
         ("chrome.exe", None, None),
         # Unknown or missing.

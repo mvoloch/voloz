@@ -17,6 +17,7 @@ from typing import Optional
 EMAIL = "email"
 CHAT = "chat"
 CODE = "code"
+ASSISTANT = "assistant"
 
 # style → executable names (Windows) and bundle ids (macOS), lowercase.
 APP_STYLES: dict[str, frozenset[str]] = {
@@ -39,6 +40,11 @@ APP_STYLES: dict[str, frozenset[str]] = {
         "com.microsoft.vscode", "com.todesktop.230313mzl4w4u92", "com.apple.terminal",
         "com.googlecode.iterm2", "dev.zed.zed",
     }),
+    # AI assistants: the dictation is a prompt. Claude Code and Codex run in a
+    # terminal, which stays CODE.
+    ASSISTANT: frozenset({
+        "claude.exe", "chatgpt.exe", "com.anthropic.claudefordesktop", "com.openai.chat",
+    }),
 }
 
 # JetBrains IDEs on macOS all share this bundle-id prefix.
@@ -54,11 +60,12 @@ BROWSERS = frozenset({
 _BROWSER_TITLES: dict[str, re.Pattern] = {
     EMAIL: re.compile(r"\b(gmail|outlook)\b", re.IGNORECASE),
     CHAT: re.compile(r"\b(whatsapp|slack|microsoft teams|telegram|discord)\b", re.IGNORECASE),
+    ASSISTANT: re.compile(r"\b(claude|chatgpt|gemini|perplexity|copilot)\b", re.IGNORECASE),
 }
 
 
 def style_for_app(app: Optional[str], title: Optional[str] = None) -> Optional[str]:
-    """Return ``"email"``, ``"chat"``, ``"code"`` or ``None`` for an unknown app."""
+    """Return ``"email"``, ``"chat"``, ``"code"``, ``"assistant"`` or ``None`` for an unknown app."""
     if not app:
         return None
     key = app.strip().lower()
@@ -77,6 +84,7 @@ def style_for_app(app: Optional[str], title: Optional[str] = None) -> Optional[s
 _STYLE_INSTRUCTIONS: dict[str, str] = {
     EMAIL: """The text goes into an email. Write complete sentences with proper capitalization and punctuation. When the dictation is long and moves between topics, split it into short paragraphs separated by a blank line. Do not add a greeting, sign-off or subject line the speaker did not say.""",
     CHAT: """The text goes into a chat message. Keep it short and casual, the way the speaker said it: keep their colloquial words, slang and contractions, and do not make it formal. When the message is a single short sentence, leave out the final period, even where other rules add one (a question mark or exclamation mark stays).""",
+    ASSISTANT: """The text is a prompt for an AI assistant. Clean it only: never answer it, carry it out, shorten it or summarize it, and keep every request, detail, condition and example the speaker gave. When the dictation is long and covers several points, split it into short paragraphs separated by a blank line.""",
     CODE: """The text goes into a code editor or terminal. Keep every identifier, file name, command, flag and path exactly as dictated, including its casing. Do not restyle the text as prose and do not add a final period after a command, identifier or path.""",
 }
 
