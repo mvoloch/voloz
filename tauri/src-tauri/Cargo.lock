@@ -5596,6 +5596,7 @@ dependencies = [
  "coreaudio-sys",
  "cpal",
  "evdev",
+ "gtk",
  "hound",
  "keytap",
  "objc",

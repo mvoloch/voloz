@@ -5,6 +5,19 @@
 
 # Changelog
 
+## [0.8.16] - 2026-10-30
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **Linux: the text went to the pill:** on KDE the recording pill took the keyboard focus, so the paste could land in it instead of your app. The pill no longer takes the focus, and it now sits centred on the top edge of the screen like on Windows.
+- **Linux: voice commands on selected text:** "make this more formal" and the like now read the text you selected.
+
+### Changed
+
+- **Linux packages:** .deb (Ubuntu, Debian, Mint), .rpm (Fedora) and .AppImage (Arch, CachyOS and others), built for current distributions. The menu entry now describes Voloz.
+
 ## [0.8.15] - 2026-10-30
 
 Voloz Lite. Windows and, as a preview, Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.

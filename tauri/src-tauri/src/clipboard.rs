@@ -827,7 +827,7 @@ mod tests {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn current_change_count() -> Result<i64, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
@@ -866,11 +866,27 @@ mod linux {
     }
 }
 
+/// Linux stand-in for a change counter: a hash of the clipboard's text
+/// (0 when it holds no text). Changes whenever another text is copied.
+#[cfg(target_os = "linux")]
+fn text_stamp(text: Option<&str>) -> i64 {
+    use std::hash::{Hash, Hasher};
+    let Some(text) = text else { return 0 };
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut hasher);
+    hasher.finish() as i64
+}
+
+#[cfg(target_os = "linux")]
+pub fn current_change_count() -> Result<i64, String> {
+    Ok(text_stamp(linux::get_text()?.as_deref()))
+}
+
 #[cfg(target_os = "linux")]
 pub fn write_text(text: &str) -> Result<i64, String> {
     let owned = text.to_string();
     linux::with(move |c| c.set_text(owned))?;
-    Ok(0)
+    Ok(text_stamp(Some(text)))
 }
 
 #[cfg(target_os = "linux")]

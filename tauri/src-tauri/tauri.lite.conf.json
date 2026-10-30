@@ -25,8 +25,16 @@
         "files": {
           "/usr/lib/udev/rules.d/60-voloz-uinput.rules": "linux/60-voloz-uinput.rules"
         }
+      },
+      "rpm": {
+        "files": {
+          "/usr/lib/udev/rules.d/60-voloz-uinput.rules": "linux/60-voloz-uinput.rules"
+        }
       }
-    }
+    },
+    "category": "Utility",
+    "shortDescription": "Voice dictation: hold a shortcut, speak, and the text appears where you type.",
+    "longDescription": "Voloz Lite turns your speech into clean text in any app. Hold the shortcut, speak, release: the text is transcribed and refined by the services you choose (your own Groq, OpenAI or Claude keys) and pasted where the cursor is."
   },
   "plugins": {
     "updater": {

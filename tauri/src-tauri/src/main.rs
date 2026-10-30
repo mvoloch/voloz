@@ -57,24 +57,45 @@ fn build_dictate_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewW
     .skip_taskbar(true)
     .resizable(false)
     .shadow(false)
-    .visible(false)
-    .build()?;
+    .visible(false);
+    // Linux: the pill never takes the focus (Windows: make_non_activating).
+    #[cfg(target_os = "linux")]
+    let window = window.focusable(false);
+    let window = window.build()?;
 
     #[cfg(target_os = "windows")]
     make_non_activating(&window);
 
     #[cfg(target_os = "linux")]
-    allow_microphone(&window);
+    {
+        make_non_activating_linux(&window);
+        allow_microphone(&window);
+    }
 
     if let Some(monitor) = window.current_monitor()? {
-        let monitor_size = monitor.size();
-        let win_size = window.outer_size()?;
-        let x = (monitor_size.width as i32 - win_size.width as i32) / 2;
-        let y = (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
-        window.set_position(PhysicalPosition::new(x, y))?;
+        let _ = window.set_position(pill_position(&window, &monitor));
     }
 
     Ok(window)
+}
+
+/// Top-centre of `monitor` for the pill window. A hidden window reports no
+/// size on Linux (X11) until it is first shown, which put the notch half a
+/// pill to the right; the configured width stands in until then.
+#[cfg(desktop)]
+pub(crate) fn pill_position(window: &tauri::WebviewWindow, monitor: &tauri::Monitor) -> PhysicalPosition<i32> {
+    let monitor_pos = monitor.position();
+    let monitor_size = monitor.size();
+    let width = window
+        .outer_size()
+        .ok()
+        .map(|size| size.width)
+        .filter(|w| *w > 0)
+        .unwrap_or((DICTATE_WINDOW_WIDTH * monitor.scale_factor()).round() as u32);
+    PhysicalPosition::new(
+        monitor_pos.x + (monitor_size.width as i32 - width as i32) / 2,
+        monitor_pos.y + (monitor_size.height as f64 * PILL_TOP_FRACTION) as i32,
+    )
 }
 
 /// Keep the pill out of the foreground on Windows. With it in front,
@@ -97,6 +118,22 @@ fn make_non_activating(window: &tauri::WebviewWindow) {
             let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE.0 as isize);
         }
+    }
+}
+
+/// Linux (X11, see `main`): KWin activated the pill whenever it was shown,
+/// even with "accepts input" off, and the dictation's Ctrl+V then went to
+/// the pill (checked on KDE Plasma 6.6). A notification-type window is
+/// never activated; it also must not take the focus when mapped.
+#[cfg(target_os = "linux")]
+fn make_non_activating_linux(window: &tauri::WebviewWindow) {
+    use gtk::prelude::GtkWindowExt;
+    if let Ok(gtk_window) = window.gtk_window() {
+        // The window manager reads the type when the window is mapped; the
+        // pill is built hidden, so this lands before its first show.
+        gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Notification);
+        gtk_window.set_accept_focus(false);
+        gtk_window.set_focus_on_map(false);
     }
 }
 
@@ -161,14 +198,7 @@ pub fn show_dictate_window(app: &tauri::AppHandle) {
         .flatten()
         .or_else(|| window.primary_monitor().ok().flatten());
     if let Some(monitor) = monitor {
-        let monitor_pos = monitor.position();
-        let monitor_size = monitor.size();
-        if let Ok(win_size) = window.outer_size() {
-            let x = monitor_pos.x
-                + (monitor_size.width as i32 - win_size.width as i32) / 2;
-            let y = monitor_pos.y + (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
-            let _ = window.set_position(PhysicalPosition::new(x, y));
-        }
+        let _ = window.set_position(pill_position(&window, &monitor));
     }
     // Skip on Linux: tao's CursorIgnoreEvents handler unwraps the GdkWindow,
     // which is None until the window is first shown, aborting the process.
@@ -2245,5 +2275,14 @@ pub fn run() {
 }
 
 fn main() {
+    // Linux: draw through X11 (XWayland on a Wayland desktop). Wayland lets
+    // no client place its own window or keep it from taking the focus, and
+    // the pill needs both: a notch at the top centre that never steals the
+    // focus from the app being dictated into. Also sidesteps a WebKitGTK
+    // crash on Wayland (tauri-apps/tauri#8541; the AppImage forces it too).
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
+        std::env::set_var("GDK_BACKEND", "x11");
+    }
     run();
 }

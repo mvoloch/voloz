@@ -2,7 +2,7 @@ name: Release (lite)
 
 # Voloz lite: dictation only, server built without PyTorch
 # (backend/requirements-lite.txt, build_binary.py --lite) and the frontend
-# built with VITE_EDITION=lite. Windows, then Linux (.deb and .AppImage)
+# built with VITE_EDITION=lite. Windows, then Linux (.deb, .rpm, .AppImage)
 # added to the same draft release by a second job.
 #
 # Its own tag (lite-v<version>) and draft release, so its installers don't
@@ -110,15 +110,16 @@ jobs:
           includeUpdaterJson: false
 
   # Linux: built after Windows so the draft release already exists; its
-  # bundles are added to that draft. Ubuntu 22.04 keeps glibc old enough for
-  # most current distros. Lite on Linux can't paste yet: a dictation is left
+  # bundles are added to that draft. Ubuntu 24.04: the AppImage built on
+  # 22.04 carried graphics libraries too old for a 2024 Intel GPU (WebKit
+  # aborted with EGL_BAD_PARAMETER); glibc 2.39 is the floor now. Lite on Linux can't paste yet: a dictation is left
   # on the clipboard (copy_final_text) and the global shortcut needs read
   # access to /dev/input (the user in the "input" group).
   linux:
     needs: release
     permissions:
       contents: write
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -182,15 +183,16 @@ jobs:
           VITE_EDITION: lite
         run: |
           cd tauri
-          bun run tauri build --config src-tauri/tauri.lite.conf.json --bundles deb,appimage
+          bun run tauri build --config src-tauri/tauri.lite.conf.json --bundles deb,rpm,appimage
 
       - name: Add the bundles to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="$(jq -r '.version' tauri/src-tauri/tauri.conf.json)"
-          ls -la tauri/src-tauri/target/release/bundle/deb tauri/src-tauri/target/release/bundle/appimage
+          ls -la tauri/src-tauri/target/release/bundle/deb tauri/src-tauri/target/release/bundle/rpm tauri/src-tauri/target/release/bundle/appimage
           gh release upload "lite-v${VERSION}" \
             tauri/src-tauri/target/release/bundle/deb/*.deb \
+            tauri/src-tauri/target/release/bundle/rpm/*.rpm \
             tauri/src-tauri/target/release/bundle/appimage/*.AppImage \
             --clobber

@@ -55,6 +55,8 @@ webkit2gtk = "2.0"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 # Ctrl+V through a uinput virtual keyboard (the same evdev keytap reads).
 evdev = "0.13"
+# The pill's X11 window type (the version Tauri already builds on).
+gtk = "0.18"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2.0"

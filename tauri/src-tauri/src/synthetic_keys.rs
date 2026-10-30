@@ -294,6 +294,7 @@ mod linux_keyboard {
         let mut keys = AttributeSet::<KeyCode>::new();
         keys.insert(KeyCode::KEY_LEFTCTRL);
         keys.insert(KeyCode::KEY_V);
+        keys.insert(KeyCode::KEY_C);
         let device = VirtualDevice::builder()?
             .name("Voloz virtual keyboard")
             .with_keys(&keys)?
@@ -341,7 +342,14 @@ pub fn send_paste() -> Result<(), String> {
     Err("synthetic paste is not yet implemented on this platform".into())
 }
 
-#[cfg(not(target_os = "windows"))]
+/// Linux: Ctrl+C from the virtual keyboard, so a voice command can read
+/// the selection (no UIAutomation on Linux).
+#[cfg(target_os = "linux")]
+pub fn send_copy() -> Result<(), String> {
+    linux_keyboard::send_ctrl(evdev::KeyCode::KEY_C)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn send_copy() -> Result<(), String> {
     Err("synthetic copy is not yet implemented on this platform".into())
 }

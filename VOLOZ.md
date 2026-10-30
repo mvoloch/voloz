@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: Linux pastes through a uinput virtual keyboard; released in Lite 0.8.15). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: Linux pill parity (X11, notification window, centred notch), voice commands on Linux; released in Lite 0.8.16). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1002,12 +1002,48 @@ pasted nothing). GB4 now has `/etc/udev/rules.d/60-voloz-uinput.rules`
 (delete it to undo). Not tested: the whole app on Linux (shortcut,
 microphone, pill, paste from a real dictation), GNOME.
 
-Release note: the 0.8.14 Windows job built fine but could not create the
-draft release ("Resource not accessible by integration") although the
-token had `contents: write` as in 0.8.13; that tag was the first to change
-the workflow file itself. The draft was created by hand (`gh release
-create --draft --verify-tag`) and the jobs re-run. If a later tag that
-changes the workflow fails the same way, do the same.
+Release note: from 0.8.14 on, the Windows job builds fine but cannot
+create the draft release ("Resource not accessible by integration"),
+although the token has `contents: write` as in 0.8.13. 0.8.15 failed the
+same way without touching the workflow, so "the tag changed the workflow"
+was wrong; what 0.8.14+ share is the edited workflow file. Cause unknown.
+Workaround: `gh release create lite-v<version> --draft --verify-tag` by
+hand (owner's gh), then `gh run rerun <run> --failed`.
+
+## Linux parity (`light`, 2026-10-30, Lite 0.8.16)
+
+The owner's rule: Linux is a clone of Windows, every release ships both
+(memory: platform parity). Found and fixed by running the app on GB4 (KDE
+Plasma 6.6, Wayland) with a uinput test keyboard holding the chord and a
+`kdialog` input box as the target, KWin scripts reporting the active
+window:
+- Wayland lets no client place its window or refuse the focus. The app now
+  sets `GDK_BACKEND=x11` at start when unset and `DISPLAY` exists (runs on
+  XWayland, as the AppImage hook already forced; tauri#8541).
+- The pill took the focus anyway: KWin activated it on show even with
+  "accepts input: False" (`focusable(false)`), and the test Ctrl+V went to
+  the pill. It is now a `Notification`-type GTK window with accept-focus
+  and focus-on-map off (`make_non_activating_linux`): the target kept the
+  focus and the Ctrl+V reached it.
+- A hidden X11 window reports width 0, so the notch sat half a pill to the
+  right; `pill_position` falls back to the configured width.
+- Voice commands: `send_copy` sends Ctrl+C through the virtual keyboard,
+  and `current_change_count` is a hash of the clipboard text on Linux, so
+  `copy_selection` sees the copy.
+- Bundles: `.deb`, `.rpm` and `.AppImage` from Ubuntu 24.04 (the 22.04
+  AppImage aborted in WebKit on GB4's Meteor Lake GPU with
+  EGL_BAD_PARAMETER; `.deb` from the same build ran). The AppImage is the
+  package for Arch-family distros (the owner's son runs CachyOS). Desktop
+  entry: dictation description and category Utility instead of upstream's
+  TTS text.
+
+Differences that stay: the default push-to-talk on Linux is Right Ctrl +
+Right Shift (releasing Super opens the KDE/GNOME launcher, which would take
+the focus before the paste); "adapt to the app" has no app name on Wayland;
+KDE asks once for microphone access ("Allow Apps to Use the Camera?").
+
+Not tested on Linux yet: a full dictation with a real key and voice, GNOME,
+the AppImage from the 24.04 build, CachyOS.
 
 ## Developing on GB4
 

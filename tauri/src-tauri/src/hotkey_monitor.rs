@@ -566,14 +566,7 @@ fn apply_effect(app: &AppHandle, bindings: &Bindings, effect: Effect) {
                     .flatten()
                     .or_else(|| window.primary_monitor().ok().flatten());
                 if let Some(monitor) = monitor {
-                    let monitor_pos = monitor.position();
-                    let monitor_size = monitor.size();
-                    if let Ok(win_size) = window.outer_size() {
-                        let x = monitor_pos.x
-                            + (monitor_size.width as i32 - win_size.width as i32) / 2;
-                        let y = monitor_pos.y + (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
-                        let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
-                    }
+                    let _ = window.set_position(crate::pill_position(&window, &monitor));
                 }
                 // Skip on Linux: aborts if the window was never realized
                 // (see show_dictate_window in main.rs).
