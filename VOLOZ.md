@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-29 (lighter Lite on `feat/lite-086`: no librosa, no main window at login, clipboard restore; not merged). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: a paste that can't return to its window leaves the text copied; not released). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -734,6 +734,36 @@ measured on Windows; expect the same order there, for 3 min after each
 dictation. Cheaper option if it matters: suspend the graph while idle
 (about half the cost, no pre-roll). Untested on Windows: everything in
 this item.
+
+## Paste that can't reach its window (`light`, 2026-10-30)
+
+Seen on the Dell with 0.8.7 (2026-10-30, 11:45 and 12:28 local): two
+dictations transcribed and refined, then `paste failed` 7–11 ms after
+`refine ok`, with no clipboard line; the owner copied the text from the
+app. A paste that works takes ~600 ms (120 ms settle + 400 ms consume), so
+these failed before touching the clipboard: returning to the window the
+dictation started in (`focus_capture::activate`). On Windows that fails
+fast when `SetForegroundWindow` is refused (another window came to the
+front during the dictation and the foreground lock keeps a background
+process from taking it back) or the window is gone. The text then only
+reached the captures list. The log had neither the app nor the reason, so
+which of the two it was is unknown.
+
+Fix (not released, untested on Windows): when the window can't be brought
+back (or the modifier wait gives up), `paste_final_text` leaves the text
+on the clipboard and returns `copied`; the pill says "Not pasted. The text
+is copied: Ctrl+V" for 6 s, and a click on it copies the text again (the
+error pill otherwise copies its own message). Not done during a new
+recording. The user's clipboard is not restored in that case, by design.
+Log lines: `[rust] paste: could not return to <exe> (in front: <exe>):
+<reason>; text left on the clipboard`, then `paste failed: text left on
+the clipboard`; other failures now log their message (`paste failed:
+<message>`), and a paste skipped for Voloz's own window says so instead of
+`paste ok`. Only exe names are logged, never window titles or text.
+
+Gate on GB4: `tsc` clean; Windows clippy the same 18 warning lines as
+before; Linux `cargo check` clean; biome the same findings as before in
+the three files touched.
 
 ## Developing on GB4
 

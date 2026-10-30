@@ -1464,7 +1464,11 @@ fn open_input_monitoring_settings(app: tauri::AppHandle) -> Result<(), String> {
 /// so a failed `CGEventPost` / `SendInput` never leaves the user's
 /// clipboard stuck on the transcript.
 ///
-/// Skips (returns `false`) without touching anything when:
+/// When the target window can't be brought back (Windows' foreground lock
+/// refused it, or the window is gone) nothing would be pasted, so the text
+/// is left on the clipboard (returns `Copied`) and `dictation.log` says why.
+///
+/// Skips (returns `Skipped`) without touching anything when:
 /// - `focus.bundle_id` is Voicebox itself — step 6 will inject directly
 ///   into our own webview; pasting would just double-insert or miss the
 ///   real target.
@@ -1472,14 +1476,14 @@ fn open_input_monitoring_settings(app: tauri::AppHandle) -> Result<(), String> {
 ///   keystroke, leaving the user's clipboard clobbered with nothing to
 ///   show for it.
 ///
-/// Returns `true` when the paste sequence completed end-to-end.
+/// Returns `Pasted` when the paste sequence completed end-to-end.
 #[command]
 async fn paste_final_text(
     text: String,
     focus: focus_capture::FocusSnapshot,
-) -> Result<bool, String> {
+) -> Result<PasteOutcome, String> {
     if focus.bundle_id.as_deref() == Some(VOICEBOX_BUNDLE_ID) {
-        return Ok(false);
+        return Ok(PasteOutcome::Skipped);
     }
     if !accessibility::is_trusted() {
         return Err(
@@ -1493,9 +1497,25 @@ async fn paste_final_text(
     // Win+Ctrl+V and the like (Windows opens its sound-output flyout) and
     // the text is lost. Wait for the keys first; activating the target
     // earlier would also pull focus away from where the user is dictating.
-    wait_for_modifier_release("paste").await?;
-
-    focus_capture::activate(&focus)?;
+    let returned = match wait_for_modifier_release("paste").await {
+        Ok(()) => focus_capture::activate(&focus),
+        Err(e) => Err(e),
+    };
+    if let Err(why) = returned {
+        let target = focus.bundle_id.as_deref().unwrap_or("unknown");
+        let front = focus_capture::foreground_exe().unwrap_or_else(|| "unknown".into());
+        let not_pasted = format!("[rust] paste: could not return to {target} (in front: {front}): {why}");
+        return match clipboard::write_text(&text) {
+            Ok(_) => {
+                dictation_log::log(&format!("{not_pasted}; text left on the clipboard"));
+                Ok(PasteOutcome::Copied)
+            }
+            Err(e) => {
+                dictation_log::log(&format!("{not_pasted}; copying the text failed too: {e}"));
+                Err(why)
+            }
+        };
+    }
     tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
 
     let snapshot = clipboard::save_clipboard()?;
@@ -1552,7 +1572,19 @@ async fn paste_final_text(
 
     restored?;
     paste_result?;
-    Ok(true)
+    Ok(PasteOutcome::Pasted)
+}
+
+/// What became of a dictation's text, for the dictate window's log and pill.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum PasteOutcome {
+    Pasted,
+    /// The text was for Voloz's own window, which inserts it itself.
+    Skipped,
+    /// The target window couldn't be brought back; the text is on the
+    /// clipboard for the user to paste.
+    Copied,
 }
 
 /// Read the text selected in the app that had focus when a voice command

@@ -140,6 +140,8 @@ export interface UseCaptureRecordingSessionResult {
   pillState: CapturePillState;
   pillElapsedMs: number;
   errorMessage: string | null;
+  /** What a click on the error pill copies, when not the message itself. */
+  errorCopyText: string | null;
   isRecording: boolean;
   /** The microphone's level analyser while recording (for the pill's level meter). */
   recordingLevel: AnalyserNode | null;
@@ -149,6 +151,11 @@ export interface UseCaptureRecordingSessionResult {
   stopRecording: () => void;
   toggleRecording: () => void;
   dismissError: () => void;
+  /**
+   * Show ``message`` on the pill (a click copies ``copyText``), unless a
+   * recording is in progress.
+   */
+  showNotice: (message: string, copyText?: string) => void;
   uploadFile: (file: File, source: CaptureSource) => void;
   refine: (captureId: string) => void;
 }
@@ -173,6 +180,7 @@ export function useCaptureRecordingSession(
   const [pillState, setPillState] = useState<CapturePillState>('hidden');
   const [frozenElapsedMs, setFrozenElapsedMs] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCopyText, setErrorCopyText] = useState<string | null>(null);
   const restTimerRef = useRef<number | null>(null);
   const errorTimerRef = useRef<number | null>(null);
 
@@ -228,24 +236,35 @@ export function useCaptureRecordingSession(
   }, [clearRestTimer]);
 
   const showError = useCallback(
-    (message: string, durationMs: number = ERROR_PILL_VISIBLE_MS) => {
+    (message: string, durationMs: number = ERROR_PILL_VISIBLE_MS, copyText?: string) => {
       clearRestTimer();
       clearErrorTimer();
       setErrorMessage(message || 'Something went wrong');
+      setErrorCopyText(copyText ?? null);
       setPillState('error');
       errorTimerRef.current = window.setTimeout(() => {
         setPillState('hidden');
         setErrorMessage(null);
+        setErrorCopyText(null);
         errorTimerRef.current = null;
       }, durationMs);
     },
     [clearRestTimer, clearErrorTimer],
   );
 
+  const showNotice = useCallback(
+    (message: string, copyText?: string) => {
+      if (pillStateRef.current === 'recording') return;
+      showError(message, ERROR_PILL_VISIBLE_MS, copyText);
+    },
+    [showError],
+  );
+
   const dismissError = useCallback(() => {
     clearErrorTimer();
     setPillState('hidden');
     setErrorMessage(null);
+    setErrorCopyText(null);
   }, [clearErrorTimer]);
 
   useEffect(
@@ -544,6 +563,7 @@ export function useCaptureRecordingSession(
     pillState,
     pillElapsedMs,
     errorMessage,
+    errorCopyText,
     isRecording,
     recordingLevel,
     isUploading: uploadMutation.isPending,
@@ -552,6 +572,7 @@ export function useCaptureRecordingSession(
     stopRecording,
     toggleRecording,
     dismissError,
+    showNotice,
     uploadFile,
     refine,
   };

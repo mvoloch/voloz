@@ -83,6 +83,9 @@ function toPlatformLineEndings(text: string): string {
  *      lands. When the audio element's ``ended`` fires, we emit
  *      ``dictate:hide`` so Rust tucks the window away.
  */
+const PASTE_SHORTCUT =
+  typeof navigator !== 'undefined' && /mac/i.test(navigator.platform) ? '⌘V' : 'Ctrl+V';
+
 export function DictateWindow() {
   // Force the host document chrome to be transparent so the Tauri window
   // takes on the pill's own shape.
@@ -120,14 +123,27 @@ export function DictateWindow() {
         return;
       }
       try {
-        await invoke('paste_final_text', { text: toPlatformLineEndings(text), focus });
-        dictationLog('paste ok');
+        const outcome = await invoke<'pasted' | 'skipped' | 'copied'>('paste_final_text', {
+          text: toPlatformLineEndings(text),
+          focus,
+        });
+        if (outcome === 'copied') {
+          // The target window couldn't be brought back; Rust left the text
+          // on the clipboard and logged why.
+          dictationLog('paste failed: text left on the clipboard');
+          sessionRef.current.showNotice(
+            pillT('captures.pill.notPasted', { shortcut: PASTE_SHORTCUT }),
+            text,
+          );
+        } else {
+          dictationLog(outcome === 'skipped' ? 'paste skipped: Voloz window' : 'paste ok');
+        }
       } catch (err) {
         // Surface accessibility failures to the main window so it can prompt
         // the user to grant permission. Other errors stay swallowed —
         // the transcription still landed in the captures list.
         const msg = err instanceof Error ? err.message : String(err);
-        dictationLog(`paste failed${/accessibility/i.test(msg) ? ' (accessibility)' : ''}`);
+        dictationLog(`paste failed: ${msg}`);
         if (/accessibility/i.test(msg)) {
           emit('system:accessibility-missing').catch(() => {});
         }
@@ -426,6 +442,7 @@ export function DictateWindow() {
           state={effectiveState}
           elapsedMs={effectiveElapsed}
           errorMessage={session.errorMessage}
+          errorCopyText={session.errorCopyText}
           onDismiss={session.dismissError}
           onStop={session.isRecording ? session.stopRecording : undefined}
           stopTitle={pillT('captures.pill.stopEscTitle')}

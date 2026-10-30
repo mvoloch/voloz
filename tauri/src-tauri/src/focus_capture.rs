@@ -595,6 +595,21 @@ pub fn window_exe_name(hwnd: windows::Win32::Foundation::HWND) -> Option<String>
 /// Text selected in the focused control: `Some` (possibly empty) when the
 /// control exposes it through UIAutomation, `None` when the caller has to
 /// fall back to a synthetic copy.
+/// Lowercased exe name of the app in front now, for the paste log.
+#[cfg(target_os = "windows")]
+pub fn foreground_exe() -> Option<String> {
+    let hwnd = unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() };
+    if hwnd.is_invalid() {
+        return None;
+    }
+    window_exe_name(hwnd)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn foreground_exe() -> Option<String> {
+    None
+}
+
 #[cfg(target_os = "windows")]
 pub fn read_selection() -> Option<String> {
     win::focused_selection()

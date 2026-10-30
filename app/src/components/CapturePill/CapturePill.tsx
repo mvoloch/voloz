@@ -155,7 +155,8 @@ function formatElapsed(ms: number): string {
  * and bar motion; `elapsedMs` freezes at whatever the caller last passed in
  * (recording advances the timer, transcribing/refining hold the final value).
  * The ``error`` state renders a destructive variant — a clickable pill that
- * copies its message to the clipboard on press and calls ``onDismiss``.
+ * copies its message (or ``errorCopyText``) to the clipboard on press and
+ * calls ``onDismiss``.
  */
 export function CapturePill({
   state,
@@ -165,6 +166,7 @@ export function CapturePill({
   handsFree,
   levelSource,
   errorMessage,
+  errorCopyText,
   onDismiss,
   className,
 }: {
@@ -182,6 +184,8 @@ export function CapturePill({
    */
   levelSource?: AnalyserNode | null;
   errorMessage?: string | null;
+  /** What a click on the error pill copies instead of its message. */
+  errorCopyText?: string | null;
   onDismiss?: () => void;
   className?: string;
 }) {
@@ -192,6 +196,7 @@ export function CapturePill({
     return (
       <ErrorPill
         message={errorMessage ?? t('captures.pill.errorFallback')}
+        copyText={errorCopyText ?? null}
         onDismiss={onDismiss}
         className={className}
       />
@@ -261,17 +266,19 @@ export function CapturePill({
 
 function ErrorPill({
   message,
+  copyText,
   onDismiss,
   className,
 }: {
   message: string;
+  copyText: string | null;
   onDismiss?: () => void;
   className?: string;
 }) {
   const t = pillT;
   const handleClick = async () => {
     try {
-      await navigator.clipboard.writeText(message);
+      await navigator.clipboard.writeText(copyText ?? message);
     } catch {
       // Clipboard access can be denied in rare webview configs — ignore,
       // we still want the dismiss to land.
@@ -283,7 +290,7 @@ function ErrorPill({
     <button
       type="button"
       onClick={handleClick}
-      title={t('captures.pill.errorCopyTooltip')}
+      title={t(copyText ? 'captures.pill.copyTextTooltip' : 'captures.pill.errorCopyTooltip')}
       className={cn(
         'inline-flex items-center gap-2.5 px-4 h-10 rounded-full',
         'bg-white/85 ring-1 ring-destructive/25 shadow-lg backdrop-blur-xl text-red-600 hover:bg-white',

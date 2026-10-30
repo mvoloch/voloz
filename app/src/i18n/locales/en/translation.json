@@ -138,7 +138,9 @@
       "refineRateLimited": "Refinement skipped (rate limit), raw text pasted",
       "transcribeRateLimited": "Transcription failed (rate limit), try again in a minute",
       "micStopped": "The microphone stopped; what was recorded was sent",
-      "micStoppedEmpty": "The microphone stopped before anything was recorded"
+      "micStoppedEmpty": "The microphone stopped before anything was recorded",
+      "notPasted": "Not pasted. The text is copied: {{shortcut}}",
+      "copyTextTooltip": "Click to copy the text again"
     },
     "chord": {
       "capturing": "Capturing…",
