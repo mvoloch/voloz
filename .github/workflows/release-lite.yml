@@ -185,6 +185,29 @@ jobs:
           cd tauri
           bun run tauri build --config src-tauri/tauri.lite.conf.json --bundles deb,rpm,appimage
 
+      # linuxdeploy copies the build machine's libwayland-*.so into the
+      # AppImage. On a newer graphics stack (GB4: Intel Meteor Lake, Mesa 25)
+      # WebKit then aborts at start with EGL_BAD_PARAMETER. Every desktop
+      # that runs GTK 3 ships its own libwayland, so the AppImage uses that
+      # one. Repacked with the AppImage's own runtime (nothing else fetched
+      # but the pinned appimagetool).
+      - name: Drop the bundled Wayland libraries from the AppImage
+        run: |
+          set -euo pipefail
+          cd tauri/src-tauri/target/release/bundle/appimage
+          APPIMAGE="$(ls *.AppImage)"
+          OFFSET="$(./"$APPIMAGE" --appimage-offset)"
+          head -c "$OFFSET" "$APPIMAGE" > runtime
+          ./"$APPIMAGE" --appimage-extract > /dev/null
+          ls squashfs-root/usr/lib/libwayland-*.so*
+          rm -f squashfs-root/usr/lib/libwayland-*.so*
+          curl -sSfL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
+          echo "46fdd785094c7f6e545b61afcfb0f3d98d8eab243f644b4b17698c01d06083d1  appimagetool" | sha256sum -c -
+          chmod +x appimagetool
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool --runtime-file runtime squashfs-root "$APPIMAGE"
+          rm -rf squashfs-root runtime appimagetool
+          ls -la
+
       - name: Add the bundles to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

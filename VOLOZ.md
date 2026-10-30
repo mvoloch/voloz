@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: Linux pill parity (X11, notification window, centred notch), voice commands on Linux; released in Lite 0.8.16). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: the release workflow drops the bundled libwayland from the AppImage; released in Lite 0.8.17). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1042,8 +1042,19 @@ Right Shift (releasing Super opens the KDE/GNOME launcher, which would take
 the focus before the paste); "adapt to the app" has no app name on Wayland;
 KDE asks once for microphone access ("Allow Apps to Use the Camera?").
 
+AppImage (Lite 0.8.17): the 24.04 build alone did not fix the abort; the
+cause was the `libwayland-*.so*` that linuxdeploy bundles. With them
+removed (and repacked with appimagetool 1.9.0 on the AppImage's own
+runtime) it starts on GB4 with no EGL abort, mounted through fuse3 alone
+(no libfuse2) or with `--appimage-extract-and-run`. The release workflow
+does this after the build.
+
+Checking the window while GB4's screen is locked: KWin screenshots come out
+black (display off), which once looked like a blank window. `xwd -id` on the
+app's X11 window reads it from XWayland and works while locked.
+
 Not tested on Linux yet: a full dictation with a real key and voice, GNOME,
-the AppImage from the 24.04 build, CachyOS.
+CachyOS.
 
 ## Developing on GB4
 

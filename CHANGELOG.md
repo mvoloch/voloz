@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.17] - 2026-10-30
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **Linux AppImage would not open on newer computers:** on recent graphics drivers (for example Intel Core Ultra laptops) the AppImage closed at start. It now uses your system's display libraries and opens normally.
+
 ## [0.8.16] - 2026-10-30
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
