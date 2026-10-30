@@ -46,6 +46,19 @@ object AudioMath {
         return false
     }
 
+    /** The loudest 100 ms window of a whole take, as [level]. */
+    fun peakLevel(pcm: ByteArray, sampleRate: Int): Float {
+        val window = sampleRate / 10 * 2
+        var peak = 0f
+        var off = 0
+        while (off < pcm.size) {
+            val n = minOf(window, pcm.size - off)
+            peak = maxOf(peak, level(pcm.copyOfRange(off, off + n), n))
+            off += window
+        }
+        return peak
+    }
+
     /** RMS level mapped from -60..0 dBFS to 0..1. */
     fun level(buf: ByteArray, length: Int): Float {
         val n = length / 2

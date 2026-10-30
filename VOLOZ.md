@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (Lite 0.8.8 with the spelling rule; desktop STT on `whisper-large-v3`; Android prototype on `feat/android`, not pushed). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (Lite 0.8.8 with the spelling rule; desktop STT on `whisper-large-v3`; Android prototype on `feat/android`, not pushed, first dictations on the owner's phone). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -768,9 +768,11 @@ Windows folder (`wisprclone\voicebox\docs\android\screens\`, not in git).
   on tap, with a `microphone` foreground service started alongside (the
   "gravando" notification). If the first 700 ms are exact zeros (a muted
   mic), capture restarts under the foreground service.
-- **Insertion:** `ACTION_SET_TEXT` merged at the cursor, else clipboard +
-  `ACTION_PASTE`; if both fail the text stays on the clipboard and the
-  bubble offers to paste it.
+- **Insertion:** `ACTION_SET_TEXT` merged at the cursor, only when the
+  field reports its text and a cursor inside it; otherwise clipboard +
+  `ACTION_PASTE` (an app that hides its text would be wiped by SET_TEXT).
+  If both fail the text stays on the clipboard and the bubble offers to
+  paste it.
 - **Key:** the user's own Groq key, encrypted with an Android Keystore
   AES-GCM key (DataStore); audio goes straight to Groq.
 - **Prompt:** STT `whisper-large-v3`, refinement `openai/gpt-oss-120b`, both
@@ -795,6 +797,29 @@ Needs a real phone: a real dictation with the owner's key through to
 mic levels and whether the fallback is needed on Android 14/15; insertion
 in WhatsApp, Gmail and Chrome; the "Configuração restrita" flow for a
 sideloaded APK; battery restrictions; gestures and rotation.
+
+Pre-install review (2026-10-30, `dd8ec67`): an independent read of the
+whole app found 10 issues; 8 fixed: SET_TEXT could wipe a field whose app
+hides its text; a refinement cut at `max_tokens` (`finish_reason:
+length`) was inserted truncated, now it falls back to the raw transcript;
+disabling the service mid-take left the mic on and still uploaded; the
+Keystore save ran on the main thread and could crash; the paste tap
+skipped the password check; text could go into a field no longer on
+screen; the Compose focus walk (up to 600 nodes) ran on every event, now
+only with the keyboard up; a hold/drag stayed stuck when the bubble
+window was removed. Left open: processing can't be cancelled (up to two
+180 s calls on a bad network) and the bubble may anchor before an
+`adjustResize` relayout finishes. Unit tests 36 -> 40, then 42.
+
+First phone test (2026-10-30, the owner's phone, his real key): setup
+through Accessibility (all four Home checks green) and dictation into
+Voloz's own "Teste aqui" field, several times. Once, a second take a few
+minutes after the first gave "Nada foi ouvido" (the mic had sound, since
+the silent-mic message did not show, but Groq returned no words); not
+reproduced since, cause unknown. Each "Nada foi ouvido" now writes a
+history line with the take's length, its loudest 100 ms level and what
+Groq returned, so the next one can be told apart (quiet mic vs.
+transcription).
 
 Desktop notes from the same days: the owner's desktop STT model is now
 `whisper-large-v3` (switched 2026-10-30 in his settings; see Decisions).

@@ -11,6 +11,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.mvoloch.voloz.android.R
+import io.github.mvoloch.voloz.android.audio.AudioMath
 import io.github.mvoloch.voloz.android.audio.Recorder
 import io.github.mvoloch.voloz.android.audio.Take
 import io.github.mvoloch.voloz.android.audio.WavWriter
@@ -213,7 +214,7 @@ class DictationController(
                 }
             }
             result.fold(
-                onSuccess = ::deliver,
+                onSuccess = { deliver(it, take) },
                 onFailure = {
                     // The stack trace is what makes an "Erro inesperado" diagnosable.
                     Log.w(TAG, "processing failed", it)
@@ -223,8 +224,11 @@ class DictationController(
         }
     }
 
-    private fun deliver(out: DictationPipeline.Output) {
-        if (out.text.isBlank()) return flashError(context.getString(R.string.msg_nothing_heard))
+    private fun deliver(out: DictationPipeline.Output, take: Take) {
+        if (out.text.isBlank()) {
+            recordNothingHeard(out, take)
+            return flashError(context.getString(R.string.msg_nothing_heard))
+        }
         val inserted = inserter?.insert(out.text) ?: InsertResult(InsertOutcome.NO_TARGET, null)
         val ok = inserted.outcome == InsertOutcome.SET_TEXT || inserted.outcome == InsertOutcome.PASTED
         history.add(
@@ -249,6 +253,19 @@ class DictationController(
         _state.value = BubbleState.Error(msg)
         onUserMessage?.invoke(msg)
         main.postDelayed(toPasteReady, ERROR_MS)
+    }
+
+    /**
+     * Diagnostic for a take that had sound but no words: kept in the history so a
+     * failure on a phone without logcat can still be told apart (quiet mic vs. Groq).
+     */
+    private fun recordNothingHeard(out: DictationPipeline.Output, take: Take) {
+        val seconds = String.format(java.util.Locale.ROOT, "%.1f", take.durationMs / 1000.0).replace('.', ',')
+        val peak = (AudioMath.peakLevel(take.pcm, take.sampleRate) * 100).toInt()
+        val groq = out.raw.ifBlank { context.getString(R.string.diag_empty) }.take(120)
+        val line = context.getString(R.string.diag_nothing_heard, seconds, peak, groq)
+        Log.i(TAG, line)
+        history.add(HistoryEntry(text = line, raw = out.raw, timestamp = System.currentTimeMillis(), refined = false, targetPackage = null))
     }
 
     private fun pasteFromClipboard() {

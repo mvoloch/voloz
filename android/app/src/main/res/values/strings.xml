@@ -35,6 +35,9 @@
     <string name="msg_mic_unavailable">Não deu para abrir o microfone.</string>
     <string name="msg_mic_silent">O microfone só entregou silêncio. O Android pode ter bloqueado a gravação.</string>
     <string name="msg_nothing_heard">Nada foi ouvido.</string>
+    <!-- History line for a failed take: seconds, loudest volume %, what Groq returned. -->
+    <string name="diag_nothing_heard">Nada foi ouvido · %1$s s de áudio · volume máximo %2$d%% · a Groq devolveu: %3$s</string>
+    <string name="diag_empty">(nada)</string>
     <string name="msg_insert_failed">Não deu para inserir aqui. O texto ficou copiado: toque na bolha para colar.</string>
     <string name="msg_paste_failed">Não deu para colar. O texto continua copiado.</string>
     <string name="msg_refine_failed">A correção falhou; entrou o texto sem correção.</string>

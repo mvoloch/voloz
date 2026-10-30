@@ -159,6 +159,11 @@ bundled as variable TTFs in `res/font` since `7184d16` (OFL, licences in
 
 ## Not verified (needs a real phone)
 
+Seen on the owner's phone (2026-10-30): setup through Accessibility and
+real dictations into Voloz's own test field. One unexplained "Nada foi
+ouvido" on a second take (see VOLOZ.md); the history now records the
+take's length, peak level and Groq's reply when that happens. Still open:
+
 - Whether in-process capture from the accessibility service works on the
   owner's Android version, or the foreground-service fallback kicks in.
 - `ACTION_SET_TEXT` / `ACTION_PASTE` behaviour per app (Gmail, WhatsApp,
