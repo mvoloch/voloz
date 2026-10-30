@@ -735,6 +735,72 @@ dictation. Cheaper option if it matters: suspend the graph while idle
 (about half the cost, no pre-roll). Untested on Windows: everything in
 this item.
 
+## Android prototype (`feat/android`, 2026-10-29/30)
+
+Code in `android/` on `feat/android`, in the GB4 worktree
+`/mnt/data/dev/voloz-android` — **not pushed**. Kotlin + Compose, minSdk 29,
+target 35; build steps, file map and the full decision notes are in
+`android/README.md`. The platform research is `docs/android/RESEARCH.md`,
+which so far lives only in the owner's Windows folder
+(`wisprclone\voicebox\docs\android\`, not in git), with the emulator
+screenshots next to it in `screens/`.
+
+- **Toolchain (GB4):** `. /mnt/data/dev/android/env.sh` (JDK 17, SDK,
+  Gradle home on `/mnt/data`), then `cd android && ./gradlew assembleDebug
+  testDebugUnitTest`. Emulator: API 34 Google APIs x86_64, AVD `voloz34` in
+  `/mnt/data/dev/android/avd` (`ANDROID_AVD_HOME`/`ANDROID_EMULATOR_HOME`
+  point there); `/mnt/data/dev/android/emu.sh boot|wait|kill` runs it
+  headless on KVM (boots in ~30 s).
+- **Signing:** builds are signed with GB4's `~/.android/debug.keystore`.
+  Every later build must be signed with that same keystore, or Android
+  won't install it over the prototype (uninstalling wipes the stored key
+  and settings). Keep a copy with the other secrets.
+- **Bubble:** a `TYPE_ACCESSIBILITY_OVERLAY` window owned by the
+  accessibility service (no "display over other apps"), not focusable, so
+  it never takes focus from the field. Until the user drags it, it sits at
+  the right edge level with the focused field, above the keyboard; a
+  dragged spot is remembered and wins.
+- **Recording:** `AudioRecord` (16 kHz mono) in the service process, started
+  on tap, with a `microphone` foreground service started alongside (the
+  "gravando" notification). If the first 700 ms are exact zeros (a muted
+  mic), capture restarts under the foreground service.
+- **Insertion:** `ACTION_SET_TEXT` merged at the cursor, else clipboard +
+  `ACTION_PASTE`; if both fail the text stays on the clipboard and the
+  bubble offers to paste it.
+- **Key:** the user's own Groq key, encrypted with an Android Keystore
+  AES-GCM key (DataStore); audio goes straight to Groq.
+- **Prompt:** STT `whisper-large-v3`, refinement `openai/gpt-oss-120b`, both
+  on Groq. The refinement prompt is generated from the desktop's
+  `backend/services/refinement.py` by `android/tools/gen_prompt.py`, and the
+  unit tests compare it with fixtures made by the desktop's own functions.
+  Regenerate after any desktop prompt change.
+
+Verified on the GB4 emulator (2026-10-30, fake key only): every screen
+against the mockups (fixed: buttons pinned to the bottom, back-button
+offset, Ajustes checkboxes and line heights, link weights); the bubble in
+Messages and in Compose fields; idle, recording, processing and error
+states and the hands-free tooltip; the bubble's placement and that a
+dragged spot wins; the recording path (in-process capture with the
+foreground service, no silence restart — on the emulator's mic). Found
+and fixed there: every dictation died on a `(?U)` regex (Android's ICU
+rejects it; the JVM unit tests could not see it), and Compose fields
+never got the bubble. Unit tests: 35, 34 passed, 1 skipped (Groq e2e).
+
+Needs a real phone: a real dictation with the owner's key through to
+"Inserido" (the emulator only reached Groq's 401 for the fake key); real
+mic levels and whether the fallback is needed on Android 14/15; insertion
+in WhatsApp, Gmail and Chrome; the "Configuração restrita" flow for a
+sideloaded APK; battery restrictions; gestures and rotation.
+
+Desktop notes from the same days: the owner's desktop STT model is now
+`whisper-large-v3` (switched 2026-10-30 in his settings; the Decisions
+section above still says turbo). Lite 0.8.8 (`63f3fa5`) added the
+refinement spelling rule (`4684ca2`): spelling and grammar are always
+corrected (há/a, por que/porque, crase, accents, words that don't exist)
+while word choice, order and register stay — on Haiku, 22 of 24 known
+mistakes fixed, up from 7. The Android prompt was generated after it and
+includes the rule.
+
 ## Developing on GB4
 
 ```bash

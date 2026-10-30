@@ -26,6 +26,8 @@ import kotlin.math.hypot
 /** Remembers which edge the bubble snapped to and how far down the screen it sits. */
 class BubblePositionStore(context: Context) {
     private val prefs = context.getSharedPreferences("bubble", Context.MODE_PRIVATE)
+    /** True once the user has dragged the bubble; until then it follows the focused field. */
+    val hasUserPosition: Boolean get() = prefs.contains("y")
     val onRight: Boolean get() = prefs.getBoolean("right", true)
     val yFraction: Float get() = prefs.getFloat("y", 0.32f)
     fun save(onRight: Boolean, yFraction: Float) {
@@ -41,6 +43,12 @@ class BubblePositionStore(context: Context) {
  * Gestures: tap = start/stop hands-free; press and hold (>= [HOLD_MS]) =
  * push-to-talk, release stops; drag (moving before the hold fires) moves it,
  * and on release it snaps to the nearest side edge and remembers the spot.
+ *
+ * Placement: a remembered (dragged) spot always wins. Until the user drags it,
+ * the bubble sits at the right edge, centred on the focused field's vertical
+ * centre ([setAnchor]), kept below the status bar and above the keyboard. It
+ * does not move during a dictation. The hands-free tooltip goes above the
+ * bubble, or below it, where it does not cover the field.
  */
 @SuppressLint("ClickableViewAccessibility")
 class BubbleOverlay(
@@ -74,6 +82,7 @@ class BubbleOverlay(
 
     private var state: BubbleState = BubbleState.Idle
     private var snapAnimator: ValueAnimator? = null
+    private var anchor: BubbleAnchor? = null
 
     // gesture state
     private var downX = 0f
@@ -111,7 +120,7 @@ class BubbleOverlay(
 
     fun show() {
         if (attached) return
-        placeFromStore()
+        place()
         attached = runCatching { wm.addView(bubble, params) }.isSuccess
         updateTooltip()
     }
@@ -138,16 +147,32 @@ class BubbleOverlay(
         if (px == bubble.bubblePx) return
         bubble.bubblePx = px
         if (attached) {
-            placeFromStore()
+            place()
             runCatching { wm.updateViewLayout(bubble, params) }
             updateTooltip()
         }
     }
 
+    /**
+     * The focused field moved, appeared or went away (null). Re-places an idle
+     * bubble that the user has not dragged; never moves it mid-dictation or
+     * mid-gesture, but the tooltip still re-checks the field.
+     */
+    fun setAnchor(newAnchor: BubbleAnchor?) {
+        if (newAnchor == anchor) return
+        anchor = newAnchor
+        if (!attached || dragging || holding || snapAnimator?.isRunning == true) return
+        if (state == BubbleState.Idle && !store.hasUserPosition) {
+            place()
+            runCatching { wm.updateViewLayout(bubble, params) }
+        }
+        updateTooltip()
+    }
+
     /** Re-place after rotation or a screen-size change. */
     fun relayout() {
         if (!attached) return
-        placeFromStore()
+        place()
         runCatching { wm.updateViewLayout(bubble, params) }
         updateTooltip()
     }
@@ -176,6 +201,17 @@ class BubbleOverlay(
         val top = dp(40f) - bubble.padPx
         val bottom = screenH - dp(64f) - bubble.bubblePx - bubble.padPx
         return y.coerceIn(top, maxOf(top, bottom))
+    }
+
+    private fun place() {
+        val a = anchor
+        if (store.hasUserPosition || a == null) return placeFromStore()
+        val (w, h) = screenSize()
+        val margin = dp(BubbleStyle.EDGE_MARGIN_DP)
+        val minTop = a.statusBarBottom + margin
+        val maxBottom = (a.imeTop ?: (h - dp(64f))) - margin
+        params.x = edgeX(onRight = true, screenW = w)
+        params.y = BubblePlacement.squircleTop(a.fieldTop, a.fieldBottom, bubble.bubblePx, minTop, maxBottom) - bubble.padPx
     }
 
     private fun placeFromStore() {
@@ -297,7 +333,7 @@ class BubbleOverlay(
     private fun updateTooltip() {
         val want = attached && !dragging && (state as? BubbleState.Recording)?.handsFree == true
         if (!want) return hideTooltip()
-        val (w, _) = screenSize()
+        val (w, h) = screenSize()
         tooltip.measure(
             View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
@@ -307,9 +343,28 @@ class BubbleOverlay(
         val gap = dp(BubbleStyle.TOOLTIP_GAP_DP)
         val bubbleLeft = params.x + bubble.padPx
         val bubbleRight = bubbleLeft + bubble.bubblePx
+        val bubbleTop = params.y + bubble.padPx
         val onRight = bubbleLeft + bubble.bubblePx / 2 > w / 2
-        tooltipParams.x = if (onRight) bubbleLeft - gap - tw else bubbleRight + gap
-        tooltipParams.y = params.y + bubble.padPx + (bubble.bubblePx - th) / 2
+        val a = anchor
+        val spot = BubblePlacement.tooltip(
+            bubbleTop = bubbleTop,
+            bubbleBottom = bubbleTop + bubble.bubblePx,
+            fieldTop = a?.fieldTop,
+            fieldBottom = a?.fieldBottom,
+            height = th,
+            gap = gap,
+            minTop = (a?.statusBarBottom ?: dp(24f)) + gap,
+            maxBottom = a?.imeTop ?: (h - dp(48f)),
+        )
+        if (spot.side == BubblePlacement.Side.BESIDE) {
+            tooltipParams.x = if (onRight) bubbleLeft - gap - tw else bubbleRight + gap
+        } else {
+            // Flush with the bubble's outer edge, kept on screen.
+            val margin = dp(BubbleStyle.EDGE_MARGIN_DP)
+            val x = if (onRight) bubbleRight - tw else bubbleLeft
+            tooltipParams.x = x.coerceIn(margin, maxOf(margin, w - margin - tw))
+        }
+        tooltipParams.y = spot.top
         if (tooltipAttached) {
             runCatching { wm.updateViewLayout(tooltip, tooltipParams) }
         } else {

@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.res.Configuration
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -18,6 +19,7 @@ import io.github.mvoloch.voloz.android.dictation.BubbleState
 import io.github.mvoloch.voloz.android.dictation.InsertOutcome
 import io.github.mvoloch.voloz.android.dictation.InsertResult
 import io.github.mvoloch.voloz.android.dictation.TextInserter
+import io.github.mvoloch.voloz.android.overlay.BubbleAnchor
 import io.github.mvoloch.voloz.android.overlay.BubbleOverlay
 import io.github.mvoloch.voloz.android.overlay.BubblePositionStore
 import io.github.mvoloch.voloz.android.text.FieldPolicy
@@ -43,14 +45,21 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         private const val CLIPBOARD_RESTORE_MS = 800L
         /** Cap for the Compose focus fallback walk (a chat screen is a few hundred nodes). */
         private const val MAX_FOCUS_SCAN_NODES = 600
+        /** Used only when no status-bar window is reported (e.g. immersive apps). */
+        private const val STATUS_BAR_FALLBACK_DP = 24f
 
         private val _connected = MutableStateFlow(false)
         /** True while the system has the service bound (i.e. it is enabled and running). */
         val connected: StateFlow<Boolean> = _connected
     }
 
-    /** Where the bubble may appear right now. */
-    private data class FocusInfo(val eligibleField: Boolean, val passwordLike: Boolean, val imeVisible: Boolean)
+    /** Where the bubble may appear right now, and where the field is (for placement). */
+    private data class FocusInfo(
+        val eligibleField: Boolean,
+        val passwordLike: Boolean,
+        val imeVisible: Boolean,
+        val anchor: BubbleAnchor? = null,
+    )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val handler = Handler(Looper.getMainLooper())
@@ -78,6 +87,7 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
             combine(focus, app.settings.settings, controller.state) { f, s, st -> Triple(f, s ?: VolozSettings(), st) }
                 .collect { (f, s, st) ->
                     overlay.setBubbleSizeDp(s.bubbleSize.dp)
+                    overlay.setAnchor(f.anchor)
                     overlay.setState(st)
                     val active = st != BubbleState.Idle
                     val visible = when {
@@ -123,14 +133,37 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
 
     private fun refreshFocusNow() {
         val node = findFocusedEditable()
-        val ime = runCatching { windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD } }.getOrDefault(false)
+        val wins = runCatching { windows }.getOrDefault(emptyList())
+        val ime = wins.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
         val eligible = node != null && FieldPolicy.isDictationTarget(node.inputType, node.isPassword)
         if (eligible) lastTarget = node
         focus.value = FocusInfo(
             eligibleField = eligible,
             passwordLike = node != null && !eligible,
             imeVisible = ime,
+            anchor = if (eligible) anchorFor(node!!, wins) else null,
         )
+    }
+
+    /** The field's on-screen bounds plus the keyboard top and status-bar bottom. */
+    private fun anchorFor(node: AccessibilityNodeInfo, wins: List<AccessibilityWindowInfo>): BubbleAnchor? {
+        val field = Rect().also { node.getBoundsInScreen(it) }
+        if (field.isEmpty) return null
+        var imeTop: Int? = null
+        var statusBottom = 0
+        val b = Rect()
+        for (w in wins) {
+            w.getBoundsInScreen(b)
+            when {
+                w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD && !b.isEmpty ->
+                    imeTop = minOf(imeTop ?: b.top, b.top)
+                // The status bar: a thin system window along the top edge.
+                w.type == AccessibilityWindowInfo.TYPE_SYSTEM && b.top == 0 && b.height() < b.width() / 4 ->
+                    statusBottom = maxOf(statusBottom, b.bottom)
+            }
+        }
+        if (statusBottom == 0) statusBottom = (STATUS_BAR_FALLBACK_DP * resources.displayMetrics.density).toInt()
+        return BubbleAnchor(field.top, field.bottom, imeTop, statusBottom)
     }
 
     private fun findFocusedEditable(): AccessibilityNodeInfo? {
