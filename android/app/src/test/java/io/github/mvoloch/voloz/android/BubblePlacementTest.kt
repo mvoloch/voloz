@@ -9,28 +9,35 @@ import org.junit.Test
 class BubblePlacementTest {
     private val size = 165 // 60dp at 2.75x
 
+    private val gap = 22 // 8dp
+
     @Test
-    fun bubbleCentresOnTheField() {
-        // Voloz Home "Teste aqui" field 1100..1243, keyboard up.
-        val top = BubblePlacement.squircleTop(1100, 1243, size, minTop = 152, maxBottom = 1491)
-        assertEquals((1100 + 1243) / 2 - size / 2, top)
+    fun bubbleSitsJustAboveTheField() {
+        // Voloz Home "Teste aqui" field 1100..1243, keyboard up (band 152..1491).
+        assertEquals(1100 - gap - size, BubblePlacement.squircleTop(1100, 1243, size, gap, minTop = 152, maxBottom = 1491))
     }
 
     @Test
-    fun bubbleStaysAboveTheKeyboard() {
-        // Messages compose field 2118..2250 sits behind the keyboard's bottom edge.
-        val top = BubblePlacement.squircleTop(2118, 2250, size, minTop = 152, maxBottom = 1491)
-        assertEquals(1491 - size, top)
+    fun bubbleAboveAFieldRightOnTopOfTheKeyboard() {
+        // Messages compose field 1351..1483 just above the keyboard: still above it, never over its buttons.
+        assertEquals(1351 - gap - size, BubblePlacement.squircleTop(1351, 1483, size, gap, minTop = 152, maxBottom = 1491))
     }
 
     @Test
-    fun bubbleStaysBelowTheStatusBar() {
-        assertEquals(152, BubblePlacement.squircleTop(140, 180, size, minTop = 152, maxBottom = 1491))
+    fun bubbleGoesBelowWhenNoRoomAbove() {
+        // Field right under the status bar (e.g. a search box).
+        assertEquals(250 + gap, BubblePlacement.squircleTop(160, 250, size, gap, minTop = 152, maxBottom = 1491))
+    }
+
+    @Test
+    fun tallEditorPutsTheBubbleAboveTheKeyboard() {
+        // Neither above nor below fits: bottom of the band.
+        assertEquals(1491 - size, BubblePlacement.squircleTop(200, 1450, size, gap, minTop = 152, maxBottom = 1491))
     }
 
     @Test
     fun topLimitWinsWhenTheBandIsTooShort() {
-        assertEquals(152, BubblePlacement.squircleTop(200, 260, size, minTop = 152, maxBottom = 250))
+        assertEquals(152, BubblePlacement.squircleTop(200, 260, size, gap, minTop = 152, maxBottom = 250))
     }
 
     @Test

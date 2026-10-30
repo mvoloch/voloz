@@ -16,14 +16,21 @@ data class BubbleAnchor(
 object BubblePlacement {
 
     /**
-     * Top of the squircle (not its window) for a [size] px bubble centred on the
-     * field's vertical centre, clamped into [minTop, maxBottom]. When the band is
-     * shorter than the bubble, the top limit wins.
+     * Top of the squircle (not its window) for a [size] px bubble that must not
+     * cover the field (its own send/mic/emoji buttons sit inside it): just above
+     * the field ([gap] between them), or just below it when there is no room
+     * above, inside [minTop, maxBottom]. When neither fits (a tall editor filling
+     * the band), the bubble goes to the bottom of the band, just above the
+     * keyboard. When the band is shorter than the bubble, the top limit wins.
      */
-    fun squircleTop(fieldTop: Int, fieldBottom: Int, size: Int, minTop: Int, maxBottom: Int): Int {
-        val centred = (fieldTop + fieldBottom) / 2 - size / 2
+    fun squircleTop(fieldTop: Int, fieldBottom: Int, size: Int, gap: Int, minTop: Int, maxBottom: Int): Int {
         val highest = maxBottom - size
-        return if (highest < minTop) minTop else centred.coerceIn(minTop, highest)
+        if (highest < minTop) return minTop
+        val above = fieldTop - gap - size
+        if (above in minTop..highest) return above
+        val below = fieldBottom + gap
+        if (below in minTop..highest) return below
+        return highest
     }
 
     enum class Side { ABOVE, BELOW, BESIDE }

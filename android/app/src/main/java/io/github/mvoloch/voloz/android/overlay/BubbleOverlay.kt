@@ -45,10 +45,11 @@ class BubblePositionStore(context: Context) {
  * and on release it snaps to the nearest side edge and remembers the spot.
  *
  * Placement: a remembered (dragged) spot always wins. Until the user drags it,
- * the bubble sits at the right edge, centred on the focused field's vertical
- * centre ([setAnchor]), kept below the status bar and above the keyboard. It
- * does not move during a dictation. The hands-free tooltip goes above the
- * bubble, or below it, where it does not cover the field.
+ * the bubble sits at the right edge just above the focused field ([setAnchor]),
+ * or just below it when there is no room above, so it never covers the field's
+ * own buttons; it stays below the status bar and above the keyboard. It does
+ * not move during a dictation. The hands-free tooltip goes above the bubble, or
+ * below it, where it does not cover the field.
  */
 @SuppressLint("ClickableViewAccessibility")
 class BubbleOverlay(
@@ -65,6 +66,8 @@ class BubbleOverlay(
     companion object {
         const val HOLD_MS = 350L
         private const val SNAP_MS = 180L
+        /** Space between the bubble and the focused field it sits above (or below). */
+        private const val FIELD_GAP_DP = 8f
     }
 
     private val wm = context.getSystemService(WindowManager::class.java)
@@ -211,7 +214,9 @@ class BubbleOverlay(
         val minTop = a.statusBarBottom + margin
         val maxBottom = (a.imeTop ?: (h - dp(64f))) - margin
         params.x = edgeX(onRight = true, screenW = w)
-        params.y = BubblePlacement.squircleTop(a.fieldTop, a.fieldBottom, bubble.bubblePx, minTop, maxBottom) - bubble.padPx
+        params.y = BubblePlacement.squircleTop(
+            a.fieldTop, a.fieldBottom, bubble.bubblePx, dp(FIELD_GAP_DP), minTop, maxBottom,
+        ) - bubble.padPx
     }
 
     private fun placeFromStore() {
