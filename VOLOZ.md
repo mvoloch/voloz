@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: saved API keys, backup providers, faster paste and upload; released in Lite 0.8.12). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: Lite redesign, notch pill, pill never takes the foreground; released in Lite 0.8.13). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -889,6 +889,57 @@ clippy the same 18 warning lines. Migration run on a copy of the Dell's DB
 with the keys replaced by fakes: columns added, both keys saved with ids,
 109 captures intact. Not exercised: the UI in the app, a real 429 from
 Groq triggering a backup, the paste log on Windows.
+
+## Pill took the foreground; Lite redesign (`light`, 2026-10-30, Lite 0.8.13)
+
+**Paste.** On 0.8.12 the two dictations after the owner closed the main
+window logged `could not return to claude.exe (in front: voloz.exe)` and
+`safety stop` (the chord's key-up unseen), and the text stayed on the
+clipboard. The two 0.8.7 failures (2026-10-30 14:45 and 15:28 UTC) were
+also the first dictations after `main window destroyed`; other dictations
+after a close pasted fine, so it is intermittent. Cause (inferred from the
+log and the code, not reproduced): the pill window is a normal activatable
+window (`window.show()` is SW_SHOW), so Windows gives it the foreground
+when the main window closes or when it is shown. Fix: `WS_EX_NOACTIVATE`
+on the pill (`make_non_activating`) and `show_pill` (SW_SHOWNOACTIVATE)
+in both show paths. To verify on the Dell: close the main window, dictate
+into another app, the log should say `paste ok`.
+
+**Look (Lite only, `.edition-lite` on `<html>` from `lib/edition.ts`).**
+Approved mockup: `wisprclone/design/lite-v2/mockup.html` on the Dell.
+- Tokens in `index.css`: cool grey `#F3F4F6` / white cards / ink
+  `#121417`; dark `#0E0F11` / `#16181B` / `#ECEDEF`; `--signal` red only
+  for voice (recording dot, logo caret); radius 0.75 rem. Studio keeps its
+  tokens. Fonts bundled in `app/src/assets/fonts` (OFL, see NOTICE.md):
+  Bricolage Grotesque (titles), Onest (text), JetBrains Mono (keys, times,
+  models).
+- Shell: `LiteTopBar` (wordmark, Home | Settings, the models in use with
+  a dot, update badge) instead of the Studio sidebar.
+- Settings: `LiteSettingsLayout` with six sections (Shortcuts =
+  `/settings`, Transcription, Refinement, Vocabulary, General, About);
+  `/settings/captures` redirects to Transcription. `SettingSection` /
+  `SettingRow` render as grouped cards when `IS_LITE`, so the reused
+  sections (vocabulary, snippets, audio retention) follow. Removed from
+  Lite: docs/Discord cards, server URL, keep-server-running, network
+  access, the REST API card, the all-in-one Dictation page and its
+  marketing block. `ProviderList` shows main + backups as one ordered
+  list (moving a provider to the top makes it the main endpoint), with
+  key status, edit (endpoint, model, key) and presets.
+- Home: display-type hero with physical keycaps, black "Dictate" button
+  with the red dot, totals as one sentence, rows with a bar as long as the
+  speech (square root of seconds), the app it went to and who refined it.
+- Pill: black notch hanging from the top edge of the screen (window at
+  `PILL_TOP_FRACTION` 0.0, pill `items-start`, outward top corners via
+  `.pill-notch`), white type, red dot only while recording; capsule in the
+  settings preview and the home page.
+
+Gate on GB4: `tsc` clean; biome: new files clean, changed files the same
+counts as before (DictateWindow one error fewer); `vite build` (lite)
+bundles the six font files; pytest 579 passed, 13 skipped (no backend
+change); `cargo check` clean; Windows clippy the same 18 warning lines.
+Checked in a browser against the Dell's 0.8.12 server (light and dark).
+Not checked: the pill window on Windows (notch position, transparency,
+no focus taken), the first-run screen (only new tokens), Logs page.
 
 ## Developing on GB4
 

@@ -97,8 +97,12 @@ function ChordKeys({ keys, size = 'sm' }: { keys: string[]; size?: 'sm' | 'lg' }
             className={cn(
               'relative inline-flex items-center justify-center rounded-md border border-border bg-muted/60 font-mono font-medium shadow-sm text-foreground',
               size === 'lg'
-                ? 'h-9 min-w-[2.25rem] px-2.5 text-sm border-b-2 tracking-normal'
-                : 'h-6 min-w-[1.5rem] px-1.5 text-[11px]',
+                ? IS_LITE
+                  ? 'h-12 min-w-16 -translate-y-[3px] rounded-[10px] bg-card px-3.5 text-[17px] shadow-[0_3px_0_hsl(var(--border))] tracking-normal'
+                  : 'h-9 min-w-[2.25rem] px-2.5 text-sm border-b-2 tracking-normal'
+                : IS_LITE
+                  ? 'h-6 min-w-[1.5rem] bg-card px-1.5 text-[11px] shadow-[0_1px_0_hsl(var(--border))]'
+                  : 'h-6 min-w-[1.5rem] px-1.5 text-[11px]',
             )}
           >
             {displayLabelForKey(k)}
@@ -253,7 +257,61 @@ function CaptureRow({ capture, text, time, isLatest, isOpen, onOpen, onCopy }: C
   );
 }
 
+/** "claude" → "Claude": exe names read as app names. */
+function capitalize(name: string): string {
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/** Bar length for a dictation: square root so a 5 s note and a 2 min memo both read. */
+function speechBarWidth(ms?: number | null): string {
+  const seconds = Math.max(0, (ms ?? 0) / 1000);
+  return `${Math.max(6, Math.min(100, Math.sqrt(seconds / 120) * 100))}%`;
+}
+
+function LiteCaptureRow({ capture, text, time, isLatest, isOpen, onOpen, onCopy }: CaptureRowProps) {
+  const { t } = useTranslation();
+  const where = [
+    capture.target_app ? capitalize(appLabel(capture.target_app)) : null,
+    capture.source !== 'dictation' ? t(`captures.source.${capture.source}`) : null,
+    capture.transcript_refined && capture.llm_model
+      ? t('lite.home.refinedBy', { model: shortModelName(capture.llm_model) })
+      : null,
+  ].filter(Boolean);
+  return (
+    <div
+      className={cn(
+        'group grid grid-cols-[3.25rem_5.5rem_1fr_auto] items-start gap-4 border-b border-border py-3.5 -mx-3 px-3 rounded-lg transition-colors',
+        isOpen ? 'bg-card' : 'hover:bg-card/70',
+      )}
+    >
+      <span className="pt-0.5 font-mono text-xs tabular-nums text-muted-foreground">{time}</span>
+      <span className="flex flex-col gap-1.5 pt-1.5" aria-hidden>
+        <i className="block h-[5px] rounded-full bg-foreground/80" style={{ width: speechBarWidth(capture.duration_ms) }} />
+        <span className="font-mono text-[11px] text-muted-foreground/80">{formatDuration(capture.duration_ms)}</span>
+      </span>
+      <button type="button" onClick={onOpen} className="min-w-0 rounded-sm text-left">
+        <p className="line-clamp-2 text-[14.5px] leading-relaxed text-foreground">
+          {text}
+          {isLatest && (
+            <span aria-hidden className="voloz-caret ml-1 inline-block h-[1.05em] w-[2px] align-[-0.15em] bg-signal" />
+          )}
+        </p>
+        {where.length > 0 && <p className="mt-1 text-xs text-muted-foreground">{where.join(' · ')}</p>}
+      </button>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-semibold opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+      >
+        {t('captures.actions.copy')}
+      </button>
+    </div>
+  );
+}
+
 type PlaybackState = 'idle' | 'generating' | 'playing';
+
+const RowComponent = IS_LITE ? LiteCaptureRow : CaptureRow;
 
 export function CapturesTab() {
   const { t, i18n } = useTranslation();
@@ -670,7 +728,7 @@ export function CapturesTab() {
   };
 
   return (
-    <div className="h-full flex overflow-hidden -mx-8">
+    <div className={cn('h-full flex overflow-hidden', !IS_LITE && '-mx-8')}>
       <input
         ref={uploadInputRef}
         type="file"
@@ -689,7 +747,7 @@ export function CapturesTab() {
       {/* Home: shortcut, numbers and the dictation history */}
       <div className={cn('flex-1 min-w-0 overflow-y-auto', isPlayerVisible && BOTTOM_SAFE_AREA_PADDING)}>
         <div className="max-w-[760px] mx-auto px-8 pt-10 pb-16">
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className={cn('flex items-center gap-1.5 text-xs text-muted-foreground', IS_LITE && 'hidden')}>
             <span
               className={cn(
                 'w-1.5 h-1.5 rounded-full',
@@ -702,7 +760,14 @@ export function CapturesTab() {
           {hasHotkey ? (
             <div className="mt-4 space-y-2">
               {pushToTalkKeys.length ? (
-                <h1 className="flex flex-wrap items-center gap-x-3 gap-y-2 text-3xl font-semibold tracking-tight">
+                <h1
+                  className={cn(
+                    'flex flex-wrap items-center gap-x-3 gap-y-2',
+                    IS_LITE
+                      ? 'font-display text-[2.75rem] font-[650] leading-tight tracking-[-0.035em]'
+                      : 'text-3xl font-semibold tracking-tight',
+                  )}
+                >
                   <span>{t('home.hero.hold')}</span>
                   <ChordKeys keys={pushToTalkKeys} size="lg" />
                   <span>{t('home.hero.speak')}</span>
@@ -742,9 +807,17 @@ export function CapturesTab() {
                   <Button
                     onClick={session.toggleRecording}
                     disabled={session.isUploading}
-                    className="bg-accent text-accent-foreground hover:bg-accent/90"
+                    className={
+                      IS_LITE
+                        ? 'rounded-full bg-foreground text-background hover:bg-foreground/90'
+                        : 'bg-accent text-accent-foreground hover:bg-accent/90'
+                    }
                   >
-                    <Mic className="h-4 w-4 mr-2" />
+                    {IS_LITE ? (
+                      <span className="mr-2 h-2 w-2 rounded-full bg-signal shadow-[0_0_0_3px_hsl(var(--signal)/0.25)]" />
+                    ) : (
+                      <Mic className="h-4 w-4 mr-2" />
+                    )}
                     {t('home.actions.dictate')}
                   </Button>
                 )}
@@ -758,12 +831,24 @@ export function CapturesTab() {
                     {session.isUploading ? t('captures.actions.importing') : t('home.actions.import')}
                   </Button>
                 )}
-                <Button variant="outline" asChild>
-                  <Link to="/settings/captures">
-                    <Settings2 className="mr-2 h-4 w-4" />
-                    {t('home.actions.configure')}
-                  </Link>
-                </Button>
+                {/* Lite reaches the settings from its top bar */}
+                {!IS_LITE && (
+                  <Button variant="outline" asChild>
+                    <Link to="/settings/captures">
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      {t('home.actions.configure')}
+                    </Link>
+                  </Button>
+                )}
+                {IS_LITE && captures.length > 0 && (
+                  <span className="ml-auto text-[13px] text-muted-foreground">
+                    {t('lite.home.totals', {
+                      words: stats.words.toLocaleString(i18n.language),
+                      minutes: stats.minutes.toLocaleString(i18n.language),
+                      count: captures.length.toLocaleString(i18n.language),
+                    })}
+                  </span>
+                )}
               </>
             )}
             {/* Stop stays reachable while recording, even if readiness changed mid-capture */}
@@ -784,7 +869,7 @@ export function CapturesTab() {
             </div>
           )}
 
-          {captures.length > 0 && (
+          {!IS_LITE && captures.length > 0 && (
             <div className="flex flex-wrap gap-x-10 gap-y-3 mt-8">
               <Stat value={stats.words.toLocaleString(i18n.language)} label={t('home.stats.words')} />
               <Stat value={captures.length.toLocaleString(i18n.language)} label={t('home.stats.captures')} />
@@ -793,7 +878,7 @@ export function CapturesTab() {
           )}
 
           {captures.length > 0 && (
-            <div className="mt-8 -mx-4">
+            <div className={IS_LITE ? 'mt-9 [&_input]:h-11 [&_input]:rounded-xl [&_input]:bg-card' : 'mt-8 -mx-4'}>
               <ListPaneSearch
                 value={search}
                 onChange={setSearch}
@@ -823,11 +908,18 @@ export function CapturesTab() {
             ) : (
               days.map((day) => (
                 <section key={day.key}>
-                  <h2 className="mt-8 mb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  <h2
+                    className={cn(
+                      'mt-8 mb-1 text-[11px] font-medium uppercase',
+                      IS_LITE
+                        ? 'flex items-center gap-3 font-mono tracking-[0.08em] text-muted-foreground after:h-px after:flex-1 after:bg-border'
+                        : 'tracking-wider text-muted-foreground/70',
+                    )}
+                  >
                     {day.label}
                   </h2>
                   {day.items.map((capture) => (
-                    <CaptureRow
+                    <RowComponent
                       key={capture.id}
                       capture={capture}
                       text={snippetOf(capture)}

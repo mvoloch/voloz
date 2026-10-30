@@ -313,7 +313,7 @@ function ConnectionStatus({
   return null;
 }
 
-function UpdatesSection() {
+export function UpdatesSection() {
   const { t } = useTranslation();
   const platform = usePlatform();
   const { status, checkForUpdates, downloadAndInstall, restartAndInstall } = useAutoUpdater(false);

@@ -7,3 +7,9 @@
  * anything else builds the full studio app.
  */
 export const IS_LITE = import.meta.env.VITE_EDITION === 'lite';
+
+// The lite look (index.css: ``.edition-lite``) hangs off <html>, so every
+// window of the app (main, pill) gets it before the first paint.
+if (IS_LITE && typeof document !== 'undefined') {
+  document.documentElement.classList.add('edition-lite');
+}

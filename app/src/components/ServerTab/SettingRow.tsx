@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { IS_LITE } from '@/lib/edition';
 
 /**
  * A section header with title and optional description, separated by a border.
@@ -12,6 +13,22 @@ export function SettingSection({
   description?: string;
   children: ReactNode;
 }) {
+  // Lite: a small label over a card of rows (grouped list), not a heading.
+  if (IS_LITE) {
+    return (
+      <section className="mt-7">
+        {title && (
+          <h3 className="mb-2 ml-1 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+            {title}
+          </h3>
+        )}
+        {description && <p className="mb-3 ml-1 text-sm text-muted-foreground">{description}</p>}
+        <div className="divide-y divide-border rounded-xl border border-border bg-card">
+          {children}
+        </div>
+      </section>
+    );
+  }
   return (
     <div className="space-y-1">
       {title && <h3 className="text-lg font-semibold">{title}</h3>}
@@ -43,7 +60,7 @@ export function SettingRow({
   children?: ReactNode;
 }) {
   return (
-    <div className="py-3">
+    <div className={IS_LITE ? 'px-4 py-3.5' : 'py-3'}>
       <div className="flex items-center justify-between gap-8">
         <div className="min-w-0">
           <label
@@ -52,7 +69,17 @@ export function SettingRow({
           >
             {title}
           </label>
-          {description && <p className="text-sm text-muted-foreground mt-0.5">{description}</p>}
+          {description && (
+            <p
+              className={
+                IS_LITE
+                  ? 'mt-1 text-[13px] text-muted-foreground'
+                  : 'text-sm text-muted-foreground mt-0.5'
+              }
+            >
+              {description}
+            </p>
+          )}
         </div>
         {action && <div className="shrink-0">{action}</div>}
       </div>

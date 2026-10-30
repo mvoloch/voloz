@@ -42,7 +42,7 @@ import { SettingRow, SettingSection } from './SettingRow';
 import { SnippetsSection } from './SnippetsSection';
 import { VocabularySection } from './VocabularySection';
 
-function ChordPreview({ keys }: { keys: string[] }) {
+export function ChordPreview({ keys }: { keys: string[] }) {
   const { t } = useTranslation();
   if (keys.length === 0) {
     return <span className="text-xs text-muted-foreground italic">{t('captures.chord.notSet')}</span>;
@@ -69,7 +69,7 @@ function ChordPreview({ keys }: { keys: string[] }) {
   );
 }
 
-function sameChord(a: string[], b: string[]): boolean {
+export function sameChord(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((k) => b.includes(k));
 }
 
@@ -84,7 +84,7 @@ const PILL_DURATIONS: Partial<Record<PillState, number>> = {
   rest: 900,
 };
 
-function HotkeyPillPreview({ enabled }: { enabled: boolean }) {
+export function HotkeyPillPreview({ enabled }: { enabled: boolean }) {
   const [state, setState] = useState<PillState>('recording');
   const [tick, setTick] = useState(0);
 
@@ -125,8 +125,9 @@ function HotkeyPillPreview({ enabled }: { enabled: boolean }) {
         backgroundSize: '22px 22px',
       }}
     >
-      <div className="absolute inset-0 flex items-center justify-center">
-        <CapturePill state={state} elapsedMs={elapsedMs} />
+      {/* Lite: the box stands for the top of the screen, the pill hangs from it */}
+      <div className={cn('absolute inset-0 flex justify-center', IS_LITE ? 'items-start' : 'items-center')}>
+        <CapturePill state={state} elapsedMs={elapsedMs} notch={IS_LITE} />
       </div>
     </div>
   );

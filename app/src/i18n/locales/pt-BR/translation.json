@@ -1520,5 +1520,84 @@
       "captures": "ditados",
       "minutes": "minutos de fala"
     }
+  },
+  "lite": {
+    "nav": {
+      "home": "Início",
+      "settings": "Configurações"
+    },
+    "status": {
+      "notReady": "Falta configurar"
+    },
+    "settings": {
+      "nav": {
+        "shortcuts": "Atalhos",
+        "transcription": "Transcrição",
+        "refinement": "Refinamento",
+        "vocabulary": "Vocabulário",
+        "general": "Geral",
+        "about": "Sobre"
+      }
+    },
+    "shortcuts": {
+      "title": "Atalhos",
+      "lede": "As teclas que começam um ditado, de qualquer app."
+    },
+    "transcription": {
+      "title": "Transcrição",
+      "lede": "Quem transforma sua voz em texto. Se o primeiro falhar, o Voloz passa para o próximo da lista sozinho."
+    },
+    "refinement": {
+      "title": "Refinamento",
+      "lede": "Quem limpa o texto antes de colar: pontuação, hesitações, mudanças de ideia no meio da frase.",
+      "autoDescription": "Roda depois de cada ditado. Desligado, o texto é colado como foi transcrito."
+    },
+    "vocabulary": {
+      "title": "Vocabulário",
+      "lede": "Nomes e termos que a transcrição erra, e frases curtas que viram textos prontos."
+    },
+    "general": {
+      "title": "Geral",
+      "lede": "Como o Voloz se comporta no seu computador.",
+      "folder": "Pasta dos ditados",
+      "open": "Abrir",
+      "log": "Registro de ditados",
+      "logHint": "Para investigar um ditado que não colou ou demorou.",
+      "logOpen": "Ver registro"
+    },
+    "about": {
+      "changelog": "Novidades",
+      "changelogHint": "O que mudou em cada versão.",
+      "view": "Ver",
+      "tagline": "Fale em qualquer lugar e receba o texto pronto em qualquer app."
+    },
+    "groups": {
+      "providers": "Provedores, na ordem",
+      "speech": "Fala",
+      "cleanup": "O que limpar",
+      "dictations": "Seus ditados"
+    },
+    "providers": {
+      "main": "Provedor principal",
+      "keyOk": "Chave guardada",
+      "keyMissing": "Falta a chave",
+      "edit": "Editar",
+      "done": "Pronto",
+      "remove": "Remover",
+      "up": "Subir",
+      "down": "Descer",
+      "add": "Adicionar provedor",
+      "other": "Outro serviço…",
+      "endpoint": "Endereço (URL)",
+      "endpointPlaceholder": "https://api.exemplo.com/v1",
+      "model": "Modelo",
+      "addCustom": "Adicionar",
+      "empty": "Nenhum provedor ainda: adicione um para começar a ditar.",
+      "backupKeySaved": "Chave da {{provider}} guardada: cole outra para trocar"
+    },
+    "home": {
+      "refinedBy": "refinado por {{model}}",
+      "totals": "{{words}} palavras em {{minutes}} min de fala · {{count}} ditados"
+    }
   }
 }

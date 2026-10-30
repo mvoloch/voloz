@@ -9,6 +9,16 @@ import {
 import { AppFrame } from '@/components/AppFrame/AppFrame';
 import { CapturesTab } from '@/components/CapturesTab/CapturesTab';
 import { EffectsTab } from '@/components/EffectsTab/EffectsTab';
+import { LiteAboutPage } from '@/components/LiteSettings/LiteAboutPage';
+import { LiteSettingsLayout } from '@/components/LiteSettings/LiteSettingsLayout';
+import { LiteTopBar } from '@/components/LiteSettings/LiteTopBar';
+import {
+  LiteGeneralPage,
+  LiteRefinementPage,
+  LiteShortcutsPage,
+  LiteTranscriptionPage,
+  LiteVocabularyPage,
+} from '@/components/LiteSettings/pages';
 import { LiteSetupScreen, useLiteSetupGate } from '@/components/LiteSetup/LiteSetup';
 import { MainEditor } from '@/components/MainEditor/MainEditor';
 import { ModelsTab } from '@/components/ModelsTab/ModelsTab';
@@ -57,6 +67,13 @@ function RootLayout() {
         />
       ) : liteSetup.pending ? (
         <div className="flex-1" />
+      ) : IS_LITE ? (
+        <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          <LiteTopBar />
+          <main className="flex-1 min-h-0 overflow-hidden">
+            <Outlet />
+          </main>
+        </div>
       ) : (
         <div className="flex flex-1 min-h-0 overflow-hidden">
           <Sidebar isMacOS={isMacOS()} />
@@ -123,6 +140,12 @@ const studioOnlySetting = IS_LITE
       throw redirect({ to: '/settings' });
     }
   : undefined;
+// Lite splits dictation settings into sections; Studio has no such pages
+const liteOnlySetting = IS_LITE
+  ? undefined
+  : () => {
+      throw redirect({ to: '/settings/captures' });
+    };
 
 // Index route: dictation home (capture history)
 const indexRoute = createRoute({
@@ -184,14 +207,42 @@ const modelsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings',
-  component: SettingsLayout,
+  component: IS_LITE ? LiteSettingsLayout : SettingsLayout,
 });
 
 // Settings sub-routes
 const settingsGeneralRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/',
-  component: GeneralPage,
+  component: IS_LITE ? LiteShortcutsPage : GeneralPage,
+});
+
+const settingsTranscriptionRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: '/transcription',
+  component: LiteTranscriptionPage,
+  beforeLoad: liteOnlySetting,
+});
+
+const settingsRefinementRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: '/refinement',
+  component: LiteRefinementPage,
+  beforeLoad: liteOnlySetting,
+});
+
+const settingsVocabularyRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: '/vocabulary',
+  component: LiteVocabularyPage,
+  beforeLoad: liteOnlySetting,
+});
+
+const settingsLiteGeneralRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: '/general',
+  component: LiteGeneralPage,
+  beforeLoad: liteOnlySetting,
 });
 
 const settingsGenerationRoute = createRoute({
@@ -205,6 +256,12 @@ const settingsCapturesRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/captures',
   component: CapturesPage,
+  // Lite's old all-in-one page (the first-run "set it up myself" link)
+  beforeLoad: IS_LITE
+    ? () => {
+        throw redirect({ to: '/settings/transcription' });
+      }
+    : undefined,
 });
 
 const settingsMCPRoute = createRoute({
@@ -236,7 +293,7 @@ const settingsLogsRoute = createRoute({
 const settingsAboutRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/about',
-  component: AboutPage,
+  component: IS_LITE ? LiteAboutPage : AboutPage,
 });
 
 // Redirect old /server path to /settings
@@ -259,6 +316,10 @@ const routeTree = rootRoute.addChildren([
   modelsRoute,
   settingsRoute.addChildren([
     settingsGeneralRoute,
+    settingsTranscriptionRoute,
+    settingsRefinementRoute,
+    settingsVocabularyRoute,
+    settingsLiteGeneralRoute,
     settingsGenerationRoute,
     settingsCapturesRoute,
     settingsMCPRoute,

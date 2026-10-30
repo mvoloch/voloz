@@ -6,7 +6,9 @@ import { BootWithoutMainWindow } from '@/components/DictateWindow/BootWithoutMai
 import { pillT } from '@/i18n';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
+import { IS_LITE } from '@/lib/edition';
 import { useCaptureRecordingSession } from '@/lib/hooks/useCaptureRecordingSession';
+import { cn } from '@/lib/utils/cn';
 import { dictationLog } from '@/lib/utils/dictationLog';
 
 /** Rust's ``dictate:start`` payload. */
@@ -293,9 +295,7 @@ export function DictateWindow() {
     audio.onplaying = () => {
       emit('dictate:show').catch(() => {});
       setSpeaking((prev) =>
-        prev && prev.generationId === generationId
-          ? { ...prev, startedAt: Date.now() }
-          : prev,
+        prev && prev.generationId === generationId ? { ...prev, startedAt: Date.now() } : prev,
       );
       setSpeakElapsed(0);
     };
@@ -433,7 +433,12 @@ export function DictateWindow() {
 
   return (
     <div
-      className="h-screen w-screen flex items-center justify-center px-3"
+      // Lite: the window sits on the top edge of the screen and the pill
+      // hangs from it like a notch.
+      className={cn(
+        'h-screen w-screen flex justify-center px-3',
+        IS_LITE ? 'items-start' : 'items-center',
+      )}
       style={{ background: 'transparent' }}
     >
       <BootWithoutMainWindow />
@@ -448,6 +453,7 @@ export function DictateWindow() {
           stopTitle={pillT('captures.pill.stopEscTitle')}
           handsFree={handsFree}
           levelSource={session.recordingLevel}
+          notch={IS_LITE}
         />
       ) : null}
     </div>

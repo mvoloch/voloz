@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Check, Loader2, TriangleAlert, Volume2 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { pillT } from '@/i18n';
+import { IS_LITE } from '@/lib/edition';
 import { cn } from '@/lib/utils/cn';
 import {
   BAR_MIN_PX,
@@ -46,7 +47,16 @@ export function PillAudioBars({ mode }: { mode: 'generating' | 'playing' | 'idle
       {[0, 1, 2, 3, 4].map((i) => (
         <motion.div
           key={`${mode}-${i}`}
-          className={cn('w-[3px] rounded-full', mode === 'idle' ? 'bg-accent/30' : 'bg-accent')}
+          className={cn(
+            'w-[3px] rounded-full',
+            IS_LITE
+              ? mode === 'idle'
+                ? 'bg-white/30'
+                : 'bg-white'
+              : mode === 'idle'
+                ? 'bg-accent/30'
+                : 'bg-accent',
+          )}
           animate={
             mode === 'generating'
               ? { height: ['6px', '16px', '6px'] }
@@ -113,7 +123,7 @@ export function PillLevelBars({ analyser }: { analyser: AnalyserNode | null }) {
           ref={(el) => {
             barsRef.current[i] = el;
           }}
-          className="w-[3px] rounded-full bg-accent"
+          className={cn('w-[3px] rounded-full', IS_LITE ? 'bg-white' : 'bg-accent')}
           style={{ height: `${BAR_MIN_PX}px` }}
         />
       ))}
@@ -130,7 +140,7 @@ function PillSymbol({ state }: { state: Exclude<PillState, 'error'> }) {
   if (state === 'recording') {
     return (
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
-        <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+        <span className={cn('h-2.5 w-2.5 rounded-full animate-pulse', IS_LITE ? 'bg-signal' : 'bg-red-500')} />
       </span>
     );
   }
@@ -140,7 +150,13 @@ function PillSymbol({ state }: { state: Exclude<PillState, 'error'> }) {
   if (state === 'speaking') {
     return <Volume2 className="h-3.5 w-3.5 shrink-0" aria-hidden />;
   }
-  return <Check className="h-3.5 w-3.5 shrink-0" strokeWidth={3} aria-hidden />;
+  return (
+    <Check
+      className={cn('h-3.5 w-3.5 shrink-0', IS_LITE && 'text-emerald-400')}
+      strokeWidth={3}
+      aria-hidden
+    />
+  );
 }
 
 function formatElapsed(ms: number): string {
@@ -168,6 +184,7 @@ export function CapturePill({
   errorMessage,
   errorCopyText,
   onDismiss,
+  notch = false,
   className,
 }: {
   state: PillState;
@@ -187,6 +204,8 @@ export function CapturePill({
   /** What a click on the error pill copies instead of its message. */
   errorCopyText?: string | null;
   onDismiss?: () => void;
+  /** Lite: drawn as a notch hanging from the top edge of the screen (the dictate window). */
+  notch?: boolean;
   className?: string;
 }) {
   // English in every app language, like a phone's status pill.
@@ -198,6 +217,7 @@ export function CapturePill({
         message={errorMessage ?? t('captures.pill.errorFallback')}
         copyText={errorCopyText ?? null}
         onDismiss={onDismiss}
+        notch={notch}
         className={className}
       />
     );
@@ -221,9 +241,14 @@ export function CapturePill({
       onClick={onStop}
       aria-label={t('captures.pill.stopAria')}
       title={stopTitle ?? t('captures.pill.stopAria')}
-      className="-mr-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent/15 transition-colors hover:bg-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+      className={cn(
+        '-mr-2 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2',
+        IS_LITE
+          ? 'bg-white/15 hover:bg-white/25 focus-visible:ring-white/50'
+          : 'bg-accent/15 hover:bg-accent/30 focus-visible:ring-accent/50',
+      )}
     >
-      <span className="h-2.5 w-2.5 rounded-[2px] bg-accent" />
+      <span className={cn('h-2.5 w-2.5 rounded-[2px]', IS_LITE ? 'bg-white' : 'bg-accent')} />
     </button>
   ) : null;
 
@@ -231,16 +256,25 @@ export function CapturePill({
   // ring — ring utility doesn't compose with arbitrary shadow-[…]) to mark
   // the success moment without changing the pill's dimensions.
   const completedStroke =
-    state === 'completed'
+    state === 'completed' && !IS_LITE
       ? 'shadow-[inset_0_0_0_2px_hsl(var(--accent)/0.6)]'
       : null;
 
   return (
     <div
       className={cn(
-        'inline-flex items-center gap-3 px-4 h-10 rounded-full text-accent',
-        'bg-white/80 ring-1 ring-black/5 shadow-lg backdrop-blur-xl',
-        'dark:bg-black/55 dark:ring-0 dark:shadow-none dark:backdrop-blur-md',
+        'inline-flex items-center gap-3',
+        IS_LITE
+          ? cn(
+              // Lite: black like the phone's hardware, white type, red only for the mic
+              'bg-[#0B0B0C] text-white/90',
+              notch ? 'pill-notch h-[38px] rounded-b-[19px] px-5' : 'h-10 rounded-full px-4 shadow-lg',
+            )
+          : cn(
+              'px-4 h-10 rounded-full text-accent',
+              'bg-white/80 ring-1 ring-black/5 shadow-lg backdrop-blur-xl',
+              'dark:bg-black/55 dark:ring-0 dark:shadow-none dark:backdrop-blur-md',
+            ),
         completedStroke,
         'transition-opacity duration-300 ease-out',
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
@@ -256,7 +290,12 @@ export function CapturePill({
       ) : (
         <PillAudioBars mode={barMode} />
       )}
-      <span className="text-xs tabular-nums text-accent/70 font-medium shrink-0 -ml-1">
+      <span
+        className={cn(
+          'text-xs tabular-nums font-medium shrink-0 -ml-1',
+          IS_LITE ? 'font-mono text-white/55' : 'text-accent/70',
+        )}
+      >
         {formatElapsed(elapsedMs)}
       </span>
       {stopButton}
@@ -268,11 +307,13 @@ function ErrorPill({
   message,
   copyText,
   onDismiss,
+  notch = false,
   className,
 }: {
   message: string;
   copyText: string | null;
   onDismiss?: () => void;
+  notch?: boolean;
   className?: string;
 }) {
   const t = pillT;
@@ -292,10 +333,19 @@ function ErrorPill({
       onClick={handleClick}
       title={t(copyText ? 'captures.pill.copyTextTooltip' : 'captures.pill.errorCopyTooltip')}
       className={cn(
-        'inline-flex items-center gap-2.5 px-4 h-10 rounded-full',
-        'bg-white/85 ring-1 ring-destructive/25 shadow-lg backdrop-blur-xl text-red-600 hover:bg-white',
-        'dark:bg-black/65 dark:ring-0 dark:shadow-none dark:backdrop-blur-md dark:text-red-300 dark:hover:bg-black/80',
-        'max-w-[380px] transition-colors',
+        'inline-flex items-center gap-2.5',
+        IS_LITE
+          ? cn(
+              'bg-[#0B0B0C] text-red-300 hover:bg-black',
+              notch ? 'pill-notch h-[38px] rounded-b-[19px] px-5' : 'h-10 rounded-full px-4 shadow-lg',
+            )
+          : cn(
+              'px-4 h-10 rounded-full',
+              'bg-white/85 ring-1 ring-destructive/25 shadow-lg backdrop-blur-xl text-red-600 hover:bg-white',
+              'dark:bg-black/65 dark:ring-0 dark:shadow-none dark:backdrop-blur-md dark:text-red-300 dark:hover:bg-black/80',
+            ),
+        // 370 + the notch ears fit the 420 px pill window
+        IS_LITE ? 'max-w-[370px] transition-colors' : 'max-w-[380px] transition-colors',
         'focus:outline-none focus:ring-2 focus:ring-red-400/50',
         className,
       )}

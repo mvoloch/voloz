@@ -1,3 +1,4 @@
+import { IS_LITE } from '@/lib/edition';
 import { cn } from '@/lib/utils/cn';
 
 /** "voloz" set in Space Grotesk Medium, as outlines (from branding/voloz-wordmark.svg). */
@@ -43,7 +44,11 @@ export function VolozWordmark({ animated = false, className }: VolozWordmarkProp
           />
         ))}
       </g>
-      <g fill="hsl(var(--accent))" className={animated ? 'voloz-caret' : undefined}>
+      {/* Lite paints the caret in the voice red; Studio in its accent */}
+      <g
+        fill={IS_LITE ? 'hsl(var(--signal))' : 'hsl(var(--accent))'}
+        className={animated ? 'voloz-caret' : undefined}
+      >
         <rect x={12} y={2} width={2} height={12} />
         <rect x={11} y={2} width={4} height={1} />
         <rect x={11} y={13} width={4} height={1} />

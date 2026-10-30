@@ -1557,5 +1557,84 @@
       "captures": "dictations",
       "minutes": "minutes of speech"
     }
+  },
+  "lite": {
+    "nav": {
+      "home": "Home",
+      "settings": "Settings"
+    },
+    "status": {
+      "notReady": "Setup needed"
+    },
+    "settings": {
+      "nav": {
+        "shortcuts": "Shortcuts",
+        "transcription": "Transcription",
+        "refinement": "Refinement",
+        "vocabulary": "Vocabulary",
+        "general": "General",
+        "about": "About"
+      }
+    },
+    "shortcuts": {
+      "title": "Shortcuts",
+      "lede": "The keys that start a dictation, from any app."
+    },
+    "transcription": {
+      "title": "Transcription",
+      "lede": "Who turns your voice into text. If the first one fails, Voloz moves on to the next on the list by itself."
+    },
+    "refinement": {
+      "title": "Refinement",
+      "lede": "Who cleans up the text before it is pasted: punctuation, filler words, changes of mind mid-sentence.",
+      "autoDescription": "Runs after every dictation. Off, the text is pasted as transcribed."
+    },
+    "vocabulary": {
+      "title": "Vocabulary",
+      "lede": "Names and terms transcription gets wrong, and short phrases that turn into saved text."
+    },
+    "general": {
+      "title": "General",
+      "lede": "How Voloz behaves on your computer.",
+      "folder": "Dictations folder",
+      "open": "Open",
+      "log": "Dictation log",
+      "logHint": "To look into a dictation that wasn't pasted or took long.",
+      "logOpen": "Open log"
+    },
+    "about": {
+      "changelog": "What's new",
+      "changelogHint": "What changed in each version.",
+      "view": "View",
+      "tagline": "Speak anywhere and get the finished text in any app."
+    },
+    "groups": {
+      "providers": "Providers, in order",
+      "speech": "Speech",
+      "cleanup": "What to clean up",
+      "dictations": "Your dictations"
+    },
+    "providers": {
+      "main": "Main provider",
+      "keyOk": "Key saved",
+      "keyMissing": "Key missing",
+      "edit": "Edit",
+      "done": "Done",
+      "remove": "Remove",
+      "up": "Move up",
+      "down": "Move down",
+      "add": "Add a provider",
+      "other": "Another service…",
+      "endpoint": "Endpoint URL",
+      "endpointPlaceholder": "https://api.example.com/v1",
+      "model": "Model",
+      "addCustom": "Add",
+      "empty": "No provider yet: add one to start dictating.",
+      "backupKeySaved": "{{provider}} key saved: paste another to replace it"
+    },
+    "home": {
+      "refinedBy": "refined by {{model}}",
+      "totals": "{{words}} words in {{minutes}} min of speech · {{count}} dictations"
+    }
   }
 }
