@@ -1020,6 +1020,40 @@ sheet; update notice; voice commands. Smaller: search covers only the final
 text, history keeps 30, onboarding has no optional Claude key, no "down"
 for providers, no UI language choice, no dictation log page.
 
+**Dictation tested on the emulator; 0.2.2 published (2026-10-30).** The
+owner asked for the phone tests to be run on the emulator. Its microphone
+gives silence on GB4 (the emulator's PulseAudio driver would not start), so
+an `emutest` build type was added, never sent to a phone: the Groq preset
+points at `android/tools/mock_api.py` on the host (10.0.2.2:8765, plain HTTP
+allowed only there by `src/emutest`), and `Recorder` reads a raw PCM file
+(`BuildConfig.FAKE_MIC_FILE`, the owner's 24 s sample) instead of the mic;
+both BuildConfig fields are the real values / empty in debug and release.
+The mock answers "ok", "fail" (503) or "hang" from a mode file. Scripts on
+GB4 in `/mnt/data/dev/android/` (`emutest_env.sh`, `et_setup.sh`,
+`et_run.sh`, `et_e.sh`). Results, each into Voloz's own test field:
+- A, normal take into the empty field: FLAC upload, refine, text set.
+- B, provider 503: warning, then the retry arrow; provider back, one tap:
+  same take sent, text pasted after the existing text.
+- C, airplane mode: "Sem conexão…", retry arrow; network back, tap: text.
+- D, provider hangs, tap while processing: "Cancelado.", retry arrow;
+  tap: text.
+- E, provider hangs, nobody taps: the 120 s read timeout fired first and
+  said "Sem conexão…" (wrong), and the 30 s retry window was easy to miss;
+  fixed: "O provedor não respondeu a tempo." for timeouts, 60 s window,
+  and the overall limit is 150 s plus the take's length (a fixed 150 s
+  could cut a long take's upload on a slow link). Rerun: passes.
+- F, a new take while a retry waits: the new one wins.
+- Every insertion after the first pasted after the existing text, which
+  stayed intact (the 0.2.1 SET_TEXT-only-when-empty rule).
+Not covered: capture from a real microphone (worked on the owner's phone
+in 0.1), WhatsApp / Gmail / Chrome (not on the emulator).
+
+0.2.2 is the first published APK: a release build (not debuggable), signed
+with GB4's debug keystore like every build installed so far, so it installs
+over them and keeps the saved keys. On OneDrive (`Voloz\Voloz-android-0.2.2.apk`)
+and as the public prerelease `android-v0.2.2` on mvoloch/voloz. A dedicated
+release key would need an uninstall first (the saved keys go with it).
+
 **Next release: vocabulary shared across devices.** The owner wants the
 phone to pick up the vocabulary he keeps on Windows, and the same list on
 every PC and the phone, which needs one identity across devices. Not

@@ -78,8 +78,11 @@ class DictationController(
         private const val ERROR_MS = 2000L
         private const val PASTE_READY_MS = 6000L
         /** How long a failed take waits for a tap to send it again. */
-        private const val RETRY_READY_MS = 30_000L
-        /** Upload, transcription and refinement together, over every provider tried. */
+        private const val RETRY_READY_MS = 60_000L
+        /**
+         * Upload, transcription and refinement together, over every provider tried: 150 s
+         * plus the take's own length, so a long dictation on a slow link isn't cut off.
+         */
         private const val PROCESS_DEADLINE_MS = 150_000L
     }
 
@@ -237,7 +240,7 @@ class DictationController(
         val s = settings.current
         val cancel = pipeline.newCancel()
         processing = take to cancel
-        main.postDelayed(deadline, PROCESS_DEADLINE_MS)
+        main.postDelayed(deadline, PROCESS_DEADLINE_MS + take.durationMs)
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
@@ -353,6 +356,8 @@ class DictationController(
             e.status == 429 -> context.getString(R.string.msg_rate_limit)
             e.status == 413 -> context.getString(R.string.msg_too_large)
             e.status != null -> context.getString(R.string.msg_provider_http, e.provider?.displayName ?: "", e.status)
+            // OkHttp's read/call timeouts: the provider was reached but didn't answer in time.
+            e.cause is java.io.InterruptedIOException -> context.getString(R.string.msg_timeout)
             else -> context.getString(R.string.msg_network)
         }
         is DictationCancelled -> context.getString(R.string.msg_cancelled)

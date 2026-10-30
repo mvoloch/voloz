@@ -37,6 +37,7 @@ class Recorder(
     val hasSignal: Boolean get() = heardSignal
     @SuppressLint("MissingPermission") // checked by DictationController before start()
     fun start() {
+        fakeMic()?.let { return startCapture(it) }
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
         )
@@ -57,12 +58,44 @@ class Recorder(
             throw IllegalStateException("Microphone busy")
         }
         audioRecord = rec
+        startCapture { buf -> rec.read(buf, 0, buf.size) }
+    }
+
+    /**
+     * `emutest` builds only (BuildConfig.FAKE_MIC_FILE is empty otherwise): the emulator's
+     * microphone gives silence, so a raw 16 kHz mono PCM16 file is read in real time, looped.
+     */
+    private fun fakeMic(): ((ByteArray) -> Int)? {
+        val path = io.github.mvoloch.voloz.android.BuildConfig.FAKE_MIC_FILE
+        if (path.isEmpty()) return null
+        val pcm = runCatching { java.io.File(path).readBytes() }
+            .onFailure { Log.w("VolozRecorder", "fake mic: can't read $path", it) }
+            .getOrNull()?.takeIf { it.isNotEmpty() } ?: return null
+        Log.i("VolozRecorder", "fake mic: ${pcm.size} bytes from $path")
+        var pos = 0
+        return { buf ->
+            Thread.sleep(100)
+            var n = 0
+            while (n < buf.size) {
+                if (pos >= pcm.size) pos = 0
+                val k = minOf(buf.size - n, pcm.size - pos)
+                System.arraycopy(pcm, pos, buf, n, k)
+                pos += k
+                n += k
+            }
+            n
+        }
+    }
+
+    /** The capture loop over [read] (100 ms chunks) on its own thread. */
+    private fun startCapture(read: (ByteArray) -> Int) {
+        val chunk = sampleRate / 10 * 2 // 100 ms
         running = true
         val maxBytes = sampleRate.toLong() * 2 * maxDurationMs / 1000
         thread = Thread({
             val buf = ByteArray(chunk)
             while (running) {
-                val n = rec.read(buf, 0, buf.size)
+                val n = read(buf)
                 if (n < 0) break
                 if (n == 0) continue
                 val size = synchronized(buffer) {

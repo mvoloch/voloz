@@ -43,7 +43,8 @@ fun hostOf(endpoint: String): String =
 
 /** The desktop's presets (app/src/lib/providers.ts BACKUP_PRESETS), fastest first, plus the Groq default. */
 object ProviderPresets {
-    const val GROQ = "https://api.groq.com/openai/v1"
+    /** https://api.groq.com/openai/v1, except in the `emutest` build (a mock on the emulator's host). */
+    const val GROQ = io.github.mvoloch.voloz.android.BuildConfig.GROQ_ENDPOINT
     const val OPENAI = "https://api.openai.com/v1"
     const val ANTHROPIC = "https://api.anthropic.com/v1"
 

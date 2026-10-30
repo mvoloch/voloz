@@ -28,6 +28,18 @@ GROQ_API_KEY=... VOLOZ_E2E_WAV=/path/to/16k-mono.wav VOLOZ_E2E_OUT=/tmp/e2e.json
 Toolchain: AGP 8.7.3, Gradle 8.11.1 (wrapper), Kotlin 2.0.21, Compose BOM
 2024.12.01, compileSdk/targetSdk 35, minSdk 29.
 
+### Emulator tests without a microphone or a key (`emutest`)
+
+The `emutest` build type (never installed on a phone) sends every request to
+`tools/mock_api.py` on the host and reads the "microphone" from a raw 16 kHz
+mono PCM16 file in the app's files dir:
+
+```sh
+python3 -I tools/mock_api.py /tmp/mock.log /tmp/mock.mode &   # echo ok|fail|hang > /tmp/mock.mode
+./gradlew assembleEmutest   # app/build/outputs/apk/emutest/app-emutest.apk
+adb push mic.pcm /data/local/tmp/ && adb shell run-as io.github.mvoloch.voloz.android sh -c 'mkdir -p files && cp /data/local/tmp/mic.pcm files/'
+```
+
 ## Install (sideload)
 
 1. Copy the APK to the phone and open it; allow "install unknown apps" for the

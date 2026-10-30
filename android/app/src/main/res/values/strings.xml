@@ -59,6 +59,7 @@
     <string name="msg_copied">Copiado</string>
     <string name="msg_cancelled">Cancelado.</string>
     <string name="msg_too_slow">Demorou demais.</string>
+    <string name="msg_timeout">O provedor não respondeu a tempo.</string>
     <string name="msg_retry_hint">O áudio foi guardado: toque na bolha para enviar de novo.</string>
 
     <!-- 1. Boas-vindas -->
