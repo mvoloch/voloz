@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.11] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Improved
+
+- **Faster text cleanup with OpenAI-compatible services:** Voloz now keeps its connection to the cleanup service open and opens it while you speak, instead of connecting again for every dictation. With OpenAI this saves about half a second per dictation.
+
 ## [0.8.10] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
