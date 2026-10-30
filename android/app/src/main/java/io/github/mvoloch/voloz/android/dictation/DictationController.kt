@@ -244,7 +244,10 @@ class DictationController(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    pipeline.run(route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine, cancel)
+                    pipeline.run(
+                        route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine, cancel,
+                        DictationPipeline.TextRules(s.replacements, s.snippets),
+                    )
                 }
             }
             // Cancelled (tap or deadline): cancelProcessing already moved the bubble on.
@@ -308,9 +311,10 @@ class DictationController(
                 durationMs = take.durationMs,
                 refineModel = out.refineModel,
                 refineBackup = out.refineBackup,
+                shortcut = out.shortcut,
             ),
         )
-        if (out.refineError != null) Log.w(TAG, "refinement failed, inserted raw: ${out.refineError}")
+        if (out.refineError != null) Log.w(TAG, "refinement failed, inserted the unrefined text: ${out.refineError}")
         if (out.sttBackup || out.refineBackup) Log.i(TAG, "served by a backup: stt=${out.sttModel} refine=${out.refineModel}")
         if (ok) {
             if (out.refineError != null) onUserMessage?.invoke(context.getString(R.string.msg_refine_failed))

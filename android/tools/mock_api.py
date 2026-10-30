@@ -3,7 +3,8 @@
 Serves GET/HEAD /openai/v1/models, POST /openai/v1/audio/transcriptions and
 POST /openai/v1/chat/completions on 127.0.0.1:8765 (the emulator reaches it as
 10.0.2.2). The mode is read from the file given as the second argument on every
-request: "ok", "fail" (HTTP 503) or "hang" (no answer for 300 s). Each request is
+request: "ok", "fail" (HTTP 503) or "hang" (no answer for 300 s); MODEFILE.text, when
+present, is the transcription returned (default below). Each request is
 logged on stdout: method, path, upload size and type, never the Authorization.
 
 Usage: python3 -I mock_api.py LOGFILE MODEFILE
@@ -63,9 +64,16 @@ class Handler(BaseHTTPRequestHandler):
         if m == "fail":
             return self.reply(503, {"error": {"message": "mock: service unavailable"}})
         if self.path.endswith("/audio/transcriptions"):
-            return self.reply(200, {"text": TEXT})
+            try:
+                text = open(MODE + ".text").read().strip() or TEXT
+            except OSError:
+                text = TEXT
+            return self.reply(200, {"text": text})
         if self.path.endswith("/chat/completions"):
-            return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": REFINED}, "finish_reason": "stop"}]})
+            # Echo the transcript back capitalised with a full stop, keeping placeholders.
+            sent = json.loads(body)["messages"][-1]["content"]
+            refined = (sent[:1].upper() + sent[1:]).rstrip(".") + "." if sent else REFINED
+            return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})
         self.reply(404, {"error": {"message": "mock: unknown path"}})
 
     def log_message(self, *args):

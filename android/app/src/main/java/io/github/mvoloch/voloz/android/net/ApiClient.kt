@@ -114,17 +114,17 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
     }
 
     /** The desktop refinement prompt on [provider]: tagged output for Claude, the keep-language rule for the rest. */
-    fun refine(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>): String =
+    fun refine(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): String =
         if (provider.vendor == Vendor.ANTHROPIC) {
-            refineAnthropic(provider, apiKey, transcript, vocabulary)
+            refineAnthropic(provider, apiKey, transcript, vocabulary, placeholders)
         } else {
-            refineOpenAiCompatible(provider, apiKey, transcript, vocabulary)
+            refineOpenAiCompatible(provider, apiKey, transcript, vocabulary, placeholders)
         }
 
-    private fun refineOpenAiCompatible(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>): String {
+    private fun refineOpenAiCompatible(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String>): String {
         val id = "${base(provider.endpoint)}|${provider.model}"
         val reasoningOff = isOpenAiApi(provider.endpoint) && id !in reasoningRefused
-        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary), reasoningOff)
+        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary, placeholders), reasoningOff)
         try {
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         } catch (e: ProviderException) {
@@ -132,7 +132,7 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             // reason (gpt-4.1) refuse the field outright: drop it for good, once.
             if (!(reasoningOff && e.status == 400 && e.detail?.contains("reasoning_effort") == true)) throw e
             reasoningRefused += id
-            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary), reasoningOff = false)
+            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary, placeholders), reasoningOff = false)
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         }
     }
@@ -171,20 +171,20 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
         return content?.trim()?.takeIf { it.isNotEmpty() } ?: throw IOException("Refinement reply was empty")
     }
 
-    private fun refineAnthropic(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>): String {
+    private fun refineAnthropic(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String>): String {
         val request = Request.Builder()
             .url("${base(provider.endpoint)}/messages")
             .auth(provider.endpoint, apiKey)
-            .post(anthropicPayload(provider, transcript, vocabulary).toString().toRequestBody("application/json".toMediaType()))
+            .post(anthropicPayload(provider, transcript, vocabulary, placeholders).toString().toRequestBody("application/json".toMediaType()))
             .build()
         return execute(provider, request) { anthropicText(provider, it) }
     }
 
     /** Messages API body as the desktop's anthropic_backend sends it (no temperature: current Claude models reject it). */
-    internal fun anthropicPayload(provider: Provider, transcript: String, vocabulary: List<String>): JsonObject = buildJsonObject {
+    internal fun anthropicPayload(provider: Provider, transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): JsonObject = buildJsonObject {
         put("model", provider.model)
         put("max_tokens", MAX_TOKENS + THINKING_HEADROOM_TOKENS)
-        put("system", RefinementPrompt.buildSystemPrompt(vocabulary, tagged = true))
+        put("system", RefinementPrompt.buildSystemPrompt(vocabulary, tagged = true, placeholders = placeholders))
         put(
             "messages",
             buildJsonArray {

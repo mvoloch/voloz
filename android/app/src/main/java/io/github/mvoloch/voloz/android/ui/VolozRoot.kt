@@ -61,6 +61,7 @@ import io.github.mvoloch.voloz.android.ui.screens.Readiness
 import io.github.mvoloch.voloz.android.ui.screens.SettingsCallbacks
 import io.github.mvoloch.voloz.android.ui.screens.SettingsScreen
 import io.github.mvoloch.voloz.android.ui.screens.SettingsSection
+import io.github.mvoloch.voloz.android.ui.screens.TextRuleActions
 import io.github.mvoloch.voloz.android.ui.screens.WelcomeScreen
 import io.github.mvoloch.voloz.android.ui.screens.distinctIds
 import io.github.mvoloch.voloz.android.ui.screens.modelStatusLine
@@ -284,6 +285,12 @@ fun VolozRoot(app: VolozApp) {
                 onBattery = { requestBatteryExemption(context) },
                 onClearHistory = { app.history.clear() },
                 providers = providerActions,
+                textRules = TextRuleActions(
+                    addReplacement = { from, to -> scope.launch { app.settings.addReplacement(from, to) } },
+                    removeReplacement = { from -> scope.launch { app.settings.removeReplacement(from) } },
+                    saveSnippet = { trigger, text, replacing -> scope.launch { app.settings.saveSnippet(trigger, text, replacing) } },
+                    removeSnippet = { trigger -> scope.launch { app.settings.removeSnippet(trigger) } },
+                ),
             ),
             onTab = onTab,
         )
@@ -295,8 +302,12 @@ private fun versionName(context: Context): String =
 
 private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
     val where = e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
-    val refined = e.refineModel?.substringAfterLast('/')?.let {
-        context.getString(if (e.refineBackup) R.string.home_refined_by_backup else R.string.home_refined_by, it)
+    val refined = if (e.shortcut) {
+        context.getString(R.string.home_shortcut)
+    } else {
+        e.refineModel?.substringAfterLast('/')?.let {
+            context.getString(if (e.refineBackup) R.string.home_refined_by_backup else R.string.home_refined_by, it)
+        }
     }
     return HistoryRow(
         id = id,

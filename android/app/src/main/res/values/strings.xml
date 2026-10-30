@@ -145,6 +145,7 @@
     <string name="home_app_clipboard">Copiado</string>
     <string name="home_refined_by">refinado por %1$s</string>
     <string name="home_refined_by_backup">refinado por %1$s (reserva)</string>
+    <string name="home_shortcut">atalho de texto</string>
 
     <!-- 6. Ajustes (the desktop Lite sections) -->
     <string name="section_bubble">Bolha</string>
@@ -154,7 +155,7 @@
     <string name="section_refinement">Refinamento</string>
     <string name="section_refinement_lede">Quem limpa o texto antes de inserir: pontuação, hesitações, mudanças de ideia no meio da frase.</string>
     <string name="section_vocabulary">Vocabulário</string>
-    <string name="section_vocabulary_lede">Nomes e termos que a transcrição erra.</string>
+    <string name="section_vocabulary_lede">Nomes e termos que a transcrição erra, e frases curtas que viram textos prontos.</string>
     <string name="section_general">Geral</string>
     <string name="section_general_lede">Como o Voloz se comporta no seu celular.</string>
     <string name="section_about">Sobre</string>
@@ -191,6 +192,25 @@
     <string name="settings_vocab_dialog_title">Adicionar ao vocabulário</string>
     <string name="settings_vocab_dialog_hint">Ex.: Voloz</string>
     <string name="settings_vocab_remove_cd">Remover %1$s</string>
+    <string name="replacements_title">Substituições</string>
+    <string name="replacements_sub">Corrige uma palavra ou expressão que a transcrição sempre ouve errado, logo após a transcrição e mesmo com o refinamento desligado. Vale para palavras inteiras, em maiúsculas ou minúsculas.</string>
+    <string name="replacements_empty">Nenhuma substituição ainda.</string>
+    <string name="replacements_add">Adicionar substituição</string>
+    <string name="replacements_from">Ouvido como</string>
+    <string name="replacements_from_hint">Ex.: Valois</string>
+    <string name="replacements_to">Escrever como</string>
+    <string name="replacements_to_hint">Ex.: Voloz</string>
+    <string name="replacements_remove_cd">Remover %1$s → %2$s</string>
+    <string name="snippets_title">Atalhos de texto</string>
+    <string name="snippets_sub">Diga uma frase curta e receba um texto salvo: um endereço, uma assinatura, um link. Um ditado que é só a frase insere o texto como está; dentro de um ditado mais longo a frase é trocada depois do refinamento. Maiúsculas, acentos e pontuação não importam.</string>
+    <string name="snippets_empty">Nenhum atalho ainda.</string>
+    <string name="snippets_add">Adicionar atalho</string>
+    <string name="snippets_edit">Editar “%1$s”</string>
+    <string name="snippets_trigger">Quando eu disser</string>
+    <string name="snippets_trigger_hint">Ex.: meu endereço</string>
+    <string name="snippets_text">Inserir este texto</string>
+    <string name="snippets_text_hint">Pode ter várias linhas</string>
+    <string name="snippets_replaces">Substitui o atalho com a mesma frase.</string>
     <string name="settings_theme">Tema</string>
     <string name="theme_system">Seguir o sistema</string>
     <string name="theme_light">Claro</string>

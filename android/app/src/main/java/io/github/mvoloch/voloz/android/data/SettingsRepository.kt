@@ -12,6 +12,10 @@ import io.github.mvoloch.voloz.android.net.KeyRules
 import io.github.mvoloch.voloz.android.net.Provider
 import io.github.mvoloch.voloz.android.net.ProviderPresets
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
+import io.github.mvoloch.voloz.android.text.Replacement
+import io.github.mvoloch.voloz.android.text.Replacements
+import io.github.mvoloch.voloz.android.text.Snippet
+import io.github.mvoloch.voloz.android.text.Snippets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -55,6 +59,10 @@ data class VolozSettings(
     val refineProviders: List<Provider> = listOf(ProviderPresets.DEFAULT_REFINE),
     val refine: Boolean = true,
     val vocabulary: List<String> = emptyList(),
+    /** "Ouvido como" -> "escrever como", applied right after transcription. */
+    val replacements: List<Replacement> = emptyList(),
+    /** Text shortcuts: a short phrase that becomes a saved text. */
+    val snippets: List<Snippet> = emptyList(),
     /** Design's "Só em campos de texto": true = only on focused text fields with the keyboard up. */
     val onlyInTextFields: Boolean = true,
     val bubbleSize: BubbleSize = BubbleSize.MEDIUM,
@@ -95,6 +103,8 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         val REFINE_PROVIDERS = stringPreferencesKey("refine_providers")
         val REFINE = booleanPreferencesKey("refine")
         val VOCABULARY = stringPreferencesKey("vocabulary")
+        val REPLACEMENTS = stringPreferencesKey("replacements")
+        val SNIPPETS = stringPreferencesKey("snippets")
         val ONLY_TEXT_FIELDS = booleanPreferencesKey("only_text_fields")
         val BUBBLE_SIZE = stringPreferencesKey("bubble_size")
         val THEME = stringPreferencesKey("theme")
@@ -177,6 +187,8 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         refineProviders = providers(p[REFINE_PROVIDERS], ProviderPresets.DEFAULT_REFINE),
         refine = p[REFINE] ?: true,
         vocabulary = p[VOCABULARY]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
+        replacements = pairs(p[REPLACEMENTS], "from", "to").map { (a, b) -> Replacement(a, b) },
+        snippets = pairs(p[SNIPPETS], "trigger", "text").map { (a, b) -> Snippet(a, b) },
         onlyInTextFields = p[ONLY_TEXT_FIELDS] ?: true,
         bubbleSize = p[BUBBLE_SIZE]?.let { runCatching { BubbleSize.valueOf(it) }.getOrNull() } ?: BubbleSize.MEDIUM,
         theme = p[THEME]?.let { runCatching { ThemeMode.valueOf(it) }.getOrNull() } ?: ThemeMode.LIGHT,
@@ -231,6 +243,45 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
     suspend fun setOnlyInTextFields(on: Boolean) = store.edit { it[ONLY_TEXT_FIELDS] = on }
     suspend fun setBubbleSize(size: BubbleSize) = store.edit { it[BUBBLE_SIZE] = size.name }
     suspend fun setTheme(mode: ThemeMode) = store.edit { it[THEME] = mode.name }
+
+    /** [first, second] string pairs stored as a JSON array of objects. */
+    private fun pairs(raw: String?, first: String, second: String): List<Pair<String, String>> = runCatching {
+        json.parseToJsonElement(raw ?: return emptyList()).jsonArray.mapNotNull { el ->
+            val o = el.jsonObject
+            val a = o[first]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            val b = o[second]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+            a to b
+        }
+    }.getOrDefault(emptyList())
+
+    private fun encodePairs(list: List<Pair<String, String>>, first: String, second: String) = buildJsonArray {
+        for ((a, b) in list) add(buildJsonObject { put(first, a); put(second, b) })
+    }.toString()
+
+    /** A rule for the same "from" (any case) replaces the old one, as on the desktop. */
+    suspend fun addReplacement(from: String, to: String) = store.edit { prefs ->
+        val current = pairs(prefs[REPLACEMENTS], "from", "to").map { (a, b) -> Replacement(a, b) }
+        val next = Replacements.normalize(current + Replacement(from, to))
+        prefs[REPLACEMENTS] = encodePairs(next.map { it.from to it.to }, "from", "to")
+    }
+
+    suspend fun removeReplacement(from: String) = store.edit { prefs ->
+        val next = pairs(prefs[REPLACEMENTS], "from", "to").filterNot { it.first.equals(from, ignoreCase = true) }
+        prefs[REPLACEMENTS] = encodePairs(next, "from", "to")
+    }
+
+    /** A shortcut with the same trigger (case, accents and punctuation ignored) is replaced. */
+    suspend fun saveSnippet(trigger: String, text: String, replacing: String? = null) = store.edit { prefs ->
+        val current = pairs(prefs[SNIPPETS], "trigger", "text").map { (a, b) -> Snippet(a, b) }
+            .filterNot { replacing != null && it.trigger == replacing }
+        val next = Snippets.normalize(current + Snippet(trigger, text))
+        prefs[SNIPPETS] = encodePairs(next.map { it.trigger to it.text }, "trigger", "text")
+    }
+
+    suspend fun removeSnippet(trigger: String) = store.edit { prefs ->
+        val next = pairs(prefs[SNIPPETS], "trigger", "text").filterNot { it.first == trigger }
+        prefs[SNIPPETS] = encodePairs(next, "trigger", "text")
+    }
 
     suspend fun addTerm(term: String) = editVocabulary { it + term }
 

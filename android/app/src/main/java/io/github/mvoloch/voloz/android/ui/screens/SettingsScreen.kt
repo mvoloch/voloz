@@ -94,6 +94,7 @@ class SettingsCallbacks(
     val onBattery: () -> Unit,
     val onClearHistory: () -> Unit,
     val providers: ProviderActions,
+    val textRules: TextRuleActions,
 )
 
 @Composable
@@ -269,6 +270,8 @@ private fun VocabularySection(settings: VolozSettings, cb: SettingsCallbacks) {
         }
     }
     if (adding) AddTermDialog(onDismiss = { adding = false }, onAdd = { cb.onAddTerm(it); adding = false })
+    ReplacementsGroup(settings.replacements, cb.textRules)
+    SnippetsGroup(settings.snippets, cb.textRules)
 }
 
 @Composable

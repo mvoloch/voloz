@@ -41,7 +41,7 @@ object RefinementPrompt {
      * System prompt: base + smart cleanup + spelling + self-correction + technical (+ vocabulary),
      * then the keep-language rule, or for Claude ([tagged]) the tagged-output rule.
      */
-    fun buildSystemPrompt(vocabulary: List<String>, tagged: Boolean = false): String {
+    fun buildSystemPrompt(vocabulary: List<String>, tagged: Boolean = false, placeholders: List<String> = emptyList()): String {
         val sections = mutableListOf(
             RefinementPromptText.BASE_INSTRUCTIONS,
             RefinementPromptText.SMART_CLEANUP,
@@ -53,9 +53,19 @@ object RefinementPrompt {
         if (terms.isNotEmpty()) {
             sections += RefinementPromptText.VOCABULARY_TEMPLATE.replace("{terms}", terms.joinToString(", "))
         }
+        if (placeholders.isNotEmpty()) {
+            sections += PLACEHOLDER_INSTRUCTION.replace("{tokens}", placeholders.joinToString(", "))
+        }
         val last = if (tagged) TAGGED_OUTPUT_INSTRUCTION else RefinementPromptText.KEEP_LANGUAGE
         return sections.joinToString("\n\n") + "\n\n" + last
     }
+
+    /**
+     * refinement.py `_PLACEHOLDER_INSTRUCTION`, added only when the transcript holds text-shortcut
+     * placeholders (see text/Snippets.kt), so other prompts stay as they were. Hand-copied.
+     */
+    const val PLACEHOLDER_INSTRUCTION =
+        "Copy each of these placeholders exactly once, unchanged, where it stands in the sentence: {tokens}. Each stands for text inserted later."
 
     /** The few-shot pairs with each answer inside the transcript tags (Claude). */
     fun taggedExamples(): List<Pair<String, String>> =
@@ -65,8 +75,8 @@ object RefinementPrompt {
     fun extractTagged(text: String): String = TAGGED.find(text)?.groupValues?.get(1)?.trim() ?: text
 
     /** Chat messages: system, the few-shot pairs as real turns, then the transcript. */
-    fun buildMessages(transcript: String, vocabulary: List<String>): JsonArray = buildJsonArray {
-        add(message("system", buildSystemPrompt(vocabulary)))
+    fun buildMessages(transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): JsonArray = buildJsonArray {
+        add(message("system", buildSystemPrompt(vocabulary, placeholders = placeholders)))
         for ((user, assistant) in RefinementPromptText.EXAMPLES) {
             add(message("user", user))
             add(message("assistant", assistant))

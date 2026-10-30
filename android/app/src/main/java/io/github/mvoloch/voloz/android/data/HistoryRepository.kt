@@ -35,6 +35,8 @@ data class HistoryEntry(
     /** The model that refined it, and whether that was a backup provider. */
     val refineModel: String? = null,
     val refineBackup: Boolean = false,
+    /** The text came from a text shortcut. */
+    val shortcut: Boolean = false,
 )
 
 private val Context.historyStore by preferencesDataStore(name = "history")
@@ -76,6 +78,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                         if (e.durationMs > 0) put("ms", JsonPrimitive(e.durationMs))
                         e.refineModel?.let { put("rmodel", JsonPrimitive(it)) }
                         if (e.refineBackup) put("rbackup", JsonPrimitive(true))
+                        if (e.shortcut) put("shortcut", JsonPrimitive(true))
                     },
                 ),
             )
@@ -97,6 +100,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                     durationMs = o["ms"]?.jsonPrimitive?.longOrNull ?: 0L,
                     refineModel = o["rmodel"]?.jsonPrimitive?.contentOrNull,
                     refineBackup = o["rbackup"]?.jsonPrimitive?.booleanOrNull ?: false,
+                    shortcut = o["shortcut"]?.jsonPrimitive?.booleanOrNull ?: false,
                 )
             }
         }.getOrDefault(emptyList())

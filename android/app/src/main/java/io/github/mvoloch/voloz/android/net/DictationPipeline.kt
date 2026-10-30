@@ -3,6 +3,10 @@ package io.github.mvoloch.voloz.android.net
 import io.github.mvoloch.voloz.android.audio.FlacEncoder
 import io.github.mvoloch.voloz.android.audio.WavWriter
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
+import io.github.mvoloch.voloz.android.text.Replacement
+import io.github.mvoloch.voloz.android.text.Replacements
+import io.github.mvoloch.voloz.android.text.Snippet
+import io.github.mvoloch.voloz.android.text.Snippets
 
 /**
  * Audio -> text: transcription, then (optionally) refinement, each on the main
@@ -24,7 +28,12 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         /** True when a backup provider answered instead of the main one. */
         val sttBackup: Boolean,
         val refineBackup: Boolean,
+        /** The text came from a text shortcut (a whole-dictation trigger, or a refinement that lost one). */
+        val shortcut: Boolean = false,
     )
+
+    /** The user's replacement rules and text shortcuts (desktop vocabulary.py / snippets.py). */
+    class TextRules(val replacements: List<Replacement> = emptyList(), val snippets: List<Snippet> = emptyList())
 
     /** Stops a run: no further provider is tried and the request in flight is aborted. */
     class Cancel(private val abort: () -> Unit) {
@@ -65,35 +74,59 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
             .forEach { client.warm(it.endpoint, route.keyFor(it)) }
     }
 
-    /** Throws [DictationCancelled] once [cancel] fires, also mid-refinement (no raw text then). */
-    fun run(route: Route, audio: UploadAudio, vocabulary: List<String>, refine: Boolean, cancel: Cancel = Cancel {}): Output {
+    /**
+     * Transcribe, apply the replacement rules, then: a dictation that is only a shortcut
+     * trigger becomes its text with no refinement; otherwise triggers go through
+     * refinement as placeholders and come back as their texts (unrefined text with the
+     * shortcuts expanded when the model loses one, or when refinement is off or fails).
+     * Throws [DictationCancelled] once [cancel] fires, also mid-refinement (no raw text then).
+     */
+    fun run(
+        route: Route,
+        audio: UploadAudio,
+        vocabulary: List<String>,
+        refine: Boolean,
+        cancel: Cancel = Cancel {},
+        rules: TextRules = TextRules(),
+    ): Output {
         val t0 = System.nanoTime()
         val stop = { cancel.cancelled }
         val stt = fallback.run("stt", route.stt, stop) { p ->
             client.transcribe(p, keyOrThrow(route, p), audio, RefinementPrompt.buildSttPrompt(vocabulary))
         }
-        val raw = stt.value.trim()
+        val raw = Replacements.apply(stt.value.trim(), rules.replacements)
         val sttMs = (System.nanoTime() - t0) / 1_000_000
-        fun output(text: String, refined: Answer?, error: String?, refineMs: Long) = Output(
+        fun output(text: String, refined: Answer?, error: String?, refineMs: Long, shortcut: Boolean = false) = Output(
             raw = raw, text = text, refined = refined != null, refineError = error, sttMs = sttMs, refineMs = refineMs,
             sttModel = stt.provider.model, refineModel = refined?.provider?.model,
-            sttBackup = stt.backup, refineBackup = refined?.backup ?: false,
+            sttBackup = stt.backup, refineBackup = refined?.backup ?: false, shortcut = shortcut,
         )
-        if (raw.isEmpty() || !refine || route.refine.isEmpty()) return output(raw, null, null, 0)
+        if (raw.isEmpty()) return output(raw, null, null, 0)
+        Snippets.matchWhole(raw, rules.snippets)?.let { return output(it, null, null, 0, shortcut = true) }
+        val unrefined = Snippets.expand(raw, rules.snippets)
+        if (!refine || route.refine.isEmpty()) return output(unrefined, null, null, 0)
 
+        val (protected, tokens) = Snippets.protect(raw, rules.snippets)
         // Same pre-pass as the desktop: the LLM never sees Whisper loops.
-        val cleaned = RefinementPrompt.collapseRepetitiveArtifacts(raw)
+        val cleaned = RefinementPrompt.collapseRepetitiveArtifacts(protected)
         if (cleaned.isBlank()) return output("", null, null, 0)
 
         val t1 = System.nanoTime()
         return try {
-            val answer = fallback.run("llm", route.refine, stop) { p -> client.refine(p, keyOrThrow(route, p), cleaned, vocabulary) }
-            output(answer.value, answer, null, (System.nanoTime() - t1) / 1_000_000)
+            val answer = fallback.run("llm", route.refine, stop) { p ->
+                client.refine(p, keyOrThrow(route, p), cleaned, vocabulary, tokens.keys.toList())
+            }
+            val ms = (System.nanoTime() - t1) / 1_000_000
+            val restored = Snippets.restore(answer.value, tokens)
+            // A lost or repeated placeholder: guessing where a shortcut belonged could put it
+            // in the wrong place; the unrefined text has each one where it was said.
+            if (restored == null) output(unrefined, null, "refinement lost a text-shortcut placeholder", ms, shortcut = true)
+            else output(restored, answer, null, ms)
         } catch (e: DictationCancelled) {
             throw e
         } catch (e: Exception) {
             if (cancel.cancelled) throw DictationCancelled()
-            output(raw, null, e.message ?: e.javaClass.simpleName, (System.nanoTime() - t1) / 1_000_000)
+            output(unrefined, null, e.message ?: e.javaClass.simpleName, (System.nanoTime() - t1) / 1_000_000)
         }
     }
 
