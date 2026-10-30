@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.8] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **Spelling and grammar:** the refinement now always corrects spelling and grammar mistakes the transcription leaves, such as "agora a pouco" (há pouco), "a muito tempo", "porque" for "por que", "mau educado", "agente" for "a gente", and words that do not exist ("desminuir"). Your words, word order and informal register ("tá", "né", "pra") are kept.
+
 ## [0.8.7] - 2026-10-29
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
