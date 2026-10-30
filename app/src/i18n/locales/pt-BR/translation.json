@@ -1218,6 +1218,28 @@
           "title": "Atenção no Windows",
           "body": "O atalho não dispara enquanto o próprio Voloz ou qualquer app rodando como administrador estiver em foco. Estamos trabalhando nisso."
         }
+      },
+      "apiKeys": {
+        "pick": "Escolha uma chave guardada",
+        "newKey": "Colar uma chave nova…",
+        "added": "adicionada em {{date}}",
+        "forget": "Esquecer",
+        "forgetConfirm": "Esquecer mesmo?",
+        "forgetHint": "Remove esta chave do Voloz"
+      },
+      "backups": {
+        "title": "Provedores de reserva",
+        "description": {
+          "stt": "Se a transcrição falhar (limite atingido, serviço fora do ar, chave recusada), o Voloz tenta estes, na ordem.",
+          "llm": "Se o refinamento falhar (limite atingido, serviço fora do ar, chave recusada), o Voloz tenta estes, na ordem."
+        },
+        "empty": "Nenhuma reserva: se o provedor principal falhar, o ditado falha junto.",
+        "add": "Adicionar reserva",
+        "moveUp": "Subir",
+        "moveDown": "Descer",
+        "remove": "Remover",
+        "keyMissing": "Nenhuma chave da {{provider}} guardada ainda: cole uma para esta reserva funcionar.",
+        "pasteKey": "Cole a chave da {{provider}}"
       }
     },
     "mcp": {

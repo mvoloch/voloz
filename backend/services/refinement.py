@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Iterable, Optional
 
 from . import llm as llm_service
+from . import providers
 from .app_context import finish_for_style, style_instruction
 
 
@@ -361,8 +362,7 @@ async def refine_transcript(
         (refined_text, llm_model_size) — so callers can persist which model
         produced the refinement.
     """
-    backend = llm_service.get_llm_model()
-    resolved_size = llm_service.resolve_model_size(backend, model_size)
+    primary = llm_service.get_llm_model()
 
     # Pre-process before the LLM sees the text — the model shouldn't have
     # to reason about obvious STT garbage (see ``collapse_repetitive_artifacts``).
@@ -370,7 +370,7 @@ async def refine_transcript(
     if not cleaned_input.strip():
         # Silence or a dropped silence loop. Claude rejects an empty message
         # and a local model would make something up, so there is nothing to do.
-        return "", resolved_size
+        return "", llm_service.resolve_model_size(primary, model_size)
 
     system_prompt = build_refinement_prompt(flags, vocabulary, app_style)
     tokens = list(placeholders)
@@ -378,24 +378,29 @@ async def refine_transcript(
         system_prompt = (
             f"{system_prompt}\n\n{_PLACEHOLDER_INSTRUCTION.format(tokens=', '.join(tokens))}"
         )
-    examples = REFINEMENT_EXAMPLES
-    tagged = _wants_tagged_output(backend)
-    if tagged:
-        system_prompt = f"{system_prompt}\n\n{_TAGGED_OUTPUT_INSTRUCTION}"
-        examples = [
-            (user, f"<{_TRANSCRIPT_TAG}>{assistant}</{_TRANSCRIPT_TAG}>")
-            for user, assistant in REFINEMENT_EXAMPLES
-        ]
-    else:
-        system_prompt = f"{system_prompt}\n\n{_KEEP_LANGUAGE_INSTRUCTION}"
-    text = await backend.generate(
-        prompt=cleaned_input,
-        system=system_prompt,
-        max_tokens=2048,
-        temperature=0.2,
-        model_size=resolved_size,
-        examples=examples,
-    )
-    if tagged:
-        text = extract_tagged_transcript(text)
+
+    async def generate_on(backend) -> str:
+        # Claude gets tagged output, the others the keep-language rule; a
+        # backup provider of the other kind gets its own prompt.
+        examples = REFINEMENT_EXAMPLES
+        if _wants_tagged_output(backend):
+            prompt = f"{system_prompt}\n\n{_TAGGED_OUTPUT_INSTRUCTION}"
+            examples = [
+                (user, f"<{_TRANSCRIPT_TAG}>{assistant}</{_TRANSCRIPT_TAG}>")
+                for user, assistant in REFINEMENT_EXAMPLES
+            ]
+        else:
+            prompt = f"{system_prompt}\n\n{_KEEP_LANGUAGE_INSTRUCTION}"
+        text = await backend.generate(
+            prompt=cleaned_input,
+            system=prompt,
+            max_tokens=2048,
+            temperature=0.2,
+            model_size=llm_service.resolve_model_size(backend, model_size),
+            examples=examples,
+        )
+        return extract_tagged_transcript(text) if _wants_tagged_output(backend) else text
+
+    backend, text = await providers.run_with_fallback("llm", primary, generate_on)
+    resolved_size = llm_service.resolve_model_size(backend, model_size)
     return finish_for_style(text.strip(), app_style), resolved_size

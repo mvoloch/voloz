@@ -1226,6 +1226,28 @@
           "title": "Heads-up on Windows",
           "body": "The shortcut won't fire while Voloz itself or any app running as administrator is focused. Working on it."
         }
+      },
+      "apiKeys": {
+        "pick": "Choose a saved key",
+        "newKey": "Paste a new key…",
+        "added": "added {{date}}",
+        "forget": "Forget",
+        "forgetConfirm": "Forget it?",
+        "forgetHint": "Removes this key from Voloz"
+      },
+      "backups": {
+        "title": "Backup providers",
+        "description": {
+          "stt": "When transcription fails (limit reached, service down, key rejected), Voloz tries these in order.",
+          "llm": "When refinement fails (limit reached, service down, key rejected), Voloz tries these in order."
+        },
+        "empty": "No backups: if the main provider fails, the dictation fails too.",
+        "add": "Add a backup",
+        "moveUp": "Move up",
+        "moveDown": "Move down",
+        "remove": "Remove",
+        "keyMissing": "No {{provider}} key saved yet: paste one so this backup can work.",
+        "pasteKey": "Paste the {{provider}} key"
       }
     },
     "mcp": {

@@ -30,7 +30,7 @@ from .snippets import (
     protect_snippets,
     restore_snippets,
 )
-from .transcribe import get_whisper_model, resolve_stt_model, transcribe_with_vocabulary
+from .transcribe import transcribe_with_fallback
 from .vocabulary import apply_replacements, normalize_replacements, suggest_replacements
 from .voice_commands import run_command
 
@@ -204,10 +204,8 @@ async def create_capture(
                 raw_path.unlink()
                 written_files.remove(raw_path)
 
-        whisper = get_whisper_model()
-        resolved_stt = resolve_stt_model(whisper, stt_model)
-        transcript = await transcribe_with_vocabulary(
-            whisper, str(audio_path), language, resolved_stt, vocabulary
+        transcript, resolved_stt = await transcribe_with_fallback(
+            str(audio_path), language, stt_model, vocabulary
         )
         transcript = apply_replacements(transcript, replacements)
         shortcut = _snippet_text(transcript, snippets, expand_inline=not refine_follows)
@@ -436,10 +434,8 @@ async def retranscribe_capture(
     if not resolved or not resolved.exists():
         raise FileNotFoundError(f"Audio for capture {capture_id} is missing")
 
-    whisper = get_whisper_model()
-    resolved_stt = resolve_stt_model(whisper, stt_model)
-    transcript = await transcribe_with_vocabulary(
-        whisper, str(resolved), language, resolved_stt, vocabulary
+    transcript, resolved_stt = await transcribe_with_fallback(
+        str(resolved), language, stt_model, vocabulary
     )
     transcript = apply_replacements(transcript, replacements)
 

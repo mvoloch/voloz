@@ -282,7 +282,8 @@ export function useCaptureRecordingSession(
     mutationFn: async ({ captureId }: { captureId: string; auto?: AutoRefine }) =>
       apiClient.refineCapture(captureId, {}),
     onSuccess: (data, { captureId, auto }) => {
-      if (auto) dictationLog('refine ok');
+      // The model names show when a backup provider answered.
+      if (auto) dictationLog(`refine ok (${data.llm_model ?? '?'})`);
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastUpdated(captureId);
       if (pillStateRef.current === 'refining') scheduleHidePill();
@@ -373,7 +374,7 @@ export function useCaptureRecordingSession(
     },
     onSuccess: (capture, { context }) => {
       dictationLog(
-        `upload ok: transcript ${capture.transcript_raw?.length ?? 0} chars, auto_refine=${capture.auto_refine}`,
+        `upload ok: transcript ${capture.transcript_raw?.length ?? 0} chars, auto_refine=${capture.auto_refine}, stt=${capture.stt_model ?? '?'}`,
       );
       queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
         if (!prev) return prev;

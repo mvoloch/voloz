@@ -20,7 +20,13 @@ from urllib.parse import urlparse
 import anthropic
 import httpx2
 
-from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
+from . import (
+    DEFAULT_LLM_MAX_TOKENS,
+    DEFAULT_LLM_TEMPERATURE,
+    LLMRateLimitError,
+    ProviderError,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,12 +159,15 @@ class AnthropicLLMBackend:
             logger.error(
                 "Claude API %s returned %d: %s", self.endpoint, exc.status_code, exc.message
             )
-            error_cls = LLMRateLimitError if exc.status_code == 429 else RuntimeError
+            error_cls = LLMRateLimitError if exc.status_code == 429 else ProviderError
+            response = getattr(exc, "response", None)
             raise error_cls(
-                f"Claude API {self.endpoint} returned HTTP {exc.status_code}: {exc.message}"
+                f"Claude API {self.endpoint} returned HTTP {exc.status_code}: {exc.message}",
+                status_code=exc.status_code,
+                retry_after=parse_retry_after(getattr(response, "headers", None)),
             ) from exc
         except anthropic.APIConnectionError as exc:
-            raise RuntimeError(f"Claude API {self.endpoint} is unreachable: {exc}") from exc
+            raise ProviderError(f"Claude API {self.endpoint} is unreachable: {exc}") from exc
 
         if response.stop_reason == "refusal":
             raise RuntimeError(f"Claude ({self.model}) declined to process this text")

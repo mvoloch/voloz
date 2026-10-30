@@ -592,9 +592,6 @@ pub fn window_exe_name(hwnd: windows::Win32::Foundation::HWND) -> Option<String>
     win::exe_basename(pid)
 }
 
-/// Text selected in the focused control: `Some` (possibly empty) when the
-/// control exposes it through UIAutomation, `None` when the caller has to
-/// fall back to a synthetic copy.
 /// Lowercased exe name of the app in front now, for the paste log.
 #[cfg(target_os = "windows")]
 pub fn foreground_exe() -> Option<String> {
@@ -610,6 +607,9 @@ pub fn foreground_exe() -> Option<String> {
     None
 }
 
+/// Text selected in the focused control: `Some` (possibly empty) when the
+/// control exposes it through UIAutomation, `None` when the caller has to
+/// fall back to a synthetic copy.
 #[cfg(target_os = "windows")]
 pub fn read_selection() -> Option<String> {
     win::focused_selection()
@@ -645,6 +645,22 @@ pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
     activate_pid(focus.pid)
+}
+
+/// Whether the window the snapshot was taken in is still the foreground
+/// window, so bringing it back is a no-op and needs no settle time.
+#[cfg(target_os = "windows")]
+pub fn is_in_front(focus: &FocusSnapshot) -> bool {
+    focus.pid > 0
+        && focus
+            .window
+            .and_then(|raw| win::live_window(raw, focus.pid as u32))
+            .is_some_and(|hwnd| unsafe { windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow() } == hwnd)
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn is_in_front(_focus: &FocusSnapshot) -> bool {
+    false
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]

@@ -1497,8 +1497,14 @@ async fn paste_final_text(
     // Win+Ctrl+V and the like (Windows opens its sound-output flyout) and
     // the text is lost. Wait for the keys first; activating the target
     // earlier would also pull focus away from where the user is dictating.
+    // When the target never lost the foreground there is nothing to settle:
+    // skipping the wait saves POST_ACTIVATE_SETTLE_MS on most dictations.
+    let mut was_in_front = false;
     let returned = match wait_for_modifier_release("paste").await {
-        Ok(()) => focus_capture::activate(&focus),
+        Ok(()) => {
+            was_in_front = focus_capture::is_in_front(&focus);
+            focus_capture::activate(&focus)
+        }
         Err(e) => Err(e),
     };
     if let Err(why) = returned {
@@ -1516,12 +1522,20 @@ async fn paste_final_text(
             }
         };
     }
-    tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
+    if !was_in_front {
+        tokio::time::sleep(std::time::Duration::from_millis(POST_ACTIVATE_SETTLE_MS)).await;
+    }
 
     let snapshot = clipboard::save_clipboard()?;
     let after_write = clipboard::write_text(&text)?;
 
     let paste_result = synthetic_keys::send_paste();
+    // The text shows up now; "paste ok" comes PASTE_CONSUME_MS later.
+    dictation_log::log(if was_in_front {
+        "[rust] paste: keys sent (target still in front)"
+    } else {
+        "[rust] paste: keys sent (target brought back)"
+    });
     tokio::time::sleep(std::time::Duration::from_millis(PASTE_CONSUME_MS)).await;
 
     // Apps that watch the clipboard (QuickTextPaste, Plaud, Grammarly…)

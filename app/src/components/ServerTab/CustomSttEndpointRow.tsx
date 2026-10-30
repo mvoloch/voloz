@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import type { CaptureSettings, CaptureSettingsUpdate } from '@/lib/api/types';
 import { IS_LITE } from '@/lib/edition';
+import { ApiKeyPicker } from './ApiKeyPicker';
 import { SettingRow } from './SettingRow';
 
 interface CustomSttEndpointRowProps {
@@ -25,8 +26,6 @@ export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowP
 
   const [endpointDraft, setEndpointDraft] = useState(endpointSaved);
   const [modelDraft, setModelDraft] = useState(modelSaved);
-  // Write-only: blank on load even when a key is stored, wiped after save.
-  const [apiKeyDraft, setApiKeyDraft] = useState('');
 
   useEffect(() => {
     setEndpointDraft(endpointSaved);
@@ -47,16 +46,6 @@ export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowP
       update({ custom_stt_model: next || null });
     }
   }, [modelDraft, modelSaved, update]);
-  const commitApiKey = useCallback(() => {
-    const trimmed = apiKeyDraft.trim();
-    if (!trimmed) return;
-    update({ custom_stt_api_key: trimmed });
-    setApiKeyDraft('');
-  }, [apiKeyDraft, update]);
-  const clearApiKey = useCallback(() => {
-    setApiKeyDraft('');
-    update({ custom_stt_api_key: null });
-  }, [update]);
 
   return (
     <SettingRow
@@ -101,43 +90,18 @@ export function CustomSttEndpointRow({ settings, update }: CustomSttEndpointRowP
           spellCheck={false}
           aria-label={t('settings.captures.transcription.customEndpoint.modelLabel')}
         />
-        <label htmlFor="customSttApiKey" className="block text-xs font-medium text-muted-foreground pt-1">
-          {t('settings.captures.transcription.customEndpoint.apiKeyLabel')}
-          {apiKeyConfigured ? (
-            <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600">
-              {t('settings.captures.transcription.customEndpoint.apiKeyConfigured')}
-            </span>
-          ) : null}
-        </label>
-        <div className="flex gap-2">
-          <Input
-            id="customSttApiKey"
-            type="password"
-            placeholder={
-              apiKeyConfigured
-                ? t('settings.captures.transcription.customEndpoint.apiKeyPlaceholderReplace')
-                : t('settings.captures.transcription.customEndpoint.apiKeyPlaceholder')
-            }
-            value={apiKeyDraft}
-            onChange={(e) => setApiKeyDraft(e.target.value)}
-            onBlur={commitApiKey}
-            disabled={!endpointDraft}
-            autoComplete="new-password"
-            spellCheck={false}
-            aria-label={t('settings.captures.transcription.customEndpoint.apiKeyLabel')}
-            className="flex-1"
-          />
-          {apiKeyConfigured && (
-            <button
-              type="button"
-              onClick={clearApiKey}
-              className="text-xs text-muted-foreground hover:text-destructive px-2 py-1 border border-border rounded-md"
-              aria-label={t('settings.captures.transcription.customEndpoint.apiKeyClear')}
-            >
-              {t('settings.captures.transcription.customEndpoint.apiKeyClear')}
-            </button>
-          )}
-        </div>
+        <ApiKeyPicker
+          i18nPrefix="settings.captures.transcription.customEndpoint"
+          inputId="customSttApiKey"
+          endpoint={endpointDraft}
+          configured={apiKeyConfigured}
+          selectedId={settings?.custom_stt_api_key_id ?? null}
+          savedKeys={settings?.saved_api_keys ?? []}
+          onSave={(key) => update({ custom_stt_api_key: key })}
+          onPick={(id) => update({ custom_stt_api_key_id: id })}
+          onClear={() => update({ custom_stt_api_key: null })}
+          onForget={(id) => update({ forget_api_key_id: id })}
+        />
         <p className="text-xs text-muted-foreground">
           {active
             ? t('settings.captures.transcription.customEndpoint.statusRemote', {

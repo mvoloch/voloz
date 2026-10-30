@@ -25,7 +25,10 @@ async def update_capture_settings_endpoint(
     patch: models.CaptureSettingsUpdate,
     db: Session = Depends(get_db),
 ):
-    row = settings_service.update_capture_settings(db, patch.model_dump(exclude_unset=True))
+    try:
+        row = settings_service.update_capture_settings(db, patch.model_dump(exclude_unset=True))
+    except settings_service.SettingsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if patch.audio_retention is not None:
         # A shorter retention applies at once, not at the next capture.
         try:

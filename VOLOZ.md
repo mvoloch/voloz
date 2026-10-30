@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: the OpenAI API works as the refinement endpoint, without reasoning, released in Lite 0.8.10; its refine reuses the connection since Lite 0.8.11). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: saved API keys, backup providers, faster paste and upload; released in Lite 0.8.12). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -816,6 +816,79 @@ free `HEAD /models` when recording starts, as the STT backend does. This
 affected every OpenAI-compatible refinement endpoint (Groq, OpenRouter,
 local servers), not only OpenAI. Gate: pytest 561 → 563 passed (+2), 13
 skipped, 0 failed; ruff: 2 more UP045 (`Optional`, matching the file).
+
+## Saved keys and backup providers (`light`, 2026-10-30)
+
+Why: on the Dell the Groq key vanished twice in one afternoon. Changing an
+endpoint to another host drops its key (by design: a key belongs to its
+host), and with one key field per section, typing the OpenAI endpoint into
+the wrong section and back, or pasting a key into the wrong section, lost
+keys silently; a Claude key in the OpenAI section only failed at the next
+dictation. The owner asked for every key to be kept and picked from a
+list, and for Groq to stay primary with automatic fallback when it runs
+out (OpenAI credit, then Claude).
+
+- **Saved keys** (`capture_settings.saved_api_keys`, JSON
+  `{id, host, key, added_at}`): every key that is set on an endpoint is
+  kept, also after the field is cleared or the endpoint moves. Moving an
+  endpoint to another host now takes the newest stored key for that host
+  instead of none. The API returns them masked (`gsk_ab…wxyz`) with
+  `custom_*_api_key_id` naming the one in use; writes take
+  `custom_*_api_key_id` (pick, same host only), `forget_api_key_id`, and
+  `save_api_key: {endpoint, key}` (a backup's key). Existing keys join the
+  list at server start (`bootstrap_llm_backend_config`).
+- **Key/host check**: a key whose prefix names another provider (`sk-ant-`,
+  `gsk_`, `sk-or-`) is refused with a 400 naming both. A bare `sk-` is not
+  checked.
+- **Backup providers** (`stt_fallbacks` / `llm_fallbacks`, up to 4
+  `{endpoint, model}` each): `services/providers.run_with_fallback` tries
+  the main endpoint, then each backup, on a `ProviderError` (any HTTP
+  error, timeout, unreachable; remote backends now raise it with
+  `status_code` and `retry_after`). A 429 parks that provider for its
+  `Retry-After` (default 60 s, max 10 min); when all are parked all are
+  tried. Refinement builds the prompt per provider (tagged output for
+  Claude). Each backup uses the main key when on the same host, else the
+  newest stored key for its host. The capture records the model that
+  answered; `dictation.log` now says `stt=…` and `refine ok (<model>)`.
+  Voice commands and personality still use the main endpoint only.
+  Checked by hand: `gpt-transcribe` takes the app's STT request as is
+  (model, json, language, prompt). Not changed: the Claude SDK still
+  retries 429/5xx itself (default 2 retries) before the fallback runs.
+- **UI**: each endpoint row picks among the stored keys for its host
+  ("Paste a new key…" for another; "Forget" asks twice); a "Backup
+  providers" row under each offers presets (STT: Groq whisper-large-v3,
+  OpenAI gpt-transcribe; refinement: Groq qwen/qwen3.8-27b, OpenAI
+  gpt-6-luna, Claude haiku-5-5), reorder and remove, and a key field when
+  no key is stored for a backup's host.
+
+Latency audit (read-only, 2026-10-30) and what was taken:
+- Paste: the 120 ms settle before Ctrl+V now runs only when the target
+  window had to be brought back (`focus_capture::is_in_front`); the log
+  says `keys sent (target still in front|brought back)` when the text
+  appears (`paste ok` stays 400 ms later, after the clipboard restore).
+- STT upload as 16 kHz FLAC instead of WAV (WAV if libsndfile lacks FLAC):
+  45% smaller on 12 dictations, 1-4 ms to encode; an A/B on 5 short clips
+  was within noise (Groq then rate-limited the test), the gain is inferred
+  from the measured ~10.5 ms per second of audio upload slope.
+- SQLite `PRAGMA synchronous=NORMAL` (WAL): no disk flush per commit.
+- Left for later: refine chained server-side after the transcription (one
+  frontend round trip and a CORS preflight, est. 15-40 ms); building the
+  16 kHz audio once in the webview instead of WAV→decode→WAV (est.
+  10-80 ms, grows with length); writing the capture WAV off the hot path;
+  the pill window may take focus (tao shows it with SW_SHOW), which would
+  force the settle on every paste: the new log line will tell.
+
+Also fixed: `read_selection`'s doc comment had ended up on
+`foreground_exe` (0907a1b).
+
+Gate on GB4: pytest 563 → 579 passed (+16 new in
+`test_providers_fallback.py`; the host-change test now expects the stored
+key back), 13 skipped, 0 failed; `tsc` clean; biome: new files clean,
+touched files the same counts as before; `cargo check` clean; Windows
+clippy the same 18 warning lines. Migration run on a copy of the Dell's DB
+with the keys replaced by fakes: columns added, both keys saved with ids,
+109 captures intact. Not exercised: the UI in the app, a real 429 from
+Groq triggering a backup, the paste log on Windows.
 
 ## Developing on GB4
 

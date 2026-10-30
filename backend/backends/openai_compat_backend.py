@@ -20,7 +20,13 @@ from urllib.parse import urlparse
 
 import httpx
 
-from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
+from . import (
+    DEFAULT_LLM_MAX_TOKENS,
+    DEFAULT_LLM_TEMPERATURE,
+    LLMRateLimitError,
+    ProviderError,
+    parse_retry_after,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -203,14 +209,17 @@ class OpenAICompatLLMBackend:
                 exc.response.status_code,
                 body_preview,
             )
-            error_cls = LLMRateLimitError if exc.response.status_code == 429 else RuntimeError
+            status = exc.response.status_code
+            error_cls = LLMRateLimitError if status == 429 else ProviderError
             raise error_cls(
-                f"Custom LLM endpoint {url} returned HTTP {exc.response.status_code}: "
-                f"{body_preview[:200] or exc.response.reason_phrase}"
+                f"Custom LLM endpoint {url} returned HTTP {status}: "
+                f"{body_preview[:200] or exc.response.reason_phrase}",
+                status_code=status,
+                retry_after=parse_retry_after(exc.response.headers),
             ) from exc
         except httpx.RequestError as exc:
             logger.error("OpenAI-compat endpoint %s request failed: %s", url, exc)
-            raise RuntimeError(
+            raise ProviderError(
                 f"Custom LLM endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
             ) from exc
 

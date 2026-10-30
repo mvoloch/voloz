@@ -22,7 +22,37 @@ DEFAULT_LLM_MAX_TOKENS = 512
 DEFAULT_LLM_TEMPERATURE = 0.7
 
 
-class LLMRateLimitError(RuntimeError):
+class ProviderError(RuntimeError):
+    """A remote STT / LLM provider failed a request.
+
+    ``status_code`` is the HTTP status, ``None`` when no answer came back
+    (timeout, DNS, TLS); ``retry_after`` the seconds the provider asked to
+    wait, when it said. The dictation path moves on to the next configured
+    provider on this error (see ``services/providers.py``).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        retry_after: Optional[float] = None,
+    ):
+        super().__init__(message)
+        self.status_code = status_code
+        self.retry_after = retry_after
+
+
+def parse_retry_after(headers) -> Optional[float]:
+    """Seconds from a ``Retry-After`` header ("7", "2.5"), ``None`` otherwise."""
+    value = headers.get("retry-after") if headers is not None else None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
+
+
+class LLMRateLimitError(ProviderError):
     """A remote LLM answered HTTP 429 (e.g. Groq's free-tier tokens per minute).
 
     Raised by the remote LLM backends so callers can tell "try again in a
@@ -31,7 +61,7 @@ class LLMRateLimitError(RuntimeError):
     """
 
 
-class STTRateLimitError(RuntimeError):
+class STTRateLimitError(ProviderError):
     """A remote speech-to-text endpoint answered HTTP 429 (e.g. Groq's free
     tier, audio seconds per hour).
 
@@ -254,6 +284,14 @@ _custom_stt_model: Optional[str] = None
 _custom_stt_api_key: Optional[str] = None
 _remote_stt_backend: Optional[STTBackend] = None
 _stt_config_lock = threading.Lock()
+
+# Backup providers, tried in order when the configured endpoint fails (see
+# ``services/providers.py``): ``(endpoint, model, api_key)`` per kind
+# ("stt" / "llm"), and their backend instances, kept so each keeps its
+# pooled connection between dictations.
+_fallback_config: dict[str, tuple] = {"stt": (), "llm": ()}
+_fallback_backends: dict[tuple, object] = {}
+_fallback_lock = threading.Lock()
 
 # Supported TTS engines — keyed by engine name, value is the backend class import path.
 # The factory function uses this for the if/elif chain; the model configs live on the backend classes.
@@ -991,6 +1029,49 @@ def set_llm_config(
             _llm_backends.pop(_OPENAI_COMPAT_CACHE_KEY, None)
 
 
+def set_fallback_config(kind: str, entries) -> None:
+    """Set the backup providers for ``kind`` ("stt" or "llm").
+
+    ``entries`` is an ordered iterable of ``(endpoint, model, api_key)``;
+    entries without an endpoint or model are dropped. Backends of entries
+    that are gone are released; the others keep their connections.
+    """
+    if kind not in _fallback_config:
+        raise ValueError(f"Unknown provider kind: {kind}")
+    cleaned = tuple(
+        (endpoint, model, api_key or None) for endpoint, model, api_key in entries if endpoint and model
+    )
+    with _fallback_lock:
+        _fallback_config[kind] = cleaned
+        for cache_key in list(_fallback_backends):
+            if cache_key[0] == kind and cache_key[1:] not in cleaned:
+                del _fallback_backends[cache_key]
+
+
+def get_fallback_backends(kind: str) -> list:
+    """Backend instances for the backup providers of ``kind``, in order."""
+    from .anthropic_backend import AnthropicLLMBackend, is_anthropic_endpoint
+    from .openai_compat_backend import OpenAICompatLLMBackend
+    from .openai_compat_stt_backend import OpenAICompatSTTBackend
+
+    backends = []
+    with _fallback_lock:
+        for endpoint, model, api_key in _fallback_config.get(kind, ()):
+            cache_key = (kind, endpoint, model, api_key)
+            backend = _fallback_backends.get(cache_key)
+            if backend is None:
+                if kind == "stt":
+                    cls = OpenAICompatSTTBackend
+                elif is_anthropic_endpoint(endpoint):
+                    cls = AnthropicLLMBackend
+                else:
+                    cls = OpenAICompatLLMBackend
+                backend = cls(endpoint=endpoint, model=model, api_key=api_key)
+                _fallback_backends[cache_key] = backend
+            backends.append(backend)
+    return backends
+
+
 def get_llm_backend() -> LLMBackend:
     """Get or create the active LLM backend.
 
@@ -1081,3 +1162,6 @@ def reset_backends():
     _custom_stt_model = None
     _custom_stt_api_key = None
     _remote_stt_backend = None
+    with _fallback_lock:
+        _fallback_config.update(stt=(), llm=())
+        _fallback_backends.clear()

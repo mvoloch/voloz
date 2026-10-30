@@ -314,14 +314,44 @@ export interface CaptureSettings {
   snippets: Snippet[];
   /** How long captures keep their audio; transcripts are always kept. */
   audio_retention: AudioRetention;
+  /** Every key entered for a custom endpoint, masked; the keys never leave the server. */
+  saved_api_keys: SavedApiKey[];
+  /** Which saved key each endpoint uses, ``null`` when none is set. */
+  custom_llm_api_key_id: string | null;
+  custom_stt_api_key_id: string | null;
+  /** Backup providers, tried in order when the custom endpoint fails. */
+  stt_fallbacks: ProviderEntry[];
+  llm_fallbacks: ProviderEntry[];
+}
+
+/** A stored API key as the settings API shows it. */
+export interface SavedApiKey {
+  id: string;
+  host: string;
+  /** ``gsk_ab…wxyz``: enough to tell keys apart, not to use one. */
+  hint: string;
+  added_at: string | null;
+}
+
+/** A backup provider; its key is the one stored for its host. */
+export interface ProviderEntry {
+  endpoint: string;
+  model: string;
 }
 
 /** ``never`` deletes a dictation's audio once its transcript is stored. */
 export type AudioRetention = 'always' | '7d' | '30d' | 'never';
 
 export type CaptureSettingsUpdate = Partial<
-  Omit<CaptureSettings, 'custom_llm_api_key_configured' | 'custom_stt_api_key_configured'>
+  Omit<
+    CaptureSettings,
+    'custom_llm_api_key_configured' | 'custom_stt_api_key_configured' | 'saved_api_keys'
+  >
 > & {
+  /** Forget a stored key; it is also unset where it is in use. */
+  forget_api_key_id?: string;
+  /** Store a key for a backup provider's endpoint. */
+  save_api_key?: { endpoint: string; key: string };
   /** Write-only: setting this to a non-empty string stores it, ``null`` clears it. */
   custom_llm_api_key?: string | null;
   /** Write-only: setting this to a non-empty string stores it, ``null`` clears it. */

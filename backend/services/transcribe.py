@@ -7,6 +7,7 @@ import re
 from typing import Iterable, Optional
 from ..backends import get_stt_backend, STTBackend
 from ..utils.audio import has_speech, load_audio
+from . import providers
 from .vocabulary import build_stt_prompt
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,25 @@ async def transcribe_with_vocabulary(
     if is_prompt_echo(text, prompt) and not _audio_has_speech(audio_path):
         return ""
     return text
+
+
+async def transcribe_with_fallback(
+    audio_path: str,
+    language: Optional[str],
+    requested_model: Optional[str],
+    vocabulary: Optional[Iterable[str]] = None,
+) -> tuple[str, str]:
+    """:func:`transcribe_with_vocabulary` on the configured endpoint, then its backups.
+
+    Returns ``(transcript, model label)`` of the provider that answered.
+    """
+
+    async def transcribe_on(backend) -> str:
+        model = resolve_stt_model(backend, requested_model)
+        return await transcribe_with_vocabulary(backend, audio_path, language, model, vocabulary)
+
+    backend, text = await providers.run_with_fallback("stt", get_whisper_model(), transcribe_on)
+    return text, resolve_stt_model(backend, requested_model)
 
 
 def _audio_has_speech(audio_path: str) -> bool:

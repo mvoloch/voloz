@@ -140,14 +140,15 @@ async def test_transcribe_sends_multipart_with_bearer_model_and_language(tmp_pat
     assert b'name="model"\r\n\r\nopenai/whisper-large-v3-turbo' in raw
     assert b'name="language"\r\n\r\npt' in raw
     assert b'name="response_format"\r\n\r\njson' in raw
-    assert b'filename="clip.wav"' in raw
-    assert b"Content-Type: audio/wav" in raw
+    assert b'filename="clip.flac"' in raw
+    assert b"Content-Type: audio/flac" in raw
 
 
 @pytest.mark.asyncio
-async def test_transcribe_uploads_wav_dictations_at_16k_mono(tmp_path):
+async def test_transcribe_uploads_wav_dictations_as_16k_mono_flac(tmp_path):
     """The webview records 48 kHz WAV: three times the bytes Whisper needs,
-    and long dictations would pass hosted endpoints' 25 MB request limit."""
+    and long dictations would pass hosted endpoints' 25 MB request limit.
+    FLAC halves the upload again, losslessly."""
     import numpy as np
     import soundfile as sf
 
@@ -161,12 +162,14 @@ async def test_transcribe_uploads_wav_dictations_at_16k_mono(tmp_path):
         assert await backend.transcribe(str(audio)) == "ok"
 
     raw = server.requests[0]["raw"]
-    start = raw.index(b"RIFF")
-    size = int.from_bytes(raw[start + 4 : start + 8], "little") + 8
-    with wave.open(io.BytesIO(raw[start : start + size])) as w:
-        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16_000, 1, 2)
-        assert abs(w.getnframes() / 16_000 - 1.0) < 0.01
-    assert b'filename="dictation.wav"' in raw
+    start = raw.index(b"fLaC")
+    end = raw.index(b"\r\n--", start)
+    data, rate = sf.read(io.BytesIO(raw[start:end]))
+    assert rate == 16_000 and data.ndim == 1
+    assert abs(len(data) / 16_000 - 1.0) < 0.01
+    assert sf.info(io.BytesIO(raw[start:end])).subtype == "PCM_16"
+    assert b'filename="dictation.flac"' in raw
+    assert b"Content-Type: audio/flac" in raw
 
 
 @pytest.mark.asyncio
@@ -537,10 +540,17 @@ def test_moving_an_endpoint_to_another_host_drops_its_stored_key(tmp_path):
         )
         assert row.custom_stt_api_key == "sk-or-new"
 
-        # Same rule for the refinement endpoint; the other side is untouched.
+        # Same rule for the refinement endpoint, except that a key stored for
+        # the new host is used: the newest OpenRouter one. The other side is
+        # untouched.
         row = update(db, {"custom_llm_endpoint": "https://openrouter.ai/api/v1"})
-        assert row.custom_llm_api_key is None
+        assert row.custom_llm_api_key == "sk-or-new"
         assert row.custom_stt_api_key == "sk-or-new"
+
+        # Back to Claude: its stored key comes back.
+        row = update(db, {"custom_llm_endpoint": "https://api.anthropic.com/v1"})
+        assert row.custom_llm_api_key == "sk-ant-old"
+        update(db, {"custom_llm_endpoint": "https://openrouter.ai/api/v1"})
 
         # Clearing an endpoint (back to local) keeps the key.
         update(db, {"custom_llm_api_key": "sk-or-llm"})

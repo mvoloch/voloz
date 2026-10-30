@@ -7,7 +7,9 @@ defaults. Each has a ``get_*`` that lazily creates the row with defaults and
 an ``update_*`` that accepts a partial payload.
 """
 
-from typing import Any
+import secrets
+from datetime import datetime, timezone
+from typing import Any, Optional
 from urllib.parse import urlparse
 
 from sqlalchemy.orm import Session
@@ -22,6 +24,61 @@ from ..utils.capture_chords import (
 
 
 SINGLETON_ID = 1
+
+_KEY_FIELDS = (
+    ("custom_stt_endpoint", "custom_stt_api_key"),
+    ("custom_llm_endpoint", "custom_llm_api_key"),
+)
+
+# Key prefixes that name their provider for sure. A bare ``sk-`` is used by
+# OpenAI and others, so it is not checked.
+_KEY_PREFIX_HOSTS = (
+    ("sk-ant-", "anthropic.com", "Anthropic"),
+    ("gsk_", "groq.com", "Groq"),
+    ("sk-or-", "openrouter.ai", "OpenRouter"),
+)
+
+
+class SettingsError(ValueError):
+    """A settings write the server refuses; the message is shown to the user."""
+
+
+def _host(endpoint: Optional[str]) -> str:
+    return (urlparse(endpoint or "").hostname or "").lower()
+
+
+def _check_key_fits_host(key: str, endpoint: Optional[str]) -> None:
+    """Refuse a key whose prefix names another provider than the endpoint's.
+
+    Pasting the Claude key into the OpenAI endpoint only showed up as a
+    failed refine at the next dictation.
+    """
+    host = _host(endpoint)
+    if not key or not host:
+        return
+    for prefix, domain, name in _KEY_PREFIX_HOSTS:
+        if key.startswith(prefix) and host != domain and not host.endswith(f".{domain}"):
+            raise SettingsError(f"This looks like a {name} key, but the endpoint is {host}.")
+
+
+def _remember_key(saved: list, host: str, key: Optional[str]) -> list:
+    """``saved`` plus ``key`` for ``host``, unless it is already there."""
+    if not key or not host or any(entry.get("key") == key for entry in saved):
+        return saved
+    added = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return [*saved, {"id": secrets.token_hex(6), "host": host, "key": key, "added_at": added}]
+
+
+def _newest_key_for(saved: list, host: str) -> Optional[str]:
+    matches = [entry["key"] for entry in saved if entry.get("host") == host and entry.get("key")]
+    return matches[-1] if matches else None
+
+
+def _find_saved(saved: list, key_id: str) -> dict:
+    for entry in saved:
+        if entry.get("id") == key_id:
+            return entry
+    raise SettingsError("That saved key no longer exists.")
 
 
 def _get_or_create_capture_row(db: Session) -> DBCaptureSettings:
@@ -92,22 +149,54 @@ def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSett
     personality calls route to the new URL without needing a restart.
     """
     row = _get_or_create_capture_row(db)
-    # A key belongs to the host it was entered for. When an endpoint moves to
-    # another host and the same request brings no key, drop the old key
-    # instead of sending it to the new host.
-    for endpoint_field, key_field in (
-        ("custom_stt_endpoint", "custom_stt_api_key"),
-        ("custom_llm_endpoint", "custom_llm_api_key"),
-    ):
+    patch = dict(patch)
+    saved = list(row.saved_api_keys or [])
+
+    # Forgetting a stored key also unsets it where it is in use.
+    forget_id = patch.pop("forget_api_key_id", None)
+    if forget_id:
+        forgotten = _find_saved(saved, forget_id)
+        saved = [entry for entry in saved if entry is not forgotten]
+        for _, key_field in _KEY_FIELDS:
+            if key_field not in patch and getattr(row, key_field) == forgotten.get("key"):
+                patch[key_field] = None
+
+    # A key for a backup provider, entered next to it in the backup list.
+    new_key = patch.pop("save_api_key", None)
+    if new_key:
+        host = _host(new_key["endpoint"])
+        if not host:
+            raise SettingsError("That endpoint has no host to save the key for.")
+        _check_key_fits_host(new_key["key"], new_key["endpoint"])
+        saved = _remember_key(saved, host, new_key["key"])
+
+    for endpoint_field, key_field in _KEY_FIELDS:
+        endpoint = patch.get(endpoint_field, getattr(row, endpoint_field))
+        # A stored key picked from the list must belong to this endpoint's host.
+        chosen_id = patch.pop(f"{key_field}_id", None)
+        if chosen_id:
+            chosen = _find_saved(saved, chosen_id)
+            if chosen.get("host") != _host(endpoint):
+                raise SettingsError(
+                    f"That key was saved for {chosen.get('host')}, not {_host(endpoint) or 'this endpoint'}."
+                )
+            patch[key_field] = chosen["key"]
+        # A key belongs to the host it was entered for. When an endpoint moves
+        # to another host and the same request brings no key, use the newest
+        # stored key for the new host, or none, rather than send the old key.
         new_endpoint = patch.get(endpoint_field)
         old_endpoint = getattr(row, endpoint_field)
-        if (
-            new_endpoint
-            and key_field not in patch
-            and urlparse(new_endpoint).hostname != urlparse(old_endpoint or "").hostname
-        ):
-            patch = {**patch, key_field: None}
+        if new_endpoint and key_field not in patch and _host(new_endpoint) != _host(old_endpoint):
+            patch[key_field] = _newest_key_for(saved, _host(new_endpoint))
+        if patch.get(key_field):
+            _check_key_fits_host(patch[key_field], endpoint)
+
     _apply_patch(row, patch)
+    # Every key in use is kept, so moving an endpoint away and back (or
+    # clearing the field) doesn't lose it.
+    for endpoint_field, key_field in _KEY_FIELDS:
+        saved = _remember_key(saved, _host(getattr(row, endpoint_field)), getattr(row, key_field))
+    row.saved_api_keys = saved
     db.commit()
     db.refresh(row)
     _sync_llm_backend_config(row)
@@ -137,11 +226,32 @@ def _sync_llm_backend_config(row: DBCaptureSettings) -> None:
         model=row.custom_stt_model,
         api_key=row.custom_stt_api_key,
     )
+    saved = row.saved_api_keys or []
+    for kind, field, primary_endpoint, primary_key in (
+        ("stt", "stt_fallbacks", row.custom_stt_endpoint, row.custom_stt_api_key),
+        ("llm", "llm_fallbacks", row.custom_llm_endpoint, row.custom_llm_api_key),
+    ):
+        entries = []
+        for entry in getattr(row, field) or []:
+            host = _host(entry.get("endpoint"))
+            # The primary's own key when the backup is on the same host,
+            # else the newest stored key for that host.
+            key = primary_key if host == _host(primary_endpoint) else _newest_key_for(saved, host)
+            entries.append((entry.get("endpoint"), entry.get("model"), key))
+        backends.set_fallback_config(kind, entries)
 
 
 def bootstrap_llm_backend_config(db: Session) -> None:
     """Seed the backend LLM config from the persisted row on server startup."""
     row = _get_or_create_capture_row(db)
+    # Keys entered before saved keys existed join the list on first start.
+    saved = list(row.saved_api_keys or [])
+    for endpoint_field, key_field in _KEY_FIELDS:
+        saved = _remember_key(saved, _host(getattr(row, endpoint_field)), getattr(row, key_field))
+    if saved != (row.saved_api_keys or []):
+        row.saved_api_keys = saved
+        db.commit()
+        db.refresh(row)
     _sync_llm_backend_config(row)
 
 

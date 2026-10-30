@@ -22,7 +22,7 @@ from typing import Optional
 import httpx
 import soundfile as sf
 
-from . import STTRateLimitError
+from . import ProviderError, STTRateLimitError, parse_retry_after
 
 logger = logging.getLogger(__name__)
 
@@ -173,14 +173,14 @@ class OpenAICompatSTTBackend:
             # upload Whisper needs, and long ones would pass the 25 MB request
             # limit hosted endpoints set. Compressed formats go as they are.
             if path.suffix.lower() == ".wav":
-                upload = await asyncio.to_thread(_wav_for_whisper, path)
+                upload, name, mime = await asyncio.to_thread(_upload_for_whisper, path)
             else:
-                upload = path.read_bytes()
+                upload, name, mime = path.read_bytes(), path.name, _mime_for(path)
             response = await client.post(
                 url,
                 headers=headers,
                 data=data,
-                files={"file": (path.name, upload, _mime_for(path))},
+                files={"file": (name, upload, mime)},
             )
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -191,13 +191,15 @@ class OpenAICompatSTTBackend:
                 exc.response.status_code,
                 body_preview,
             )
-            error_cls = STTRateLimitError if exc.response.status_code == 429 else RuntimeError
+            status = exc.response.status_code
+            error_cls = STTRateLimitError if status == 429 else ProviderError
             raise error_cls(
-                f"Custom STT endpoint {url} returned HTTP {exc.response.status_code}: "
-                f"{body_preview}"
+                f"Custom STT endpoint {url} returned HTTP {status}: {body_preview}",
+                status_code=status,
+                retry_after=parse_retry_after(exc.response.headers),
             ) from exc
         except httpx.HTTPError as exc:
-            raise RuntimeError(
+            raise ProviderError(
                 f"Custom STT endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
             ) from exc
 
@@ -224,17 +226,27 @@ _MIME_BY_SUFFIX = {
 }
 
 
-def _wav_for_whisper(path: Path) -> bytes:
-    """Return the WAV as 16 kHz mono 16-bit, untouched if it already is."""
-    info = sf.info(str(path))
-    if info.samplerate <= WHISPER_SAMPLE_RATE and info.channels == 1:
-        return path.read_bytes()
+def _upload_for_whisper(path: Path) -> tuple[bytes, str, str]:
+    """A WAV dictation as 16 kHz mono 16-bit FLAC: ``(bytes, filename, mime)``.
+
+    FLAC is lossless and about half the size of the WAV for speech (12 of
+    the owner's dictations: 45% smaller, 1-4 ms to encode), and upload time
+    grows with size (~10 ms per second of audio on the Dell). Falls back to
+    WAV when this libsndfile build has no FLAC encoder.
+    """
     from ..utils.audio import load_audio
 
-    audio, sr = load_audio(str(path), sample_rate=WHISPER_SAMPLE_RATE)
+    info = sf.info(str(path))
+    if info.samplerate <= WHISPER_SAMPLE_RATE and info.channels == 1:
+        audio, sr = sf.read(str(path), dtype="int16")
+    else:
+        audio, sr = load_audio(str(path), sample_rate=WHISPER_SAMPLE_RATE)
     buf = io.BytesIO()
+    if "FLAC" in sf.available_formats():
+        sf.write(buf, audio, sr, format="FLAC", subtype="PCM_16")
+        return buf.getvalue(), f"{path.stem}.flac", "audio/flac"
     sf.write(buf, audio, sr, format="WAV", subtype="PCM_16")
-    return buf.getvalue()
+    return buf.getvalue(), path.name, "audio/wav"
 
 
 def _mime_for(path: Path) -> str:

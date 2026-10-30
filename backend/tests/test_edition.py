@@ -135,11 +135,11 @@ with FakeServer(lambda *_: (200, {"text": "hello"})) as stt:
     uploads = [r for r in stt.requests if r["path"].endswith("/audio/transcriptions")]
     assert len(uploads) == 1
     raw = uploads[0]["raw"]
-    start = raw.index(b"RIFF")
-    size = int.from_bytes(raw[start + 4 : start + 8], "little") + 8
-    with wave.open(io.BytesIO(raw[start : start + size])) as w:
-        assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16_000, 1, 2)
-        assert w.getnframes() == 16_000
+    start = raw.index(b"fLaC")
+    end = raw.index(b"\\r\\n--", start)
+    import soundfile as sf
+    data, rate = sf.read(io.BytesIO(raw[start:end]), dtype="int16")
+    assert (rate, data.ndim, len(data)) == (16_000, 1, 16_000)
 print("ok")
 """
     env = {**os.environ, "VOICEBOX_EDITION": "lite"}

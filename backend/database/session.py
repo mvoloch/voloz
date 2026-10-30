@@ -52,6 +52,10 @@ def init_db() -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA busy_timeout=5000")
+        # In WAL mode NORMAL is still corruption-safe and skips the disk
+        # flush on every commit (two per dictation); a power cut can lose
+        # the last transaction.
+        cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

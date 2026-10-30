@@ -258,6 +258,15 @@ class CaptureSettings(Base):
     # How long captures keep their audio: "always", "7d", "30d" or "never".
     # See ``services/audio_retention.py``.
     audio_retention = Column(String, nullable=False, default="always", server_default="always")
+    # Every API key entered for a custom endpoint, kept when the endpoint
+    # moves elsewhere: ``{"id", "host", "key", "added_at"}``. The settings
+    # API never returns ``key``. See ``services/settings.py``.
+    saved_api_keys = Column(JSON, nullable=False, default=list, server_default="[]")
+    # Backup providers tried in order when the custom endpoint fails:
+    # ``{"endpoint", "model"}``; keys come from ``saved_api_keys`` by host.
+    # See ``services/providers.py``.
+    stt_fallbacks = Column(JSON, nullable=False, default=list, server_default="[]")
+    llm_fallbacks = Column(JSON, nullable=False, default=list, server_default="[]")
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
 

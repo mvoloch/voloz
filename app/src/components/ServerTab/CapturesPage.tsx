@@ -34,7 +34,9 @@ import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
 import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
+import { ApiKeyPicker } from './ApiKeyPicker';
 import { AudioRetentionRow } from './AudioRetentionRow';
+import { BackupProvidersRow } from './BackupProvidersRow';
 import { CustomSttEndpointRow } from './CustomSttEndpointRow';
 import { SettingRow, SettingSection } from './SettingRow';
 import { SnippetsSection } from './SnippetsSection';
@@ -170,10 +172,6 @@ export function CapturesPage() {
   // re-render on every keystroke while the user types out a URL or token.
   const [customLlmEndpointDraft, setCustomLlmEndpointDraft] = useState(customLlmEndpointSaved);
   const [customLlmModelDraft, setCustomLlmModelDraft] = useState(customLlmModelSaved);
-  // Write-only field: the input is blank on load even when a key is stored,
-  // and clears itself after a successful save so the raw value never lingers
-  // in React state where a browser cache or dev-tools inspection could grab it.
-  const [customLlmApiKeyDraft, setCustomLlmApiKeyDraft] = useState('');
 
   useEffect(() => {
     setCustomLlmEndpointDraft(customLlmEndpointSaved);
@@ -194,21 +192,6 @@ export function CapturesPage() {
       update({ custom_llm_model: next || null });
     }
   }, [customLlmModelDraft, customLlmModelSaved, update]);
-  const commitCustomLlmApiKey = useCallback(() => {
-    const trimmed = customLlmApiKeyDraft.trim();
-    if (!trimmed) return;
-    // Send the trimmed value — surrounding whitespace in a bearer token
-    // makes the remote reject it with 401, which surfaces as a confusing
-    // "auth failed" toast when the raw pasted key is fine. Then wipe the
-    // draft so nothing else in the tree can read it back; the server flag
-    // flips to `configured=true` on the next settings query.
-    update({ custom_llm_api_key: trimmed });
-    setCustomLlmApiKeyDraft('');
-  }, [customLlmApiKeyDraft, update]);
-  const clearCustomLlmApiKey = useCallback(() => {
-    setCustomLlmApiKeyDraft('');
-    update({ custom_llm_api_key: null });
-  }, [update]);
 
   useEffect(() => {
     fetch(`${serverUrl}/health/filesystem`)
@@ -488,6 +471,7 @@ export function CapturesPage() {
         />
 
         <CustomSttEndpointRow settings={settings} update={update} />
+        <BackupProvidersRow kind="stt" settings={settings} update={update} />
 
       </SettingSection>
 
@@ -644,43 +628,18 @@ export function CapturesPage() {
               spellCheck={false}
               aria-label={t('settings.captures.refinement.customEndpoint.modelLabel')}
             />
-            <label htmlFor="customLlmApiKey" className="block text-xs font-medium text-muted-foreground pt-1">
-              {t('settings.captures.refinement.customEndpoint.apiKeyLabel')}
-              {customLlmApiKeyConfigured ? (
-                <span className="ml-2 text-[10px] uppercase tracking-wide text-emerald-600">
-                  {t('settings.captures.refinement.customEndpoint.apiKeyConfigured')}
-                </span>
-              ) : null}
-            </label>
-            <div className="flex gap-2">
-              <Input
-                id="customLlmApiKey"
-                type="password"
-                placeholder={
-                  customLlmApiKeyConfigured
-                    ? t('settings.captures.refinement.customEndpoint.apiKeyPlaceholderReplace')
-                    : t('settings.captures.refinement.customEndpoint.apiKeyPlaceholder')
-                }
-                value={customLlmApiKeyDraft}
-                onChange={(e) => setCustomLlmApiKeyDraft(e.target.value)}
-                onBlur={commitCustomLlmApiKey}
-                disabled={!customLlmEndpointDraft}
-                autoComplete="new-password"
-                spellCheck={false}
-                aria-label={t('settings.captures.refinement.customEndpoint.apiKeyLabel')}
-                className="flex-1"
-              />
-              {customLlmApiKeyConfigured && (
-                <button
-                  type="button"
-                  onClick={clearCustomLlmApiKey}
-                  className="text-xs text-muted-foreground hover:text-destructive px-2 py-1 border border-border rounded-md"
-                  aria-label={t('settings.captures.refinement.customEndpoint.apiKeyClear')}
-                >
-                  {t('settings.captures.refinement.customEndpoint.apiKeyClear')}
-                </button>
-              )}
-            </div>
+            <ApiKeyPicker
+              i18nPrefix="settings.captures.refinement.customEndpoint"
+              inputId="customLlmApiKey"
+              endpoint={customLlmEndpointDraft}
+              configured={customLlmApiKeyConfigured}
+              selectedId={settings?.custom_llm_api_key_id ?? null}
+              savedKeys={settings?.saved_api_keys ?? []}
+              onSave={(key) => update({ custom_llm_api_key: key })}
+              onPick={(id) => update({ custom_llm_api_key_id: id })}
+              onClear={() => update({ custom_llm_api_key: null })}
+              onForget={(id) => update({ forget_api_key_id: id })}
+            />
             <p className="text-xs text-muted-foreground">
               {customLlmActive
                 ? t('settings.captures.refinement.customEndpoint.statusRemote', {
@@ -694,6 +653,7 @@ export function CapturesPage() {
             </p>
           </div>
         </SettingRow>
+        <BackupProvidersRow kind="llm" settings={settings} update={update} />
       </SettingSection>
 
       {/* Lite has no voice profiles to play transcripts back in */}

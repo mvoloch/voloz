@@ -291,6 +291,57 @@ class CaptureRetranscribeRequest(BaseModel):
     language: Optional[str] = Field(None, pattern="^(en|zh|ja|ko|de|fr|ru|pt|es|it)$")
 
 
+class ProviderEntry(BaseModel):
+    """A backup provider: an OpenAI-compatible (or Claude) endpoint and model."""
+
+    endpoint: str = Field(..., min_length=1, max_length=500)
+    model: str = Field(..., min_length=1, max_length=200)
+
+    @field_validator("endpoint", "model")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+    @field_validator("endpoint")
+    @classmethod
+    def _http_url(cls, value: str) -> str:
+        if not value.lower().startswith(("http://", "https://")):
+            raise ValueError("endpoint must be an http(s) URL")
+        return value
+
+
+class NewApiKey(BaseModel):
+    """A key to store for a provider that isn't the main endpoint (a backup)."""
+
+    endpoint: str = Field(..., min_length=1, max_length=500)
+    key: str = Field(..., min_length=1, max_length=500)
+
+    @field_validator("endpoint", "key")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be blank")
+        return value
+
+
+class SavedApiKey(BaseModel):
+    """A stored API key as the settings API shows it: never the key itself."""
+
+    id: str
+    host: str
+    hint: str
+    added_at: Optional[str] = None
+
+
+def mask_api_key(key: str) -> str:
+    """``gsk_ab…wxyz``: enough to tell keys apart, not to use one."""
+    return f"{key[:6]}…{key[-4:]}" if len(key) > 14 else "…"
+
+
 class CaptureSettingsResponse(BaseModel):
     """Server-persisted defaults for the capture / refine flow."""
 
@@ -331,6 +382,14 @@ class CaptureSettingsResponse(BaseModel):
     snippets: List[Dict[str, str]] = Field(default_factory=list)
     # How long captures keep their audio (see ``services/audio_retention.py``).
     audio_retention: str = "always"
+    # Stored keys, masked, and which of them each endpoint uses (``None``
+    # when no key is set). See ``services/settings.py``.
+    saved_api_keys: List[SavedApiKey] = Field(default_factory=list)
+    custom_llm_api_key_id: Optional[str] = None
+    custom_stt_api_key_id: Optional[str] = None
+    # Backup providers, in the order they are tried.
+    stt_fallbacks: List[ProviderEntry] = Field(default_factory=list)
+    llm_fallbacks: List[ProviderEntry] = Field(default_factory=list)
 
     @model_validator(mode="before")
     @classmethod
@@ -342,23 +401,39 @@ class CaptureSettingsResponse(BaseModel):
         SQLAlchemy ORM rows (``from_attributes=True`` path) and plain dicts
         so tests that construct the model directly get the same treatment.
         """
-        secret_fields = ("custom_llm_api_key", "custom_stt_api_key")
-        if isinstance(data, dict):
-            for field in secret_fields:
-                raw_key = data.pop(field, None)
-                data.setdefault(f"{field}_configured", bool(raw_key))
-            return data
-        # ORM row — build a snapshot dict, drop the secrets, and hand the
-        # rest to Pydantic. ``from_attributes`` won't reach the raw
-        # attributes anymore because the returned dict wins.
-        columns = getattr(getattr(data, "__table__", None), "columns", None)
-        if columns is None:
-            return data
-        snapshot = {c.name: getattr(data, c.name, None) for c in columns}
-        for field in secret_fields:
-            raw_key = snapshot.pop(field, None)
-            snapshot[f"{field}_configured"] = bool(raw_key)
-        return snapshot
+        if not isinstance(data, dict):
+            # ORM row — build a snapshot dict, drop the secrets, and hand the
+            # rest to Pydantic. ``from_attributes`` won't reach the raw
+            # attributes anymore because the returned dict wins.
+            columns = getattr(getattr(data, "__table__", None), "columns", None)
+            if columns is None:
+                return data
+            data = {c.name: getattr(data, c.name, None) for c in columns}
+        saved = [
+            entry
+            for entry in (data.pop("saved_api_keys", None) or [])
+            if isinstance(entry, dict) and entry.get("key")
+        ]
+        data["saved_api_keys"] = [
+            {
+                "id": entry["id"],
+                "host": entry.get("host", ""),
+                "hint": mask_api_key(entry["key"]),
+                "added_at": entry.get("added_at"),
+            }
+            for entry in saved
+        ]
+        for field in ("custom_llm_api_key", "custom_stt_api_key"):
+            raw_key = data.pop(field, None)
+            data.setdefault(f"{field}_configured", bool(raw_key))
+            data.setdefault(
+                f"{field}_id",
+                next((e["id"] for e in saved if raw_key and e["key"] == raw_key), None),
+            )
+        for field in ("stt_fallbacks", "llm_fallbacks"):
+            if data.get(field) is None:
+                data[field] = []
+        return data
 
     class Config:
         from_attributes = True
@@ -387,6 +462,14 @@ class CaptureSettingsUpdate(BaseModel):
     custom_stt_endpoint: Optional[str] = None
     custom_stt_model: Optional[str] = None
     custom_stt_api_key: Optional[str] = None
+    # Point an endpoint at a stored key (``saved_api_keys[].id``), or drop one.
+    custom_llm_api_key_id: Optional[str] = None
+    custom_stt_api_key_id: Optional[str] = None
+    forget_api_key_id: Optional[str] = None
+    save_api_key: Optional[NewApiKey] = None
+    # Replace the backup list whole; at most four, in the order to try them.
+    stt_fallbacks: Optional[List[ProviderEntry]] = Field(default=None, max_length=4)
+    llm_fallbacks: Optional[List[ProviderEntry]] = Field(default=None, max_length=4)
     # A list replaces the stored one whole. Terms and rules are trimmed,
     # empties dropped and duplicates merged case-insensitively.
     vocabulary: Optional[List[str]] = None
