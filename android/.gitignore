@@ -1,0 +1,19 @@
+# Gradle / Android build outputs
+.gradle/
+.kotlin/
+build/
+app/build/
+captures/
+*.apk
+*.aab
+*.ap_
+*.dex
+# Local machine config
+local.properties
+.idea/
+*.iml
+.DS_Store
+# Never commit secrets
+keys.env
+*.jks
+*.keystore

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Five lime level bars, the bubble's signature, on the 108dp adaptive canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="@color/lime" android:pathData="M37,45.5a3,3 0,0 1,6 0v17a3,3 0,0 1,-6 0z" />
+    <path android:fillColor="@color/lime" android:pathData="M45,38.5a3,3 0,0 1,6 0v31a3,3 0,0 1,-6 0z" />
+    <path android:fillColor="@color/lime" android:pathData="M53,33a3,3 0,0 1,6 0v42a3,3 0,0 1,-6 0z" />
+    <path android:fillColor="@color/lime" android:pathData="M61,40.5a3,3 0,0 1,6 0v27a3,3 0,0 1,-6 0z" />
+    <path android:fillColor="@color/lime" android:pathData="M69,47.5a3,3 0,0 1,6 0v13a3,3 0,0 1,-6 0z" />
+</vector>

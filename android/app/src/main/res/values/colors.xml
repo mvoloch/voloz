@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors the tokens in ui/theme/Theme.kt and overlay/BubbleStyle.kt for XML use. -->
+    <color name="paper">#F2F2F0</color>
+    <color name="ink">#0D0D0D</color>
+    <color name="lime">#C7FF38</color>
+</resources>

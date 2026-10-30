@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default locale is pt-BR for now (design copy). Strings with markup use CDATA and are rendered with AnnotatedString.fromHtml. -->
+<resources>
+    <string name="app_name" translatable="false">Voloz</string>
+    <string name="a11y_description">Mostra a bolha de ditado quando um campo de texto está ativo e coloca o texto ditado onde está o cursor. O Voloz só olha qual campo está ativo. Não lê nem guarda o que aparece na tela.</string>
+
+    <!-- Common -->
+    <string name="common_continue">Continuar</string>
+    <string name="common_add">Adicionar</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="cd_back">Voltar</string>
+    <string name="cd_settings">Ajustes</string>
+    <string name="cd_copy">Copiar</string>
+
+    <!-- Recording notification -->
+    <string name="notif_channel_name">Ditado</string>
+    <string name="notif_recording_title">Voloz está gravando</string>
+    <string name="notif_recording_text">Toque na bolha para terminar</string>
+    <string name="notif_action_finish">Terminar</string>
+
+    <!-- Bubble (symbols only on screen; these are for TalkBack) -->
+    <string name="bubble_cd_idle">Ditado do Voloz. Toque para falar, ou segure enquanto fala.</string>
+    <string name="bubble_cd_recording">Gravando. Toque para terminar.</string>
+    <string name="bubble_cd_processing">Transcrevendo</string>
+    <string name="bubble_cd_done">Texto inserido</string>
+    <string name="bubble_cd_error">Não deu</string>
+    <string name="bubble_cd_paste">Toque para colar o texto ditado</string>
+    <string name="tooltip_hands_free" translatable="false">Hands Free</string>
+    <string name="tooltip_tap_again">toque de novo para terminar</string>
+
+    <!-- Dictation messages (toasts) -->
+    <string name="msg_need_key">Coloque a sua chave da Groq no app Voloz.</string>
+    <string name="msg_need_mic">Permita o microfone no app Voloz.</string>
+    <string name="msg_too_short">Curto demais. Fale um pouco mais.</string>
+    <string name="msg_mic_unavailable">Não deu para abrir o microfone.</string>
+    <string name="msg_mic_silent">O microfone só entregou silêncio. O Android pode ter bloqueado a gravação.</string>
+    <string name="msg_nothing_heard">Nada foi ouvido.</string>
+    <string name="msg_insert_failed">Não deu para inserir aqui. O texto ficou copiado: toque na bolha para colar.</string>
+    <string name="msg_paste_failed">Não deu para colar. O texto continua copiado.</string>
+    <string name="msg_refine_failed">A correção falhou; entrou o texto sem correção.</string>
+    <string name="msg_key_invalid">Chave da Groq inválida.</string>
+    <string name="msg_rate_limit">Limite da Groq atingido. Tente de novo em instantes.</string>
+    <string name="msg_too_large">Gravação grande demais para a Groq.</string>
+    <string name="msg_network">Sem conexão com a Groq.</string>
+    <string name="msg_groq_http">Erro da Groq (%1$d).</string>
+    <string name="msg_unexpected">Erro inesperado (%1$s).</string>
+    <string name="msg_copied">Copiado</string>
+
+    <!-- 1. Boas-vindas -->
+    <string name="welcome_headline">Fale. O texto aparece onde você está digitando.</string>
+    <string name="welcome_body">Uma bolha pequena fica na borda da tela. Toque nela, fale, e o texto entra pronto no WhatsApp, no Gmail ou em qualquer campo, com pontuação e ortografia corrigidas.</string>
+    <string name="welcome_cta">Começar</string>
+    <string name="welcome_footnote">Usa a sua própria chave da Groq. Seu áudio vai direto para a Groq, sem passar por servidores do Voloz.</string>
+
+    <!-- 2. Chave -->
+    <string name="key_title">Cole a sua chave da Groq</string>
+    <string name="key_body">É ela que transcreve o que você fala. Criar uma é grátis e leva um minuto.</string>
+    <string name="key_step1"><![CDATA[Entre em <a href="https://console.groq.com/keys">console.groq.com/keys</a> com o seu Google.]]></string>
+    <string name="key_step2"><![CDATA[Toque em <b>Create API Key</b>, dê um nome e copie a chave.]]></string>
+    <string name="key_step3">Volte aqui e cole abaixo.</string>
+    <string name="key_label">Chave da API</string>
+    <string name="key_placeholder">Cole a chave aqui</string>
+    <string name="key_test">Testar</string>
+    <string name="key_testing">Testando…</string>
+    <string name="key_ok">Chave funcionando</string>
+    <string name="key_save">Salvar</string>
+    <string name="key_footnote">A chave fica guardada criptografada, só neste celular.</string>
+
+    <!-- 3. Microfone -->
+    <string name="mic_title">Deixe o Voloz ouvir você</string>
+    <string name="mic_body">O microfone só liga quando você toca na bolha. Enquanto grava, o Android mostra o ponto verde de microfone em uso e uma notificação do Voloz.</string>
+    <string name="mic_preview_note">É essa notificação que aparece durante o ditado. Ela some quando o texto é inserido.</string>
+    <string name="mic_cta">Permitir microfone</string>
+    <string name="mic_skip">Já permiti, continuar</string>
+
+    <!-- 4. Acessibilidade -->
+    <string name="a11y_title">Ative o Voloz em Acessibilidade</string>
+    <string name="a11y_body">É o que deixa o Voloz mostrar a bolha quando você está num campo de texto e colocar o texto onde está o cursor, em qualquer app.</string>
+    <string name="a11y_step1"><![CDATA[Toque no botão abaixo. Em <b>Apps instalados</b>, abra <b>Voloz</b> e ligue a chave.]]></string>
+    <string name="a11y_step2"><![CDATA[Apareceu <b>Configuração restrita</b>? Vá em Configurações › Apps › Voloz, toque em <b>⋮</b> e em <b>Permitir configurações restritas</b>. Depois repita o passo 1.]]></string>
+    <string name="a11y_open_app_info">Abrir Configurações › Apps › Voloz</string>
+    <string name="a11y_privacy">O Voloz só olha qual campo está ativo. Não lê nem guarda o que aparece na tela.</string>
+    <string name="a11y_status_off">Ainda não ativado</string>
+    <string name="a11y_status_on">Ativado</string>
+    <string name="a11y_cta">Abrir Acessibilidade</string>
+    <string name="a11y_skip">Já ativei, testar o ditado</string>
+    <string name="a11y_done">Testar o ditado</string>
+
+    <!-- 5. Início -->
+    <string name="home_ready_title">Pronto para ditar</string>
+    <string name="home_ready_sub">A bolha aparece quando você toca num campo de texto.</string>
+    <string name="home_ready_sub_always">A bolha fica sempre na borda da tela.</string>
+    <string name="home_missing_title">Falta pouco</string>
+    <string name="home_missing_sub">Toque no que está em amarelo para resolver.</string>
+    <string name="chip_key">Chave Groq</string>
+    <string name="chip_mic">Microfone</string>
+    <string name="chip_a11y">Acessibilidade</string>
+    <string name="chip_battery">Bateria sem restrição</string>
+    <string name="home_try_label">Teste aqui</string>
+    <string name="home_try_placeholder">Toque aqui e use a bolha</string>
+    <string name="home_recent">Últimos ditados</string>
+    <string name="home_empty">Os seus ditados aparecem aqui.</string>
+    <string name="home_app_clipboard">Copiado</string>
+
+    <!-- 6. Ajustes -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_group_bubble">Bolha</string>
+    <string name="settings_only_fields">Só em campos de texto</string>
+    <string name="settings_only_fields_sub">Desligado: a bolha fica sempre na tela</string>
+    <string name="settings_size">Tamanho</string>
+    <string name="size_small">Pequena</string>
+    <string name="size_medium">Média</string>
+    <string name="size_large">Grande</string>
+    <string name="settings_how">Como gravar</string>
+    <string name="settings_how_body">Toque uma vez para falar à vontade e toque de novo para terminar. Ou segure enquanto fala e solte para terminar.</string>
+    <string name="settings_group_text">Texto</string>
+    <string name="settings_refine">Corrigir o texto</string>
+    <string name="settings_refine_sub">Pontuação, ortografia e vícios de fala</string>
+    <string name="settings_vocab">Vocabulário</string>
+    <string name="settings_vocab_sub">Nomes e termos que o Voloz deve escrever assim</string>
+    <string name="settings_vocab_add">+ Adicionar</string>
+    <string name="settings_vocab_dialog_title">Adicionar ao vocabulário</string>
+    <string name="settings_vocab_dialog_hint">Ex.: Voloz</string>
+    <string name="settings_vocab_remove_cd">Remover %1$s</string>
+    <string name="settings_group_account">Conta</string>
+    <string name="settings_key">Chave da Groq</string>
+    <string name="settings_key_none">Nenhuma chave</string>
+    <string name="settings_key_change">Trocar</string>
+</resources>
