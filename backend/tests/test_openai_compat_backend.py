@@ -175,6 +175,30 @@ async def test_other_400s_are_not_retried(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_generate_reuses_one_pooled_client():
+    with FakeOpenAIServer(lambda *_: _chat_reply("ok")) as server:
+        backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="m")
+        await backend.generate(prompt="x")
+        first = backend._client
+        await backend.generate(prompt="y")
+    assert first is not None
+    assert backend._client is first
+    assert len(server.requests) == 2
+
+
+@pytest.mark.asyncio
+async def test_warm_opens_the_pool_and_never_raises():
+    with FakeOpenAIServer(lambda *_: _chat_reply("ok")) as server:
+        backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="m", api_key="sk-test")
+        await backend.warm()  # the fake server answers HEAD with 501; still fine
+        assert backend._client is not None
+        assert await backend.generate(prompt="x") == "ok"
+    with FakeOpenAIServer(lambda *_: _chat_reply("ok")) as server:
+        dead_url = server.base_url
+    await OpenAICompatLLMBackend(endpoint=dead_url, model="m", timeout=2.0).warm()
+
+
+@pytest.mark.asyncio
 async def test_generate_without_api_key_sends_no_authorization_header():
     with FakeOpenAIServer(lambda *_: _chat_reply("ok")) as server:
         backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="m", api_key="")

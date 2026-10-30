@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: the OpenAI API works as the refinement endpoint, without reasoning; released in Lite 0.8.10). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: the OpenAI API works as the refinement endpoint, without reasoning, released in Lite 0.8.10; its refine reuses the connection since Lite 0.8.11). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -803,6 +803,19 @@ To use it: refinement endpoint `https://api.openai.com/v1`, model
 `gpt-6-luna`, the user's own OpenAI key. Gate on GB4: pytest 557 → 561
 passed (+4 new), 13 skipped, 0 failed; ruff: 1 new UP045 on
 `is_openai_endpoint` (`Optional`, matching the file), the rest as before.
+
+In the app (0.8.10 on the Dell, the same 12 captures re-refined through
+`POST /captures/{id}/refine`, stored text and label put back after):
+gpt-6-luna took 2.41 s median (1.63–5.04 s, the first one cold), about
+0.7 s more than in the benchmark. Cause: `OpenAICompatLLMBackend` opened a
+new `httpx.AsyncClient` per refine and had no `warm()`, unlike the STT and
+Claude backends, so every refine paid a fresh TCP + TLS handshake (measured
+from the Dell: 1.55 s median per call fresh vs 1.02 s pooled). It now keeps
+one pooled client per event loop (keep-alive 120 s) and `warm()` sends a
+free `HEAD /models` when recording starts, as the STT backend does. This
+affected every OpenAI-compatible refinement endpoint (Groq, OpenRouter,
+local servers), not only OpenAI. Gate: pytest 561 → 563 passed (+2), 13
+skipped, 0 failed; ruff: 2 more UP045 (`Optional`, matching the file).
 
 ## Developing on GB4
 

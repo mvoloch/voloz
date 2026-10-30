@@ -13,6 +13,7 @@ The user configures ``custom_llm_endpoint`` / ``custom_llm_model`` /
 built-in Qwen3 backend.
 """
 
+import asyncio
 import logging
 from typing import Optional
 from urllib.parse import urlparse
@@ -24,6 +25,12 @@ from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
 logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
+
+# Keep the TLS connection open across a whole dictation, as the STT and
+# Claude backends do: ``warm()`` runs when recording starts and the refine
+# follows the transcription, often more than httpx's default 5 s later. A
+# fresh connection per refine cost ~0.5 s to the OpenAI API from Brazil.
+KEEPALIVE_EXPIRY_SECONDS = 120.0
 
 
 def is_openai_endpoint(endpoint: Optional[str]) -> bool:
@@ -73,11 +80,44 @@ class OpenAICompatLLMBackend:
         # for good the first time the model rejects it.
         self._openai_api = is_openai_endpoint(endpoint)
         self._reasoning_off = self._openai_api
+        # One pooled client per event loop (see ``_get_client``).
+        self._client: Optional[httpx.AsyncClient] = None
+        self._client_loop: Optional[asyncio.AbstractEventLoop] = None
         # ``model_size`` / ``_current_model_size`` are read by the shared
         # download-progress / unload plumbing on other backends. Report the
         # remote model name so the routes layer can echo it back to clients.
         self.model_size = model
         self._current_model_size = model
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Pooled client bound to the running event loop.
+
+        httpx clients can't be shared across event loops, so a new loop
+        (tests, a restarted server loop) gets a fresh client.
+        """
+        loop = asyncio.get_running_loop()
+        if self._client is None or self._client_loop is not loop:
+            self._client = httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=True,
+                limits=httpx.Limits(keepalive_expiry=KEEPALIVE_EXPIRY_SECONDS),
+            )
+            self._client_loop = loop
+        return self._client
+
+    async def warm(self) -> None:
+        """Open the pooled connection ahead of a refine with a free request.
+
+        ``HEAD {endpoint}/models`` is unbilled and carries no body, yet it pays
+        the TCP + TLS handshake while the user is still speaking; any status
+        code leaves a reusable connection in the pool. Errors are swallowed:
+        warming is best-effort and must never surface to the dictation flow.
+        """
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        try:
+            await self._get_client().head(f"{self.endpoint}/models", headers=headers, timeout=10.0)
+        except httpx.HTTPError as exc:
+            logger.debug("LLM warm-up against %s failed (ignored): %s", self.endpoint, exc)
 
     def is_loaded(self) -> bool:
         """Return ``True`` unconditionally — the remote server owns model state.
@@ -138,48 +178,48 @@ class OpenAICompatLLMBackend:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         url = f"{self.endpoint}/chat/completions"
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            try:
+        client = self._get_client()
+        try:
+            response = await client.post(url, headers=headers, json=payload)
+            if (
+                "reasoning_effort" in payload
+                and response.status_code == 400
+                and "reasoning_effort" in response.text
+            ):
+                # gpt-5 / gpt-5-mini only go down to "minimal", and models
+                # that don't reason (gpt-4.1) refuse the field outright.
+                logger.info("%s rejects reasoning_effort=none; not sending it", self.model)
+                self._reasoning_off = False
+                del payload["reasoning_effort"]
                 response = await client.post(url, headers=headers, json=payload)
-                if (
-                    "reasoning_effort" in payload
-                    and response.status_code == 400
-                    and "reasoning_effort" in response.text
-                ):
-                    # gpt-5 / gpt-5-mini only go down to "minimal", and models
-                    # that don't reason (gpt-4.1) refuse the field outright.
-                    logger.info("%s rejects reasoning_effort=none; not sending it", self.model)
-                    self._reasoning_off = False
-                    del payload["reasoning_effort"]
-                    response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                # Truncate the body — some servers echo the whole prompt in
-                # error responses, and log files fill up fast otherwise.
-                body_preview = exc.response.text[:500]
-                logger.error(
-                    "OpenAI-compat endpoint %s returned %d: %s",
-                    url,
-                    exc.response.status_code,
-                    body_preview,
-                )
-                error_cls = LLMRateLimitError if exc.response.status_code == 429 else RuntimeError
-                raise error_cls(
-                    f"Custom LLM endpoint {url} returned HTTP {exc.response.status_code}: "
-                    f"{body_preview[:200] or exc.response.reason_phrase}"
-                ) from exc
-            except httpx.RequestError as exc:
-                logger.error("OpenAI-compat endpoint %s request failed: %s", url, exc)
-                raise RuntimeError(
-                    f"Custom LLM endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
-                ) from exc
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            # Truncate the body — some servers echo the whole prompt in
+            # error responses, and log files fill up fast otherwise.
+            body_preview = exc.response.text[:500]
+            logger.error(
+                "OpenAI-compat endpoint %s returned %d: %s",
+                url,
+                exc.response.status_code,
+                body_preview,
+            )
+            error_cls = LLMRateLimitError if exc.response.status_code == 429 else RuntimeError
+            raise error_cls(
+                f"Custom LLM endpoint {url} returned HTTP {exc.response.status_code}: "
+                f"{body_preview[:200] or exc.response.reason_phrase}"
+            ) from exc
+        except httpx.RequestError as exc:
+            logger.error("OpenAI-compat endpoint %s request failed: %s", url, exc)
+            raise RuntimeError(
+                f"Custom LLM endpoint {url} is unreachable: {exc.__class__.__name__}: {exc}"
+            ) from exc
 
-            try:
-                data = response.json()
-            except ValueError as exc:
-                raise RuntimeError(
-                    f"Custom LLM endpoint {url} returned a non-JSON body: {response.text[:200]}"
-                ) from exc
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Custom LLM endpoint {url} returned a non-JSON body: {response.text[:200]}"
+            ) from exc
 
         return _extract_content(data, url)
 
