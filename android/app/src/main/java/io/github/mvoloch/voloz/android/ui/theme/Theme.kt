@@ -8,11 +8,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import io.github.mvoloch.voloz.android.R
+import androidx.compose.ui.text.font.FontVariation
 
 /**
  * The single place for the app's look: colour tokens, type and shapes from the
@@ -47,10 +51,18 @@ object VolozColors {
  * download source was approved), so these fall back to the system families.
  * To bundle: drop the OFL TTFs in res/font and point these three vals at them.
  */
+@OptIn(ExperimentalTextApi::class)
 object VolozFonts {
-    val Display: FontFamily = FontFamily.SansSerif
+    // Familjen Grotesk and JetBrains Mono: variable TTFs from google/fonts (OFL,
+    // licences in android/fonts-licenses). Body text stays the system Roboto.
+    val Display: FontFamily = FontFamily(
+        Font(R.font.familjen_grotesk, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
+        Font(R.font.familjen_grotesk, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    )
     val Body: FontFamily = FontFamily.Default
-    val Mono: FontFamily = FontFamily.Monospace
+    val Mono: FontFamily = FontFamily(
+        Font(R.font.jetbrains_mono, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
+    )
 }
 
 object VolozType {
