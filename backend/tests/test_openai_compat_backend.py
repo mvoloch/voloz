@@ -20,10 +20,11 @@ from backend.backends import (
     _OPENAI_COMPAT_CACHE_KEY,
     _llm_backends,
     get_llm_backend,
+    openai_compat_backend,
     reset_backends,
     set_llm_config,
 )
-from backend.backends.openai_compat_backend import OpenAICompatLLMBackend
+from backend.backends.openai_compat_backend import OpenAICompatLLMBackend, is_openai_endpoint
 
 
 class FakeOpenAIServer:
@@ -120,6 +121,57 @@ async def test_generate_sends_openai_chat_shape_with_bearer_and_examples():
         {"role": "assistant", "content": "Hi."},
         {"role": "user", "content": "um hello there"},
     ]
+
+
+def test_is_openai_endpoint_matches_only_the_openai_api_host():
+    assert is_openai_endpoint("https://api.openai.com/v1")
+    assert is_openai_endpoint("https://API.openai.com/v1/")
+    assert not is_openai_endpoint("https://api.groq.com/openai/v1")
+    assert not is_openai_endpoint("http://localhost:8080/v1")
+    assert not is_openai_endpoint("")
+    assert not is_openai_endpoint(None)
+
+
+@pytest.mark.asyncio
+async def test_openai_api_gets_max_completion_tokens_and_no_reasoning(monkeypatch):
+    monkeypatch.setattr(openai_compat_backend, "is_openai_endpoint", lambda _: True)
+    with FakeOpenAIServer(lambda *_: _chat_reply("ok")) as server:
+        backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="gpt-6-luna")
+        assert await backend.generate(prompt="x", max_tokens=64, temperature=0.2) == "ok"
+    body = server.requests[0]["body"]
+    assert "max_tokens" not in body
+    assert body["max_completion_tokens"] == 64
+    assert body["reasoning_effort"] == "none"
+    assert body["temperature"] == 0.2
+
+
+@pytest.mark.asyncio
+async def test_openai_model_that_rejects_reasoning_effort_is_retried_without_it(monkeypatch):
+    monkeypatch.setattr(openai_compat_backend, "is_openai_endpoint", lambda _: True)
+
+    def script(_path, _headers, body):
+        if "reasoning_effort" in body:
+            return 400, {
+                "error": {"message": "Unrecognized request argument supplied: reasoning_effort"}
+            }
+        return _chat_reply("ok")
+
+    with FakeOpenAIServer(script) as server:
+        backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="gpt-4.1-mini")
+        assert await backend.generate(prompt="x") == "ok"
+        assert await backend.generate(prompt="y") == "ok"
+    sent = [r["body"] for r in server.requests]
+    assert ["reasoning_effort" in b for b in sent] == [True, False, False]
+
+
+@pytest.mark.asyncio
+async def test_other_400s_are_not_retried(monkeypatch):
+    monkeypatch.setattr(openai_compat_backend, "is_openai_endpoint", lambda _: True)
+    with FakeOpenAIServer(lambda *_: (400, {"error": {"message": "context too long"}})) as server:
+        backend = OpenAICompatLLMBackend(endpoint=server.base_url, model="gpt-6-luna")
+        with pytest.raises(RuntimeError, match="HTTP 400"):
+            await backend.generate(prompt="x")
+    assert len(server.requests) == 1
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: a paste that can't return to its window leaves the text copied; not released). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: the OpenAI API works as the refinement endpoint, without reasoning; released in Lite 0.8.10). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -764,6 +764,45 @@ the clipboard`; other failures now log their message (`paste failed:
 Gate on GB4: `tsc` clean; Windows clippy the same 18 warning lines as
 before; Linux `cargo check` clean; biome the same findings as before in
 the three files touched.
+
+## OpenAI as the refinement model (`light`, 2026-10-30)
+
+Benchmark on 12 of the owner's dictations (2–59 s, 3 runs each, the app's
+own prompt and examples; script and report kept outside the repo since
+they hold dictation text). Refine, median per call: Claude Haiku 5.5
+2.03 s, `gpt-6-luna` 1.68 s, `gpt-5.6-luna` 1.68 s (both with
+`reasoning_effort: "none"`); `gpt-6-luna` with `low` 1.71 s but up to
+6.2 s and rewrote more. On 13–30 s dictations Haiku took 2.0–3.0 s and
+luna 1.3–1.9 s. Quality about even: Haiku stays closer to the words
+(but once turned "dois erres" into "dois erros"); luna punctuates and
+drops fillers more, and once dropped a clause. The app's real refine
+time on the Dell with Haiku (dictation.log, 55 dictations, upload ok →
+refine ok): median 2.25 s, p90 3.66 s.
+
+Transcription in the same run: Groq whisper-large-v3 0.52 s after
+release (1.14 s at 59 s of audio); `gpt-transcribe` 1.31 s (4.08 s at
+59 s) with better names ("Claude", "Voloz") and fewer dropped words;
+`gpt-live-transcribe` 0.59 s (`minimal`) / 0.65 s (`low`), flat with
+length, but `minimal` garbled the first words of 5 of 12 clips (other
+scripts and languages). Decision: keep Groq for transcription; Realtime
+is not worth its price for dictation.
+
+What the OpenAI API needed (checked against it on 2026-10-30): its
+GPT-5/6 models reject `max_tokens` ("use max_completion_tokens"), and
+without `reasoning_effort` they reason at medium effort. With
+`reasoning_effort: "none"` they accept `temperature` 0.2. `gpt-5-mini`
+only goes down to `minimal`; `gpt-4.1-mini` refuses the field.
+`OpenAICompatLLMBackend` now, for `api.openai.com` only, sends
+`max_completion_tokens` and `reasoning_effort: "none"`, and drops the
+latter for that backend after a 400 that names it. Other servers get
+the same request as before. Known gap, not fixed: `gpt-5` / `gpt-5-mini`
+still fail (after the retry they reason at default effort and refuse
+`temperature` 0.2).
+
+To use it: refinement endpoint `https://api.openai.com/v1`, model
+`gpt-6-luna`, the user's own OpenAI key. Gate on GB4: pytest 557 → 561
+passed (+4 new), 13 skipped, 0 failed; ruff: 1 new UP045 on
+`is_openai_endpoint` (`Optional`, matching the file), the rest as before.
 
 ## Developing on GB4
 

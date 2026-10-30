@@ -15,6 +15,7 @@ built-in Qwen3 backend.
 
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -23,6 +24,13 @@ from . import DEFAULT_LLM_MAX_TOKENS, DEFAULT_LLM_TEMPERATURE, LLMRateLimitError
 logger = logging.getLogger(__name__)
 
 DEFAULT_REQUEST_TIMEOUT_SECONDS = 120.0
+
+
+def is_openai_endpoint(endpoint: Optional[str]) -> bool:
+    """Whether a custom LLM endpoint URL targets the OpenAI API itself."""
+    if not endpoint:
+        return False
+    return (urlparse(endpoint).hostname or "").lower() == "api.openai.com"
 
 
 class OpenAICompatLLMBackend:
@@ -58,6 +66,13 @@ class OpenAICompatLLMBackend:
         # the same way an unset field looks in the DB.
         self.api_key = api_key or None
         self.timeout = timeout
+        # The OpenAI API's GPT-5/6 models reject ``max_tokens`` and, unless
+        # told otherwise, reason before answering (medium effort), which
+        # slows a refine down. Its chat models all take
+        # ``max_completion_tokens``; ``reasoning_effort: "none"`` is dropped
+        # for good the first time the model rejects it.
+        self._openai_api = is_openai_endpoint(endpoint)
+        self._reasoning_off = self._openai_api
         # ``model_size`` / ``_current_model_size`` are read by the shared
         # download-progress / unload plumbing on other backends. Report the
         # remote model name so the routes layer can echo it back to clients.
@@ -112,10 +127,12 @@ class OpenAICompatLLMBackend:
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": max_tokens,
+            "max_completion_tokens" if self._openai_api else "max_tokens": max_tokens,
             "temperature": temperature,
             "stream": False,
         }
+        if self._reasoning_off:
+            payload["reasoning_effort"] = "none"
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -124,6 +141,17 @@ class OpenAICompatLLMBackend:
         async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
             try:
                 response = await client.post(url, headers=headers, json=payload)
+                if (
+                    "reasoning_effort" in payload
+                    and response.status_code == 400
+                    and "reasoning_effort" in response.text
+                ):
+                    # gpt-5 / gpt-5-mini only go down to "minimal", and models
+                    # that don't reason (gpt-4.1) refuse the field outright.
+                    logger.info("%s rejects reasoning_effort=none; not sending it", self.model)
+                    self._reasoning_off = False
+                    del payload["reasoning_effort"]
+                    response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
             except httpx.HTTPStatusError as exc:
                 # Truncate the body — some servers echo the whole prompt in
