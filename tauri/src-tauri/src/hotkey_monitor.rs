@@ -567,7 +567,7 @@ fn apply_effect(app: &AppHandle, bindings: &Bindings, effect: Effect) {
                     if let Ok(win_size) = window.outer_size() {
                         let x = monitor_pos.x
                             + (monitor_size.width as i32 - win_size.width as i32) / 2;
-                        let y = monitor_pos.y + (monitor_size.height as f64 * 0.04) as i32;
+                        let y = monitor_pos.y + (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
                         let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
                     }
                 }
@@ -578,7 +578,7 @@ fn apply_effect(app: &AppHandle, bindings: &Bindings, effect: Effect) {
                 // Deliberately no set_focus() — taking key focus would yank
                 // it out of whatever app the user was typing in, which is
                 // the opposite of what a dictation overlay should do.
-                let _ = window.show();
+                crate::show_pill(&window);
                 let payload = serde_json::json!({
                     "focus": focus,
                     "mode": if command { "command" } else { "dictation" },

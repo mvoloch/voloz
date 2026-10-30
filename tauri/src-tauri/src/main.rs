@@ -30,6 +30,10 @@ use tokio::sync::mpsc;
 pub const DICTATE_WINDOW_LABEL: &str = "dictate";
 const DICTATE_WINDOW_WIDTH: f64 = 420.0;
 const DICTATE_WINDOW_HEIGHT: f64 = 64.0;
+/// How far down the screen the pill window sits, as a fraction of the
+/// monitor height. Lite draws the pill as a notch hanging from the top
+/// edge, so its window starts at the very top.
+pub(crate) const PILL_TOP_FRACTION: f64 = 0.0;
 
 /// Create the floating dictate webview hidden. The HotkeyMonitor shows it on
 /// chord-start; the frontend hides it when the capture pipeline finishes.
@@ -56,6 +60,9 @@ fn build_dictate_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewW
     .visible(false)
     .build()?;
 
+    #[cfg(target_os = "windows")]
+    make_non_activating(&window);
+
     #[cfg(target_os = "linux")]
     allow_microphone(&window);
 
@@ -63,11 +70,52 @@ fn build_dictate_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewW
         let monitor_size = monitor.size();
         let win_size = window.outer_size()?;
         let x = (monitor_size.width as i32 - win_size.width as i32) / 2;
-        let y = (monitor_size.height as f64 * 0.04) as i32;
+        let y = (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
         window.set_position(PhysicalPosition::new(x, y))?;
     }
 
     Ok(window)
+}
+
+/// Keep the pill out of the foreground on Windows. With it in front,
+/// Windows refused to hand the foreground back to the app the dictation
+/// started in (`could not return to claude.exe (in front: voloz.exe)`: the
+/// text only reached the clipboard) and the chord's key-up went unseen
+/// (`safety stop`). It happened after the main window was closed: Windows
+/// gives the foreground to the next window, the pill. WS_EX_NOACTIVATE
+/// stops that and activation on click; `show_pill` shows it without
+/// activating.
+#[cfg(target_os = "windows")]
+fn make_non_activating(window: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE, WS_EX_NOACTIVATE,
+    };
+    if let Ok(hwnd) = window.hwnd() {
+        let hwnd = HWND(hwnd.0);
+        unsafe {
+            let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE.0 as isize);
+        }
+    }
+}
+
+/// Show the pill without giving it the foreground (`window.show()` uses
+/// SW_SHOW, which activates the window on Windows).
+#[cfg(desktop)]
+pub fn show_pill(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_SHOWNOACTIVATE};
+        if let Ok(hwnd) = window.hwnd() {
+            unsafe {
+                let _ = ShowWindow(HWND(hwnd.0), SW_SHOWNOACTIVATE);
+            }
+            return;
+        }
+    }
+    let _ = window.show();
 }
 
 /// Position, undo click-through, and show the dictate pill window.
@@ -118,7 +166,7 @@ pub fn show_dictate_window(app: &tauri::AppHandle) {
         if let Ok(win_size) = window.outer_size() {
             let x = monitor_pos.x
                 + (monitor_size.width as i32 - win_size.width as i32) / 2;
-            let y = monitor_pos.y + (monitor_size.height as f64 * 0.04) as i32;
+            let y = monitor_pos.y + (monitor_size.height as f64 * crate::PILL_TOP_FRACTION) as i32;
             let _ = window.set_position(PhysicalPosition::new(x, y));
         }
     }
@@ -127,7 +175,7 @@ pub fn show_dictate_window(app: &tauri::AppHandle) {
     // The click-through toggle is a macOS workaround and is never set on Linux.
     #[cfg(not(target_os = "linux"))]
     let _ = window.set_ignore_cursor_events(false);
-    let _ = window.show();
+    show_pill(&window);
 }
 
 const LEGACY_PORT: u16 = 8000;

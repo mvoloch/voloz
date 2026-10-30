@@ -67,3 +67,4 @@ How to keep this list:
 | To port | Paste: skip the 120 ms settle when the target window is still in front | `light` (Lite 0.8.12) | `fix/` branch (`paste_final_text`, `focus_capture::is_in_front`) |
 | To port | Remote STT upload as 16 kHz FLAC (lossless, ~45% smaller than WAV) | `light` (Lite 0.8.12) | `perf/` branch (`openai_compat_stt_backend.py`) |
 | To port | SQLite `synchronous=NORMAL` with WAL: no disk flush per commit | `light` (Lite 0.8.12) | `perf/` branch (`database/session.py`) |
+| To port | Dictation pill took the foreground on Windows (shown with SW_SHOW, and handed the foreground when the main window closed), so the paste couldn't return to the target app and the chord's key-up was missed; the pill is now WS_EX_NOACTIVATE and shown with SW_SHOWNOACTIVATE | `light` (Lite 0.8.13) | `fix/` branch (`build_dictate_window`, `show_dictate_window`, hotkey monitor) |
