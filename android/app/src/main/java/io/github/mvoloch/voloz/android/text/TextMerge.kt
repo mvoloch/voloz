@@ -31,6 +31,10 @@ object TextMerge {
         return Merge(before + piece + after, before.length + piece.length)
     }
 
+    /** True when the reported selection is a real position inside a text of [length]. */
+    fun selectionFits(length: Int, selStart: Int, selEnd: Int): Boolean =
+        selStart in 0..length && selEnd in 0..length
+
     /** The dictated text trimmed and padded with the spaces its neighbours need. */
     fun withSpacing(before: String, insert: String, after: String): String {
         var t = insert.trim()

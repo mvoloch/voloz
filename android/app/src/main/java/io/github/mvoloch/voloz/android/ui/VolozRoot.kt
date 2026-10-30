@@ -111,12 +111,15 @@ fun VolozRoot(app: VolozApp) {
         val key = keyInput.trim()
         keyTest = KeyTestState.Testing
         scope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { app.groq.testKey(key) } }
-            keyTest = result.fold(
-                onSuccess = {
+            // Saving runs here too: the Keystore is slow on first use and can throw on some phones.
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    app.groq.testKey(key)
                     app.settings.setGroqKey(key)
-                    KeyTestState.Ok
-                },
+                }
+            }
+            keyTest = result.fold(
+                onSuccess = { KeyTestState.Ok },
                 onFailure = { KeyTestState.Failed(describeKeyError(context, it)) },
             )
         }
@@ -125,7 +128,10 @@ fun VolozRoot(app: VolozApp) {
     fun saveKey(next: Screen) {
         val key = keyInput.trim()
         scope.launch {
-            app.settings.setGroqKey(key)
+            withContext(Dispatchers.IO) { runCatching { app.settings.setGroqKey(key) } }.onFailure {
+                keyTest = KeyTestState.Failed(describeKeyError(context, it))
+                return@launch
+            }
             keyInput = ""
             keyTest = KeyTestState.Idle
             screen = next

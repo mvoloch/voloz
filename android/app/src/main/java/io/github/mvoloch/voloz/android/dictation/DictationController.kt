@@ -122,6 +122,17 @@ class DictationController(
         if (_state.value is BubbleState.Recording) stop()
     }
 
+    /** Drops an in-progress take without uploading it (the accessibility service went away). */
+    fun abortRecording() {
+        main.removeCallbacks(silenceProbe)
+        val rec = recorder ?: return
+        recorder = null
+        rec.stop()
+        stopForegroundService()
+        cancelTimers()
+        _state.value = BubbleState.Idle
+    }
+
     // ---- recording ------------------------------------------------------
 
     private fun start(handsFree: Boolean) {

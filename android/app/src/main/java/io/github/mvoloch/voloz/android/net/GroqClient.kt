@@ -89,13 +89,17 @@ class GroqClient(
             .header("Authorization", "Bearer $apiKey")
             .post(payload.toString().toRequestBody("application/json".toMediaType()))
             .build()
-        return http.newCall(request).execute().use { response ->
-            val body = readOk(response)
-            val content = json.parseToJsonElement(body).jsonObject["choices"]?.jsonArray
-                ?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")
-                ?.jsonPrimitive?.contentOrNull
-            content?.trim()?.takeIf { it.isNotEmpty() } ?: throw IOException("Groq refinement reply was empty")
+        return http.newCall(request).execute().use { response -> refinedText(readOk(response)) }
+    }
+
+    /** The reply's text. A reply cut at max_tokens throws, so the caller falls back to the raw transcript. */
+    internal fun refinedText(body: String): String {
+        val choice = json.parseToJsonElement(body).jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+        if (choice?.get("finish_reason")?.jsonPrimitive?.contentOrNull == "length") {
+            throw IOException("Groq refinement reply was cut off at max_tokens")
         }
+        val content = choice?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
+        return content?.trim()?.takeIf { it.isNotEmpty() } ?: throw IOException("Groq refinement reply was empty")
     }
 
     private fun readOk(response: Response): String {

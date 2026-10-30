@@ -118,6 +118,9 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
     override fun onDestroy() {
         _connected.value = false
         handler.removeCallbacksAndMessages(null)
+        // Without the service there is no bubble to stop a take: release the mic
+        // (before hide(), which would end a hold and upload the take).
+        app.controller.abortRecording()
         bubble?.hide()
         bubble = null
         val controller = app.controller
@@ -132,9 +135,10 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
     // ---- focus tracking -------------------------------------------------
 
     private fun refreshFocusNow() {
-        val node = findFocusedEditable()
         val wins = runCatching { windows }.getOrDefault(emptyList())
         val ime = wins.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+        // The tree walk runs on every event; without a keyboard no field is being typed in.
+        val node = findFocusedEditable(scanTree = ime)
         val eligible = node != null && FieldPolicy.isDictationTarget(node.inputType, node.isPassword)
         if (eligible) lastTarget = node
         focus.value = FocusInfo(
@@ -166,7 +170,7 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         return BubbleAnchor(field.top, field.bottom, imeTop, statusBottom)
     }
 
-    private fun findFocusedEditable(): AccessibilityNodeInfo? {
+    private fun findFocusedEditable(scanTree: Boolean = true): AccessibilityNodeInfo? {
         val active = rootInActiveWindow
         active?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { if (it.isEditable) return it }
         val all = runCatching { windows }.getOrDefault(emptyList())
@@ -181,7 +185,7 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         // does not return them (seen on API 34 with Compose BOM 2024.12, Voloz's own
         // "Teste aqui" field). Fall back to a bounded walk of the active window for
         // a node that is both focused and editable. Only flags are read, never text.
-        return active?.let { findFocusedEditableIn(it) }
+        return if (scanTree) active?.let { findFocusedEditableIn(it) } else null
     }
 
     private fun findFocusedEditableIn(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
@@ -198,7 +202,8 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
 
     private fun currentTarget(): AccessibilityNodeInfo? {
         findFocusedEditable()?.let { return it }
-        return lastTarget?.takeIf { runCatching { it.refresh() && it.isEditable }.getOrDefault(false) }
+        // Still on screen only: never drop text into a field the user has navigated away from.
+        return lastTarget?.takeIf { runCatching { it.refresh() && it.isEditable && it.isVisibleToUser }.getOrDefault(false) }
     }
 
     // ---- insertion ------------------------------------------------------
@@ -229,9 +234,9 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         val existing = if (showingHint) "" else raw
         val start = node.textSelectionStart
         val end = node.textSelectionEnd
-        if (existing.isNotEmpty() && (start < 0 || end < 0 || start > existing.length || end > existing.length)) {
-            return false
-        }
+        // An empty `existing` with a cursor past 0 means the app hides its text
+        // (rich editors, WebViews): SET_TEXT would wipe it, so paste instead.
+        if (!TextMerge.selectionFits(existing.length, start, end)) return false
         val merged = TextMerge.merge(existing, start, end, text)
         val ok = node.performAction(
             AccessibilityNodeInfo.ACTION_SET_TEXT,
@@ -277,6 +282,7 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
 
     override fun pasteClipboard(): Boolean {
         val node = currentTarget() ?: return false
+        if (!FieldPolicy.isDictationTarget(node.inputType, node.isPassword)) return false
         return node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
     }
 }

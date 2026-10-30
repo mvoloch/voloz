@@ -134,6 +134,10 @@ class BubbleOverlay(
         snapAnimator?.cancel()
         runCatching { wm.removeView(bubble) }
         attached = false
+        // A removed window gets no ACTION_UP/CANCEL; end the gesture here.
+        if (holding) listener.onHoldEnd()
+        holding = false
+        dragging = false
         updateTooltip()
     }
 
