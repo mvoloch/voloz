@@ -19,11 +19,20 @@
     ]
   },
   "bundle": {
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/lib/udev/rules.d/60-voloz-uinput.rules": "linux/60-voloz-uinput.rules"
+        }
+      }
+    }
   },
   "plugins": {
     "updater": {
-      "endpoints": ["https://github.com/mvoloch/voloz/releases/download/lite-latest/latest.json"]
+      "endpoints": [
+        "https://github.com/mvoloch/voloz/releases/download/lite-latest/latest.json"
+      ]
     }
   }
 }

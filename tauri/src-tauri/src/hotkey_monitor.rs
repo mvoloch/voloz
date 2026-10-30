@@ -540,6 +540,10 @@ fn apply_effect(app: &AppHandle, bindings: &Bindings, effect: Effect) {
             // steal key focus and poison the reading. In practice those
             // calls leave keyWindow alone, but capturing first is free.
             let focus = focus_capture::capture_focus().ok();
+            // Linux pastes through a virtual keyboard the compositor needs a
+            // moment to pick up: create it while the user speaks.
+            #[cfg(target_os = "linux")]
+            std::thread::spawn(crate::synthetic_keys::prepare_paste);
             // A voice command works on the selection. UIAutomation reads it
             // now; `None` (no TextPattern) makes the pill fall back to a
             // synthetic copy once the chord is released.

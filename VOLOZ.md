@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: Linux build (copy, no paste), light theme by default; released in Lite 0.8.14). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: Linux pastes through a uinput virtual keyboard; released in Lite 0.8.15). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -967,6 +967,47 @@ release with `gh release upload`. State of Lite on Linux (from the code):
   the window, microphone, tray, shortcut and clipboard on a Linux desktop.
   GNOME on Wayland without data-control may refuse the clipboard; then
   the pill shows nothing and the text is in the history.
+
+## Linux paste (`light`, 2026-10-30, Lite 0.8.15)
+
+The owner's call: Lite is no use on Linux without the automatic paste, so
+the Linux functions are written instead of stubbed:
+- `focus_capture`: `capture_focus` returns an empty snapshot and `activate`
+  does nothing. Wayland lets no app read or raise another app's window;
+  the pill never takes the focus, so the window dictated into is still in
+  front when the paste arrives.
+- `clipboard`: one long-lived `arboard` handle (`write_text`, `read_text`,
+  `save_clipboard` / `restore_clipboard` with text only). arboard 3.7 uses
+  wl-clipboard-rs 0.9.5, which speaks `ext_data_control_v1` (KDE Plasma
+  6.6 exposes that one, not the wlr variant) and serves the clipboard from
+  a forked process; X11 elsewhere.
+- `synthetic_keys::send_paste`: Ctrl+V from a uinput virtual keyboard
+  (evdev 0.13, the crate keytap already uses), created at recording start
+  (`prepare_paste`) because the compositor needs ~1 s to pick a new device
+  up (300 ms was not enough on KDE), one key event per report with 25 ms
+  between them (Ctrl and V in one report did not paste on KDE). Physical V
+  position: fine on QWERTY and ABNT2. Terminals paste with Ctrl+Shift+V,
+  so the paste does nothing there.
+- Permission: `/dev/uinput` is root-only by default. The .deb installs
+  `/usr/lib/udev/rules.d/60-voloz-uinput.rules` (group `input`, mode 0660;
+  `tauri.lite.conf.json` → `bundle.linux.deb.files`); the AppImage needs
+  that rule by hand. The user must be in `input` (also for the shortcut).
+
+Tested on GB4 (KDE Plasma 6.6, Wayland), with the app's own crate versions
+in small test programs (`/tmp/cliptest` on GB4): text set through arboard
+was read by another process and restored; with the text on the clipboard,
+the virtual keyboard pasted it into a `kdialog` input box that KWin
+confirmed active, twice (the first try ran while the screen was locked and
+pasted nothing). GB4 now has `/etc/udev/rules.d/60-voloz-uinput.rules`
+(delete it to undo). Not tested: the whole app on Linux (shortcut,
+microphone, pill, paste from a real dictation), GNOME.
+
+Release note: the 0.8.14 Windows job built fine but could not create the
+draft release ("Resource not accessible by integration") although the
+token had `contents: write` as in 0.8.13; that tag was the first to change
+the workflow file itself. The draft was created by hand (`gh release
+create --draft --verify-tag`) and the jobs re-run. If a later tag that
+changes the workflow fails the same way, do the same.
 
 ## Developing on GB4
 

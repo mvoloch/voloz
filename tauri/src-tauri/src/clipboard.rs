@@ -832,35 +832,68 @@ pub fn current_change_count() -> Result<i64, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn save_clipboard() -> Result<ClipboardSnapshot, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
 
-/// Linux: put `text` on the clipboard. X11 and Wayland serve the clipboard
-/// from the process that set it, so a thread keeps serving it until another
-/// app takes the clipboard over. No change counter on Linux: returns 0.
+/// Linux clipboard through arboard: Wayland's data-control protocol where
+/// the compositor has it (KDE, wlroots), else X11 (GNOME bridges XWayland's
+/// clipboard). Text only; Linux has no change counter, so the paste's
+/// restore decision rests on the text (`restore_decision`).
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::sync::Mutex;
+
+    /// One handle for the app's life: X11 serves the clipboard from the
+    /// process that set it, for as long as the handle lives.
+    static CLIPBOARD: Mutex<Option<arboard::Clipboard>> = Mutex::new(None);
+
+    pub fn with<T>(f: impl FnOnce(&mut arboard::Clipboard) -> Result<T, arboard::Error>) -> Result<T, String> {
+        let mut guard = CLIPBOARD.lock().map_err(|_| "clipboard lock poisoned".to_string())?;
+        if guard.is_none() {
+            *guard = Some(arboard::Clipboard::new().map_err(|e| format!("no clipboard: {e}"))?);
+        }
+        f(guard.as_mut().expect("opened above")).map_err(|e| e.to_string())
+    }
+
+    pub fn get_text() -> Result<Option<String>, String> {
+        match with(|c| c.get_text()) {
+            Ok(text) => Ok(Some(text)),
+            Err(e) if e.contains("not available") || e.contains("empty") => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub fn write_text(text: &str) -> Result<i64, String> {
-    use arboard::SetExtLinux;
-    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
     let owned = text.to_string();
-    std::thread::spawn(move || match arboard::Clipboard::new() {
-        Ok(mut clipboard) => {
-            let _ = ready_tx.send(Ok(()));
-            // Blocks while we own the clipboard, returns once replaced.
-            if let Err(e) = clipboard.set().wait().text(owned) {
-                crate::dictation_log::log(&format!("[rust] clipboard: setting the text failed: {e}"));
-            }
-        }
-        Err(e) => {
-            let _ = ready_tx.send(Err(format!("no clipboard: {e}")));
-        }
-    });
-    ready_rx
-        .recv_timeout(std::time::Duration::from_secs(2))
-        .map_err(|_| "the clipboard did not answer".to_string())??;
+    linux::with(move |c| c.set_text(owned))?;
     Ok(0)
+}
+
+#[cfg(target_os = "linux")]
+pub fn save_clipboard() -> Result<ClipboardSnapshot, String> {
+    let items = match linux::get_text()? {
+        Some(text) => vec![vec![("text/plain;charset=utf-8".to_string(), text.into_bytes())]],
+        None => Vec::new(),
+    };
+    Ok(ClipboardSnapshot { items, change_count: 0 })
+}
+
+#[cfg(target_os = "linux")]
+pub fn restore_clipboard(snapshot: &ClipboardSnapshot) -> Result<(), String> {
+    // Only text is saved on Linux; an empty clipboard keeps the dictation.
+    let Some((_, bytes)) = snapshot.items.first().and_then(|item| item.first()) else {
+        return Ok(());
+    };
+    write_text(&String::from_utf8_lossy(bytes)).map(|_| ())
+}
+
+#[cfg(target_os = "linux")]
+pub fn read_text() -> Result<Option<String>, String> {
+    linux::get_text()
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
@@ -868,12 +901,12 @@ pub fn write_text(_text: &str) -> Result<i64, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn restore_clipboard(_snapshot: &ClipboardSnapshot) -> Result<(), String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn read_text() -> Result<Option<String>, String> {
     Err("reading the clipboard is not yet implemented on this platform".into())
 }

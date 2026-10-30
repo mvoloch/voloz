@@ -642,9 +642,17 @@ pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
     activate_pid(focus.pid)
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn activate(focus: &FocusSnapshot) -> Result<(), String> {
     activate_pid(focus.pid)
+}
+
+/// Linux: nothing to bring back. Wayland lets no app read or raise another
+/// app's window; the pill never takes the focus, so the window the user
+/// dictated into is still in front when the paste arrives.
+#[cfg(target_os = "linux")]
+pub fn activate(_focus: &FocusSnapshot) -> Result<(), String> {
+    Ok(())
 }
 
 /// Whether the window the snapshot was taken in is still the foreground
@@ -663,12 +671,25 @@ pub fn is_in_front(_focus: &FocusSnapshot) -> bool {
     false
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+/// Linux: an empty snapshot (no window, no app name), so the dictation is
+/// pasted into whatever window is in front (see `activate`).
+#[cfg(target_os = "linux")]
+pub fn capture_focus() -> Result<FocusSnapshot, String> {
+    Ok(FocusSnapshot {
+        pid: 0,
+        bundle_id: None,
+        role: None,
+        window: None,
+        title: None,
+    })
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn capture_focus() -> Result<FocusSnapshot, String> {
     Err("focus capture is not yet implemented on this platform".into())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn activate_pid(_pid: i32) -> Result<(), String> {
     Err("app activation is not yet implemented on this platform".into())
 }

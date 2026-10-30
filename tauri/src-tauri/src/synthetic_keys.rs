@@ -257,7 +257,86 @@ pub fn any_key_down(vks: &[u16]) -> bool {
         .any(|&vk| unsafe { GetAsyncKeyState(vk as i32) } < 0)
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+/// Linux: Ctrl+V from a uinput virtual keyboard. Wayland gives apps no way
+/// to send keys to each other, and uinput sits below the compositor, so this
+/// works on Wayland and X11 alike. It needs write access to /dev/uinput: the
+/// .deb installs a udev rule for the `input` group (VOLOZ.md, "Linux paste").
+/// The key is the physical V position, like a real keyboard on a QWERTY or
+/// ABNT2 layout.
+#[cfg(target_os = "linux")]
+pub fn send_paste() -> Result<(), String> {
+    linux_keyboard::send_ctrl(evdev::KeyCode::KEY_V)
+}
+
+/// Linux: create the virtual keyboard ahead of the first paste (called when
+/// a recording starts), so the compositor has picked it up by then.
+#[cfg(target_os = "linux")]
+pub fn prepare_paste() {
+    if let Err(e) = linux_keyboard::ensure() {
+        crate::dictation_log::log(&format!("[rust] paste: virtual keyboard unavailable: {e}"));
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_keyboard {
+    use evdev::{uinput::VirtualDevice, AttributeSet, KeyCode, KeyEvent};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    /// Built once and kept: a new input device takes the compositor a moment
+    /// to pick up (on KDE Plasma 6.6, 300 ms was too short, 1.2 s enough).
+    static DEVICE: Mutex<Option<VirtualDevice>> = Mutex::new(None);
+    const PICKUP_DELAY: Duration = Duration::from_millis(1200);
+    /// Between key events, as a person's fingers would be.
+    const KEY_GAP: Duration = Duration::from_millis(25);
+
+    fn build() -> std::io::Result<VirtualDevice> {
+        let mut keys = AttributeSet::<KeyCode>::new();
+        keys.insert(KeyCode::KEY_LEFTCTRL);
+        keys.insert(KeyCode::KEY_V);
+        let device = VirtualDevice::builder()?
+            .name("Voloz virtual keyboard")
+            .with_keys(&keys)?
+            .build()?;
+        std::thread::sleep(PICKUP_DELAY);
+        Ok(device)
+    }
+
+    fn open(device: &mut Option<VirtualDevice>) -> Result<(), String> {
+        if device.is_none() {
+            *device = Some(build().map_err(|e| {
+                if e.kind() == std::io::ErrorKind::PermissionDenied {
+                    "no permission to write /dev/uinput (the udev rule for the input group is missing)".to_string()
+                } else {
+                    format!("could not create the virtual keyboard: {e}")
+                }
+            })?);
+        }
+        Ok(())
+    }
+
+    pub fn ensure() -> Result<(), String> {
+        let mut device = DEVICE.lock().map_err(|_| "virtual keyboard lock poisoned".to_string())?;
+        open(&mut device)
+    }
+
+    pub fn send_ctrl(key: KeyCode) -> Result<(), String> {
+        let mut device = DEVICE.lock().map_err(|_| "virtual keyboard lock poisoned".to_string())?;
+        open(&mut device)?;
+        let keyboard = device.as_mut().expect("opened above");
+        // One event per report: Ctrl down and V down in the same report were
+        // not taken as a paste on KDE Plasma 6.6.
+        for (code, value) in [(KeyCode::KEY_LEFTCTRL, 1), (key, 1), (key, 0), (KeyCode::KEY_LEFTCTRL, 0)] {
+            keyboard
+                .emit(&[*KeyEvent::new(code, value)])
+                .map_err(|e| format!("virtual keyboard write failed: {e}"))?;
+            std::thread::sleep(KEY_GAP);
+        }
+        Ok(())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn send_paste() -> Result<(), String> {
     Err("synthetic paste is not yet implemented on this platform".into())
 }

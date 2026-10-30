@@ -1,0 +1,4 @@
+# Voloz pastes a dictation with a virtual keyboard (/dev/uinput).
+# Members of the input group may create one; the global shortcut already
+# needs that group to read the keyboard (/dev/input).
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"
