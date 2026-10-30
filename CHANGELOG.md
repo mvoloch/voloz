@@ -5,6 +5,19 @@
 
 # Changelog
 
+## [0.8.13] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Changed
+
+- **New look:** a lighter interface with a top bar, settings split into short sections (Shortcuts, Transcription, Refinement, Vocabulary, General, About) and the services for each step shown as one list in the order they are tried. The history shows how long each dictation was, which app it went to and who refined it.
+- **The pill is a notch:** while you dictate, a black notch hangs from the top edge of the screen, with a red dot only while the microphone is on.
+
+### Fixed
+
+- **Dictation not pasted after closing the window:** after you closed the Voloz window, the next dictation could stay on the clipboard instead of being pasted. The pill no longer takes the focus from the app you dictate into.
+
 ## [0.8.12] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
