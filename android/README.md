@@ -6,8 +6,9 @@ inserted at the cursor. Speech goes straight from the phone to Groq with the
 user's own API key (no Voloz server).
 
 Status: first prototype. It compiles, its pure parts are unit-tested and its
-Groq pipeline was run end to end from a JVM, but **nothing has been run on a
-phone yet**. See "Not verified" below.
+Groq pipeline was run end to end from a JVM. It has run on an API 34
+emulator (screens compared with the mockups, bubble states, recording path),
+but **nothing has been run on a phone yet**. See "Not verified" below.
 
 ## Build
 
@@ -66,7 +67,10 @@ Toolchain: AGP 8.7.3, Gradle 8.11.1 (wrapper), Kotlin 2.0.21, Compose BOM
 2. Tap = hands-free (tap again to stop; a "Hands Free" tooltip shows). Press and
    hold ≥ 350 ms = push-to-talk (release stops). Moving the finger before the
    hold fires drags the bubble; on release it snaps to the nearest side edge and
-   the side + height are remembered. Idle bubble is 60% opaque
+   the side + height are remembered; until then it sits at the right edge
+   just above the focused field (just below it when there is no room above),
+   clear of the status bar and the keyboard, so it never covers the field's
+   own buttons. Idle bubble is 60% opaque
    (`BubbleStyle.IDLE_ALPHA`), fully opaque from touch-down and in every
    active state.
 3. Audio: `AudioRecord`, `VOICE_RECOGNITION` source, 16 kHz mono PCM16, kept in
@@ -148,10 +152,10 @@ migrate anyway).
 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (permission declared; fine for
 sideload, would need justification on Play).
 
-**Fonts:** the spec's Familjen Grotesk / Roboto Flex / JetBrains Mono are not
-bundled (no approved download source for this build); `ui/theme/Theme.kt`
-`VolozFonts` falls back to system sans-serif / Roboto / monospace. Bundling =
-drop the OFL TTFs in `res/font` and change those three vals.
+**Fonts:** Familjen Grotesk (headlines) and JetBrains Mono (key field) are
+bundled as variable TTFs in `res/font` since `7184d16` (OFL, licences in
+`fonts-licenses`); body text uses the system Roboto in place of Roboto Flex
+(`ui/theme/Theme.kt`, `VolozFonts`).
 
 ## Not verified (needs a real phone)
 
@@ -160,6 +164,9 @@ drop the OFL TTFs in `res/font` and change those three vals.
 - `ACTION_SET_TEXT` / `ACTION_PASTE` behaviour per app (Gmail, WhatsApp,
   Chrome, Telegram…), cursor placement after SET_TEXT.
 - IME-visibility detection (`TYPE_INPUT_METHOD` window) on the owner's keyboard.
-- Bubble gestures, snapping, the tooltip position, rotation.
+- Bubble gestures, snapping and rotation by hand (placement and the tooltip
+  position were checked on the emulator).
 - "Restricted setting" flow wording on the owner's Android skin.
-- Visual match of the screens with the mockups (only compiled, never rendered).
+- The screens on a real phone. They were rendered on an API 34 emulator
+  (1080x2340) and compared side by side with the mockups; line breaks may
+  differ a little on the phone (system Roboto vs Roboto Flex).

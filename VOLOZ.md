@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-29 (lighter Lite on `feat/lite-086`: no librosa, no main window at login, clipboard restore; not merged). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (Lite 0.8.8 with the spelling rule; desktop STT on `whisper-large-v3`; Android prototype on `feat/android`, not pushed). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -59,9 +59,12 @@ Remotes on GB4: `origin` = mvoloch/voloz, `upstream` = jamiepine/voicebox.
   models come as an optional on-demand download (reuse the CUDA-libs
   download mechanism Voicebox already has).
 - **Transcription:** Groq direct, `https://api.groq.com/openai/v1` with
-  `whisper-large-v3-turbo` (since 2026-10-28; was OpenRouter). Same model,
-  about 4x faster here and steady; it also honours Whisper's `prompt`.
-  Rollback: set the STT endpoint back to `https://openrouter.ai/api/v1`,
+  `whisper-large-v3` (since 2026-10-30, in the owner's settings, after a
+  side-by-side on two dictations: better words and punctuation at the same
+  speed). `whisper-large-v3-turbo` stays the rollback; it was the model from
+  2026-10-28, when Groq replaced OpenRouter (same model, about 4x faster
+  here and steady; Groq also honours Whisper's `prompt`). Rollback to
+  OpenRouter: set the STT endpoint back to `https://openrouter.ai/api/v1`,
   model `openai/whisper-large-v3-turbo`, with the OpenRouter key.
 - **Refinement model:** `claude-haiku-5-5` (best quality of 5 measured; see
   below). Native SDK, `effort: "low"`, no sampling parameters.
@@ -740,10 +743,10 @@ this item.
 Code in `android/` on `feat/android`, in the GB4 worktree
 `/mnt/data/dev/voloz-android` — **not pushed**. Kotlin + Compose, minSdk 29,
 target 35; build steps, file map and the full decision notes are in
-`android/README.md`. The platform research is `docs/android/RESEARCH.md`,
-which so far lives only in the owner's Windows folder
-(`wisprclone\voicebox\docs\android\`, not in git), with the emulator
-screenshots next to it in `screens/`.
+`android/README.md`. The platform research (Wispr Flow's Android behaviour,
+overlay/recording/insertion options, Play and sideload policy) is
+`docs/android/RESEARCH.md`. The emulator screenshots are in the owner's
+Windows folder (`wisprclone\voicebox\docs\android\screens\`, not in git).
 
 - **Toolchain (GB4):** `. /mnt/data/dev/android/env.sh` (JDK 17, SDK,
   Gradle home on `/mnt/data`), then `cd android && ./gradlew assembleDebug
@@ -758,8 +761,9 @@ screenshots next to it in `screens/`.
 - **Bubble:** a `TYPE_ACCESSIBILITY_OVERLAY` window owned by the
   accessibility service (no "display over other apps"), not focusable, so
   it never takes focus from the field. Until the user drags it, it sits at
-  the right edge level with the focused field, above the keyboard; a
-  dragged spot is remembered and wins.
+  the right edge just above the focused field (below it when there is no
+  room above), so it never covers the field's own send/mic/emoji buttons;
+  a dragged spot is remembered and wins.
 - **Recording:** `AudioRecord` (16 kHz mono) in the service process, started
   on tap, with a `microphone` foreground service started alongside (the
   "gravando" notification). If the first 700 ms are exact zeros (a muted
@@ -784,7 +788,7 @@ dragged spot wins; the recording path (in-process capture with the
 foreground service, no silence restart — on the emulator's mic). Found
 and fixed there: every dictation died on a `(?U)` regex (Android's ICU
 rejects it; the JVM unit tests could not see it), and Compose fields
-never got the bubble. Unit tests: 35, 34 passed, 1 skipped (Groq e2e).
+never got the bubble. Unit tests: 36, 35 passed, 1 skipped (Groq e2e).
 
 Needs a real phone: a real dictation with the owner's key through to
 "Inserido" (the emulator only reached Groq's 401 for the fake key); real
@@ -793,8 +797,8 @@ in WhatsApp, Gmail and Chrome; the "Configuração restrita" flow for a
 sideloaded APK; battery restrictions; gestures and rotation.
 
 Desktop notes from the same days: the owner's desktop STT model is now
-`whisper-large-v3` (switched 2026-10-30 in his settings; the Decisions
-section above still says turbo). Lite 0.8.8 (`63f3fa5`) added the
+`whisper-large-v3` (switched 2026-10-30 in his settings; see Decisions).
+Lite 0.8.8 (`63f3fa5`) added the
 refinement spelling rule (`4684ca2`): spelling and grammar are always
 corrected (há/a, por que/porque, crase, accents, words that don't exist)
 while word choice, order and register stay — on Haiku, 22 of 24 known
