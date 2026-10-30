@@ -1,9 +1,18 @@
 package io.github.mvoloch.voloz.android.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,16 +70,25 @@ sealed interface KeyTestState {
     data class Failed(val message: String) : KeyTestState
 }
 
-/** Shared frame for the onboarding screens: paper background, safe insets, scroll. */
+/**
+ * Shared frame for the onboarding screens: paper background, safe insets, scroll.
+ * The content column is at least one viewport tall, so a `Modifier.weight(1f)`
+ * spacer pins the CTAs to the bottom as in the mockups; on short screens (or
+ * with the keyboard up) it simply scrolls.
+ */
 @Composable
-private fun OnboardingFrame(top: Int = 28, content: @Composable () -> Unit) {
-    Box(
+private fun OnboardingFrame(top: Int = 28, content: @Composable ColumnScope.() -> Unit) {
+    BoxWithConstraints(
         Modifier.fillMaxSize().background(VolozColors.Paper).safeDrawingPadding().imePadding(),
     ) {
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                .padding(start = VolozDimens.ScreenPadding, end = VolozDimens.ScreenPadding, top = top.dp, bottom = 32.dp),
-        ) { content() }
+        val viewport = maxHeight
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(min = viewport)
+                    .padding(start = VolozDimens.ScreenPadding, end = VolozDimens.ScreenPadding, top = top.dp, bottom = 32.dp),
+                content = content,
+            )
+        }
     }
 }
 
@@ -79,8 +97,11 @@ private fun OnboardingFrame(top: Int = 28, content: @Composable () -> Unit) {
 @Composable
 fun WelcomeScreen(onStart: () -> Unit) {
     OnboardingFrame(top = 56) {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(40.dp)) {
-            Spacer(Modifier.height(40.dp))
+        // Hero centred in the space above the CTA block (mockup: flex-grow + justify-center).
+        Column(
+            Modifier.fillMaxWidth().weight(1f),
+            verticalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterVertically),
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 BubbleGlyph(
                     size = 96.dp,
@@ -94,7 +115,7 @@ fun WelcomeScreen(onStart: () -> Unit) {
                 Text(stringResource(R.string.welcome_body), style = VolozType.BodyLarge, color = VolozColors.TextSecondary)
             }
         }
-        Spacer(Modifier.height(48.dp))
+        Spacer(Modifier.height(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrimaryButton(stringResource(R.string.welcome_cta), onStart)
             Footnote(stringResource(R.string.welcome_footnote))
@@ -169,7 +190,8 @@ fun KeyScreen(
                 else -> Unit
             }
         }
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PrimaryButton(
                 stringResource(if (standalone) R.string.key_save else R.string.common_continue),
@@ -189,9 +211,14 @@ fun MicScreen(micGranted: Boolean, onAllow: () -> Unit, onContinue: () -> Unit, 
         StepHeader(step = 2, onBack = onBack)
         Spacer(Modifier.height(28.dp))
         ScreenTitle(stringResource(R.string.mic_title), stringResource(R.string.mic_body))
-        Spacer(Modifier.height(40.dp))
+        // Notification preview centred in the free space (mockup: flex-grow + align-center).
+        Box(Modifier.fillMaxWidth().weight(1f).padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.fillMaxWidth().clip(VolozShapes.CardLarge).background(VolozColors.Card)
+            Modifier.fillMaxWidth()
+                .drawBehind { // 1dp hairline under the card (mockup: box-shadow 0 1px 0 #E0E0DB)
+                    drawRoundRect(VolozColors.CardHairline, topLeft = Offset(0f, 1.dp.toPx()), size = size, cornerRadius = CornerRadius(24.dp.toPx()))
+                }
+                .clip(VolozShapes.CardLarge).background(VolozColors.Card)
                 .padding(horizontal = 22.dp, vertical = 28.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -205,7 +232,7 @@ fun MicScreen(micGranted: Boolean, onAllow: () -> Unit, onContinue: () -> Unit, 
             Box(Modifier.fillMaxWidth().height(1.dp).background(VolozColors.Divider))
             Text(stringResource(R.string.mic_preview_note), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.TextSecondary)
         }
-        Spacer(Modifier.height(40.dp))
+        }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (micGranted) {
                 PrimaryButton(stringResource(R.string.common_continue), onContinue)
@@ -235,14 +262,24 @@ fun AccessibilityScreen(
         VolozCard(spacing = 14.dp) {
             NumberedStep(1, stringResource(R.string.a11y_step1))
             NumberedStep(2, stringResource(R.string.a11y_step2))
-            TextLink(stringResource(R.string.a11y_open_app_info), onOpenAppInfo)
+            // Not in the mockup, kept as the shortcut for step 2: an inline link
+            // aligned with the step text rather than a centred button.
+            Text(
+                stringResource(R.string.a11y_open_app_info),
+                fontSize = 15.sp,
+                color = VolozColors.Olive,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.padding(start = 38.dp).heightIn(min = VolozDimens.MinTouch)
+                    .clickable(onClick = onOpenAppInfo).wrapContentHeight(Alignment.CenterVertically),
+            )
         }
         Spacer(Modifier.height(22.dp))
         Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(VolozIcons.Lock, null, tint = VolozColors.Olive, modifier = Modifier.size(20.dp).padding(top = 1.dp))
             Text(stringResource(R.string.a11y_privacy), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.TextSecondary)
         }
-        Spacer(Modifier.height(40.dp))
+        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.weight(1f))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
@@ -255,7 +292,7 @@ fun AccessibilityScreen(
                 color = if (enabled) VolozColors.OliveDark else VolozColors.AmberText,
             )
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(22.dp))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (enabled) {
                 PrimaryButton(stringResource(R.string.a11y_done), onDone)

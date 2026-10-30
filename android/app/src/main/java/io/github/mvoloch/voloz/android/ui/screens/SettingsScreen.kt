@@ -23,11 +23,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +43,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.mvoloch.voloz.android.R
@@ -87,7 +92,7 @@ fun SettingsScreen(
                 )
                 GroupDivider()
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.settings_size), fontSize = 16.sp)
+                    Text(stringResource(R.string.settings_size), style = RowTitle)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SizeOption(R.string.size_small, settings.bubbleSize == BubbleSize.SMALL, Modifier.weight(1f)) { onBubbleSizeChange(BubbleSize.SMALL) }
                         SizeOption(R.string.size_medium, settings.bubbleSize == BubbleSize.MEDIUM, Modifier.weight(1f)) { onBubbleSizeChange(BubbleSize.MEDIUM) }
@@ -96,7 +101,7 @@ fun SettingsScreen(
                 }
                 GroupDivider()
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(stringResource(R.string.settings_how), fontSize = 16.sp)
+                    Text(stringResource(R.string.settings_how), style = RowTitle)
                     Text(stringResource(R.string.settings_how_body), style = VolozType.Caption, color = VolozColors.TextTertiary)
                 }
             }
@@ -111,8 +116,8 @@ fun SettingsScreen(
                 GroupDivider()
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(stringResource(R.string.settings_vocab), fontSize = 16.sp)
-                        Text(stringResource(R.string.settings_vocab_sub), style = VolozType.Caption, color = VolozColors.TextTertiary)
+                        Text(stringResource(R.string.settings_vocab), style = RowTitle)
+                        Text(stringResource(R.string.settings_vocab_sub), style = RowSubtitle, color = VolozColors.TextTertiary)
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (term in settings.vocabulary) VocabChip(term) { onRemoveTerm(term) }
@@ -124,7 +129,7 @@ fun SettingsScreen(
             SettingsGroup(stringResource(R.string.settings_group_account)) {
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(stringResource(R.string.settings_key), fontSize = 16.sp)
+                        Text(stringResource(R.string.settings_key), style = RowTitle)
                         Text(
                             maskKey(settings.groqKey) ?: stringResource(R.string.settings_key_none),
                             style = VolozType.MonoKey.copy(fontSize = 13.sp), color = VolozColors.TextTertiary,
@@ -136,7 +141,7 @@ fun SettingsScreen(
                         border = BorderStroke(1.5.dp, VolozColors.FieldBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = VolozColors.Ink, containerColor = VolozColors.Card),
                         modifier = Modifier.height(40.dp),
-                    ) { Text(stringResource(R.string.settings_key_change), fontSize = 14.sp) }
+                    ) { Text(stringResource(R.string.settings_key_change), fontSize = 14.sp, fontWeight = FontWeight.Normal) }
                 }
             }
         }
@@ -144,6 +149,9 @@ fun SettingsScreen(
 
     if (adding) AddTermDialog(onDismiss = { adding = false }, onAdd = { onAddTerm(it); adding = false })
 }
+
+private val RowTitle = TextStyle(fontSize = 16.sp, lineHeight = 20.sp)
+private val RowSubtitle = TextStyle(fontSize = 13.sp, lineHeight = 17.sp)
 
 /** First 8 characters, "•••••", last 3: never the whole key on screen. */
 fun maskKey(key: String): String? {
@@ -160,20 +168,23 @@ private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChang
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, fontSize = 16.sp)
-            Text(subtitle, style = VolozType.Caption, color = VolozColors.TextTertiary)
+            Text(title, style = RowTitle)
+            Text(subtitle, style = RowSubtitle, color = VolozColors.TextTertiary)
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onChange,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = VolozColors.Olive,
-                checkedThumbColor = Color.White,
-                uncheckedTrackColor = VolozColors.Divider,
-                uncheckedBorderColor = VolozColors.FieldBorder,
-                uncheckedThumbColor = VolozColors.TextTertiary,
-            ),
-        )
+        // Mockup: a 22px olive checkbox. The whole row is the touch target, so the
+        // box itself skips the 48dp minimum that would make the row taller.
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Checkbox(
+                checked = checked,
+                onCheckedChange = null,
+                modifier = Modifier.size(24.dp),
+                colors = CheckboxDefaults.colors(
+                    checkedColor = VolozColors.Olive,
+                    checkmarkColor = Color.White,
+                    uncheckedColor = VolozColors.TextTertiary,
+                ),
+            )
+        }
     }
 }
 

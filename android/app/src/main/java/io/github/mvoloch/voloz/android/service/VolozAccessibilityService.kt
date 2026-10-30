@@ -41,6 +41,8 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         private const val TAG = "VolozA11y"
         private const val FOCUS_DEBOUNCE_MS = 80L
         private const val CLIPBOARD_RESTORE_MS = 800L
+        /** Cap for the Compose focus fallback walk (a chat screen is a few hundred nodes). */
+        private const val MAX_FOCUS_SCAN_NODES = 600
 
         private val _connected = MutableStateFlow(false)
         /** True while the system has the service bound (i.e. it is enabled and running). */
@@ -132,7 +134,8 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
     }
 
     private fun findFocusedEditable(): AccessibilityNodeInfo? {
-        rootInActiveWindow?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { if (it.isEditable) return it }
+        val active = rootInActiveWindow
+        active?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.let { if (it.isEditable) return it }
         val all = runCatching { windows }.getOrDefault(emptyList())
         for (w in all) {
             if (w.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY ||
@@ -140,6 +143,22 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
             ) continue
             val f = w.root?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             if (f != null && f.isEditable) return f
+        }
+        // Jetpack Compose text fields are virtual nodes, and findFocus(FOCUS_INPUT)
+        // does not return them (seen on API 34 with Compose BOM 2024.12, Voloz's own
+        // "Teste aqui" field). Fall back to a bounded walk of the active window for
+        // a node that is both focused and editable. Only flags are read, never text.
+        return active?.let { findFocusedEditableIn(it) }
+    }
+
+    private fun findFocusedEditableIn(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+        var visited = 0
+        while (queue.isNotEmpty() && visited < MAX_FOCUS_SCAN_NODES) {
+            val n = queue.removeFirst()
+            visited++
+            if (n.isFocused && n.isEditable) return n
+            for (i in 0 until n.childCount) n.getChild(i)?.let(queue::addLast)
         }
         return null
     }

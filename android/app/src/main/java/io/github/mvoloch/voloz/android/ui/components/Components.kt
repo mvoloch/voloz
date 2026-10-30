@@ -47,7 +47,9 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.fromHtml
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,12 +83,26 @@ fun TextLink(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
         onClick = onClick,
         modifier = modifier.fillMaxWidth().heightIn(min = VolozDimens.MinTouch),
         colors = ButtonDefaults.textButtonColors(contentColor = VolozColors.Olive),
-    ) { Text(text, fontSize = 15.sp) }
+    ) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.Normal) }
 }
 
+/**
+ * 44dp back target pulled 10dp into the left padding (mockup: margin-left -10px).
+ * The pull is a layout shift, not an offset, so the next item in the row sits
+ * where the mockup puts it instead of 10dp further right.
+ */
 @Composable
 fun BackButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.offset(x = (-10).dp).size(VolozDimens.MinTouch)) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .layout { measurable, constraints ->
+                val p = measurable.measure(constraints)
+                val pull = 10.dp.roundToPx()
+                layout(p.width - pull, p.height) { p.place(-pull, 0) }
+            }
+            .size(VolozDimens.MinTouch),
+    ) {
         Icon(VolozIcons.Back, contentDescription = stringResource(R.string.cd_back), tint = VolozColors.Ink, modifier = Modifier.size(22.dp))
     }
 }
@@ -94,7 +110,7 @@ fun BackButton(onClick: () -> Unit) {
 /** Onboarding header: back arrow + 3-segment olive progress bar. */
 @Composable
 fun StepHeader(step: Int, onBack: () -> Unit, total: Int = 3) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         BackButton(onBack)
         Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             repeat(total) { i ->
@@ -130,11 +146,11 @@ fun VolozCard(
     )
 }
 
-/** Simple HTML (<b>, <a href>) from strings.xml, links in olive. */
+/** Simple HTML (<b>, <a href>) from strings.xml, links olive and underlined. */
 @Composable
 fun htmlText(html: String): AnnotatedString = AnnotatedString.fromHtml(
     html,
-    linkStyles = TextLinkStyles(style = SpanStyle(color = VolozColors.Olive)),
+    linkStyles = TextLinkStyles(style = SpanStyle(color = VolozColors.Olive, textDecoration = TextDecoration.Underline)),
 )
 
 /** Ink circle badge with a lime digit + text. */

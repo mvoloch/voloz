@@ -7,6 +7,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -82,5 +83,24 @@ class RefinementPromptTest {
             val expected = c.jsonArray[1].jsonPrimitive.content
             assertEquals("input: $input", expected, RefinementPrompt.collapseRepetitiveArtifacts(input))
         }
+    }
+
+    /**
+     * Android compiles regexes with ICU, which rejects the JVM-only (?U) flag
+     * (PatternSyntaxException in RefinementPrompt.<clinit>, seen on an API 34
+     * emulator). The JVM test run cannot see that, so guard the pattern text and
+     * check the Unicode behaviour (\\s / \\w as in Python's re) explicitly.
+     */
+    @Test
+    fun patternsCompileOnAndroidIcu() {
+        for (p in listOf(RefinementPrompt.WHITESPACE_PATTERN, RefinementPrompt.NON_WORD_PATTERN)) {
+            assertFalse("inline flag group in $p", p.contains("(?"))
+        }
+        // Accented words still count as the same token (NON_WORD keeps letters + marks).
+        assertEquals("", RefinementPrompt.collapseRepetitiveArtifacts("não não não não não não"))
+        assertEquals("ok", RefinementPrompt.collapseRepetitiveArtifacts("ok é, é! é é é é"))
+        // Non-breaking and other Unicode spaces split words like ASCII spaces.
+        assertEquals("fim", RefinementPrompt.collapseRepetitiveArtifacts("olá\u00A0olá\u2009olá olá olá olá fim"))
+        assertEquals("Voloz Pascoal", RefinementPrompt.normalizeVocabulary(listOf("Voloz\u00A0 Pascoal")).single())
     }
 }

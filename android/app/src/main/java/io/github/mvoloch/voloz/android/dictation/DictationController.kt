@@ -201,7 +201,14 @@ class DictationController(
                     pipeline.run(s.groqKey, WavWriter.pcm16ToWav(take.pcm, take.sampleRate), s.vocabulary, s.refine)
                 }
             }
-            result.fold(onSuccess = ::deliver, onFailure = { flashError(describe(it)) })
+            result.fold(
+                onSuccess = ::deliver,
+                onFailure = {
+                    // The stack trace is what makes an "Erro inesperado" diagnosable.
+                    Log.w(TAG, "processing failed", it)
+                    flashError(describe(it))
+                },
+            )
         }
     }
 

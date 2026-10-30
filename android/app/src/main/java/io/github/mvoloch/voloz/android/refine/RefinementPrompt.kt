@@ -19,8 +19,13 @@ object RefinementPrompt {
     private const val REPETITION_RUN_THRESHOLD = 6
     private const val MAX_REPETITION_UNIT_CHARS = 60
 
-    private val WHITESPACE = Regex("(?U)\\s+")
-    private val NON_WORD = Regex("(?U)[^\\w]")
+    // Unicode-aware like Python's re (the desktop's), written with explicit property
+    // classes. Do not use the (?U) flag: the JVM accepts it, but Android's ICU regex
+    // throws PatternSyntaxException, which broke every dictation on device.
+    internal const val WHITESPACE_PATTERN = "[\\s\\p{Z}\\x{85}]+"
+    internal const val NON_WORD_PATTERN = "[^\\p{L}\\p{M}\\p{Nd}\\p{Pc}\\x{200C}\\x{200D}]"
+    private val WHITESPACE = Regex(WHITESPACE_PATTERN)
+    private val NON_WORD = Regex(NON_WORD_PATTERN)
 
     /** System prompt: base + smart cleanup + spelling + self-correction + technical (+ vocabulary) + keep-language. */
     fun buildSystemPrompt(vocabulary: List<String>): String {

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontVariation
 object VolozColors {
     val Paper = Color(0xFFF2F2F0)
     val Card = Color(0xFFFFFFFF)
+    val CardHairline = Color(0xFFE0E0DB) // 1dp line under the mic preview card
     val Divider = Color(0xFFECECE7)
     val FieldBorder = Color(0xFFCFCFC9)
     val ProgressTrack = Color(0xFFD3D3CE)
@@ -47,9 +48,8 @@ object VolozColors {
 
 /**
  * Fonts. The spec asks for Familjen Grotesk (display), Roboto Flex (body) and
- * JetBrains Mono (API key). They are not bundled in this prototype (no font
- * download source was approved), so these fall back to the system families.
- * To bundle: drop the OFL TTFs in res/font and point these three vals at them.
+ * JetBrains Mono (API key). Display and Mono are bundled; body uses the system
+ * Roboto, which is visually close to Roboto Flex at these sizes.
  */
 @OptIn(ExperimentalTextApi::class)
 object VolozFonts {
