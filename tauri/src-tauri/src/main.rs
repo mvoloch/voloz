@@ -1525,6 +1525,22 @@ fn open_input_monitoring_settings(app: tauri::AppHandle) -> Result<(), String> {
 ///   show for it.
 ///
 /// Returns `Pasted` when the paste sequence completed end-to-end.
+/// Leave a finished dictation on the clipboard when there is no window to
+/// paste it into (no focus snapshot: Linux has no focus capture yet).
+#[command]
+async fn copy_final_text(text: String) -> Result<(), String> {
+    match clipboard::write_text(&text) {
+        Ok(_) => {
+            dictation_log::log("[rust] copy: no window to paste into; text left on the clipboard");
+            Ok(())
+        }
+        Err(e) => {
+            dictation_log::log(&format!("[rust] copy: no window to paste into, and copying failed: {e}"));
+            Err(e)
+        }
+    }
+}
+
 #[command]
 async fn paste_final_text(
     text: String,
@@ -2038,6 +2054,7 @@ pub fn run() {
             open_accessibility_settings,
             open_input_monitoring_settings,
             paste_final_text,
+            copy_final_text,
             copy_selection,
             enable_hotkey,
             disable_hotkey,

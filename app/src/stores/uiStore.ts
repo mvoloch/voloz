@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { IS_LITE } from '@/lib/edition';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -93,7 +94,8 @@ export const useUIStore = create<UIStore>()(
       profileFormDraft: null,
       setProfileFormDraft: (draft) => set({ profileFormDraft: draft }),
 
-      theme: 'system',
+      // Lite opens light (the owner's call, 2026-10-30); Studio follows the system.
+      theme: IS_LITE ? 'light' : 'system',
       setTheme: (theme) => {
         set({ theme });
         applyTheme(theme);
@@ -101,6 +103,15 @@ export const useUIStore = create<UIStore>()(
     }),
     {
       name: 'voicebox-ui',
+      // v1: Lite installs that kept the old default ("system") move to light.
+      version: 1,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as { theme?: Theme };
+        if (version < 1 && IS_LITE && (state.theme ?? 'system') === 'system') {
+          state.theme = 'light';
+        }
+        return state as UIStore;
+      },
       partialize: (state) => ({
         selectedProfileId: state.selectedProfileId,
         theme: state.theme,

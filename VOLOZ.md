@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: Lite redesign, notch pill, pill never takes the foreground; released in Lite 0.8.13). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: Linux build (copy, no paste), light theme by default; released in Lite 0.8.14). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -940,6 +940,33 @@ change); `cargo check` clean; Windows clippy the same 18 warning lines.
 Checked in a browser against the Dell's 0.8.12 server (light and dark).
 Not checked: the pill window on Windows (notch position, transparency,
 no focus taken), the first-run screen (only new tokens), Logs page.
+
+## Linux build, light theme by default (`light`, 2026-10-30, Lite 0.8.14)
+
+**Light by default.** The owner preferred the light look: `uiStore` starts
+Lite on `light` and a persist migration (v1) moves Lite installs still on
+the old default `system` to `light`. Studio still follows the system.
+
+**Linux.** Asked for the owner's son, whose main PC runs Linux.
+`release-lite.yml` has a second job, `linux` (ubuntu-22.04, after the
+Windows job), that builds the lite server with PyInstaller, bundles `.deb`
+and `.AppImage` with the Tauri CLI and uploads them to the same draft
+release with `gh release upload`. State of Lite on Linux (from the code):
+- No focus capture, no synthetic paste (`focus_capture`, `synthetic_keys`
+  stubs): a dictation is not pasted. It is now copied instead
+  (`clipboard::write_text` via `arboard` with Wayland data-control; a
+  thread keeps serving the clipboard until another app takes it) and the
+  pill says "Not pasted. The text is copied: Ctrl+V" (`copy_final_text`,
+  called whenever there is no focus snapshot, on any platform).
+- The global shortcut uses keytap's evdev backend: it needs read access to
+  `/dev/input/event*`, i.e. the user in the `input` group
+  (`sudo usermod -aG input $USER`, then log out and in).
+- Checked on GB4 (Ubuntu 26.04, no desktop): `cargo check` for Linux; the
+  lite server built with `build_binary.py --lite` and answered `/health`
+  and `/settings/captures` on a fresh data dir. Not checked: the bundle,
+  the window, microphone, tray, shortcut and clipboard on a Linux desktop.
+  GNOME on Wayland without data-control may refuse the clipboard; then
+  the pill shows nothing and the text is in the history.
 
 ## Developing on GB4
 

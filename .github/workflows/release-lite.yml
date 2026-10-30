@@ -2,7 +2,8 @@ name: Release (lite)
 
 # Voloz lite: dictation only, server built without PyTorch
 # (backend/requirements-lite.txt, build_binary.py --lite) and the frontend
-# built with VITE_EDITION=lite. Windows only, like release.yml.
+# built with VITE_EDITION=lite. Windows, then Linux (.deb and .AppImage)
+# added to the same draft release by a second job.
 #
 # Its own tag (lite-v<version>) and draft release, so its installers don't
 # collide with the studio ones of the same version. tauri.lite.conf.json
@@ -107,3 +108,89 @@ jobs:
           prerelease: false
           args: --config src-tauri/tauri.lite.conf.json
           includeUpdaterJson: false
+
+  # Linux: built after Windows so the draft release already exists; its
+  # bundles are added to that draft. Ubuntu 22.04 keeps glibc old enough for
+  # most current distros. Lite on Linux can't paste yet: a dictation is left
+  # on the clipboard (copy_final_text) and the global shortcut needs read
+  # access to /dev/input (the user in the "input" group).
+  linux:
+    needs: release
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies (lite)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r backend/requirements-lite.txt
+
+      - name: Check the environment has no PyTorch or librosa
+        run: |
+          for pkg in torch librosa; do
+            if python -c "import $pkg" 2>/dev/null; then
+              echo "::error::$pkg is installed; the lite server must be built without it"
+              exit 1
+            fi
+          done
+
+      - name: Build Python server (lite)
+        run: |
+          cd backend
+          python build_binary.py --lite
+          python build_binary.py --shim
+
+          PLATFORM=$(rustc --print host-tuple)
+          mkdir -p ../tauri/src-tauri/binaries
+          cp dist/voicebox-server ../tauri/src-tauri/binaries/voicebox-server-${PLATFORM}
+          cp dist/voicebox-mcp ../tauri/src-tauri/binaries/voicebox-mcp-${PLATFORM}
+          chmod +x ../tauri/src-tauri/binaries/*
+          ls -la ../tauri/src-tauri/binaries
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./tauri/src-tauri -> target"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build the Linux bundles
+        timeout-minutes: 40
+        env:
+          VITE_EDITION: lite
+        run: |
+          cd tauri
+          bun run tauri build --config src-tauri/tauri.lite.conf.json --bundles deb,appimage
+
+      - name: Add the bundles to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(jq -r '.version' tauri/src-tauri/tauri.conf.json)"
+          ls -la tauri/src-tauri/target/release/bundle/deb tauri/src-tauri/target/release/bundle/appimage
+          gh release upload "lite-v${VERSION}" \
+            tauri/src-tauri/target/release/bundle/deb/*.deb \
+            tauri/src-tauri/target/release/bundle/appimage/*.AppImage \
+            --clobber

@@ -120,8 +120,23 @@ export function DictateWindow() {
         dictationLog('paste skipped: auto-paste off');
         return;
       }
-      if (!focus || !text.trim()) {
-        dictationLog(`paste skipped: ${focus ? 'empty text' : 'no focus snapshot'}`);
+      if (!text.trim()) {
+        dictationLog('paste skipped: empty text');
+        return;
+      }
+      if (!focus) {
+        // No window to return to (Linux has no focus capture yet): leave the
+        // text on the clipboard and say so, instead of only the history.
+        try {
+          await invoke('copy_final_text', { text: toPlatformLineEndings(text) });
+          dictationLog('paste skipped: no focus snapshot; text left on the clipboard');
+          sessionRef.current.showNotice(
+            pillT('captures.pill.notPasted', { shortcut: PASTE_SHORTCUT }),
+            text,
+          );
+        } catch (err) {
+          dictationLog(`paste skipped: no focus snapshot; copy failed: ${err}`);
+        }
         return;
       }
       try {

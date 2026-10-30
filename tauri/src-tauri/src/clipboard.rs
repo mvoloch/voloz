@@ -837,7 +837,33 @@ pub fn save_clipboard() -> Result<ClipboardSnapshot, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+/// Linux: put `text` on the clipboard. X11 and Wayland serve the clipboard
+/// from the process that set it, so a thread keeps serving it until another
+/// app takes the clipboard over. No change counter on Linux: returns 0.
+#[cfg(target_os = "linux")]
+pub fn write_text(text: &str) -> Result<i64, String> {
+    use arboard::SetExtLinux;
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    let owned = text.to_string();
+    std::thread::spawn(move || match arboard::Clipboard::new() {
+        Ok(mut clipboard) => {
+            let _ = ready_tx.send(Ok(()));
+            // Blocks while we own the clipboard, returns once replaced.
+            if let Err(e) = clipboard.set().wait().text(owned) {
+                crate::dictation_log::log(&format!("[rust] clipboard: setting the text failed: {e}"));
+            }
+        }
+        Err(e) => {
+            let _ = ready_tx.send(Err(format!("no clipboard: {e}")));
+        }
+    });
+    ready_rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .map_err(|_| "the clipboard did not answer".to_string())??;
+    Ok(0)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn write_text(_text: &str) -> Result<i64, String> {
     Err("clipboard snapshot is not yet implemented on this platform".into())
 }
