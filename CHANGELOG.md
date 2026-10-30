@@ -5,6 +5,22 @@
 
 # Changelog
 
+## [0.8.14] - 2026-10-30
+
+Voloz Lite. Windows and, as a preview, Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Added
+
+- **Linux (preview):** a .deb and an .AppImage. On Linux the text is not pasted yet: after each dictation it is copied, and the pill tells you to press Ctrl+V. The shortcut needs your user in the `input` group (`sudo usermod -aG input $USER`, then log out and back in).
+
+### Changed
+
+- **Light theme by default:** Voloz opens in the light theme. The dark one is in Settings, General, Theme.
+
+### Fixed
+
+- **Text kept only in the history:** when Voloz can't tell which window you dictated into, the text is now copied for Ctrl+V.
+
 ## [0.8.13] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
