@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.9] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **Dictation not pasted:** when Voloz can't get back to the window you dictated in (another window came to the front, or that window closed), the text is now left copied and the pill says so: press Ctrl+V to paste it. Before, it only went to the history in the app. Clicking the pill copies the text again.
+
 ## [0.8.8] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
