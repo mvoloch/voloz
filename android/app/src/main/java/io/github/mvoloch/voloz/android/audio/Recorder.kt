@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 
@@ -34,8 +35,6 @@ class Recorder(
 
     /** Bytes captured so far that held any non-zero sample. */
     val hasSignal: Boolean get() = heardSignal
-    val capturedMs: Long get() = AudioMath.durationMs(synchronized(buffer) { buffer.size() }, sampleRate)
-
     @SuppressLint("MissingPermission") // checked by DictationController before start()
     fun start() {
         val minBuf = AudioRecord.getMinBufferSize(
@@ -86,8 +85,10 @@ class Recorder(
         running = false
         audioRecord?.let { runCatching { it.stop() } }
         thread?.join(1000)
+        // Releasing while the capture thread is still inside read() can crash natively: leak it instead.
+        if (thread?.isAlive == true) Log.w("VolozRecorder", "capture thread still running; AudioRecord not released")
+        else audioRecord?.release()
         thread = null
-        audioRecord?.release()
         audioRecord = null
         val pcm = synchronized(buffer) { buffer.toByteArray() }
         return Take(pcm, sampleRate, AudioMath.durationMs(pcm.size, sampleRate), silent = !heardSignal)

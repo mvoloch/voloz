@@ -44,8 +44,6 @@ data class VolozPalette(
     val signal: Color, // voice only (and a key that is missing)
     val signalSoft: Color,
     val ok: Color,
-    val key: Color, // keycaps
-    val keyEdge: Color,
     val dark: Boolean,
 )
 
@@ -59,8 +57,6 @@ val LightPalette = VolozPalette(
     signal = Color(0xFFE5483C),
     signalSoft = Color(0xFFFDECEA),
     ok = Color(0xFF1F9D63),
-    key = Color(0xFFFFFFFF),
-    keyEdge = Color(0xFFD5D8DE),
     dark = false,
 )
 
@@ -74,8 +70,6 @@ val DarkPalette = VolozPalette(
     signal = Color(0xFFFF5A4E),
     signalSoft = Color(0xFF2A1614),
     ok = Color(0xFF3CC487),
-    key = Color(0xFF1E2125),
-    keyEdge = Color(0xFF33373D),
     dark = true,
 )
 
@@ -92,12 +86,9 @@ object VolozColors {
     val Signal: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.signal
     val SignalSoft: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.signalSoft
     val Ok: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.ok
-    val Key: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.key
-    val KeyEdge: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.keyEdge
 
     /** The desktop pill/notch: black like the phone's hardware in both themes. */
     val Notch = Color(0xFF0B0B0C)
-    val OnNotch = Color(0xE6FFFFFF)
 }
 
 /**
@@ -147,7 +138,6 @@ object VolozShapes {
     val CardLarge = RoundedCornerShape(18.dp)
     val Field = RoundedCornerShape(12.dp) // mockup .search
     val Small = RoundedCornerShape(9.dp) // mockup .sel / .ctl
-    val Key = RoundedCornerShape(10.dp) // mockup .kc
     val Pill = RoundedCornerShape(999.dp)
 }
 
@@ -158,7 +148,7 @@ object VolozDimens {
     val MinTouch = 44.dp
 }
 
-/** Follows the system unless the user picked a theme in Ajustes › Geral. */
+/** The theme picked in Ajustes › Geral (light by default; "Seguir o sistema" follows the phone). */
 @Composable
 fun isDarkTheme(mode: ThemeMode): Boolean = when (mode) {
     ThemeMode.SYSTEM -> isSystemInDarkTheme()

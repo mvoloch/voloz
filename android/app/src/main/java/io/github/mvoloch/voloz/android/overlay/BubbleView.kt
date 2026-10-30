@@ -58,6 +58,7 @@ class BubbleView(context: Context) : View(context) {
     private val checkPath = PathParser.createPathFromPathData(BubbleStyle.CHECK_PATH)
     private val warningPaths = BubbleStyle.WARNING_PATHS.map { PathParser.createPathFromPathData(it) }
     private val pastePaths = BubbleStyle.PASTE_PATHS.map { PathParser.createPathFromPathData(it) }
+    private val retryPaths = BubbleStyle.RETRY_PATHS.map { PathParser.createPathFromPathData(it) }
     private val scratch = Path()
     private val glyphMatrix = Matrix()
 
@@ -94,6 +95,7 @@ class BubbleView(context: Context) : View(context) {
                 BubbleState.Done -> R.string.bubble_cd_done
                 is BubbleState.Error -> R.string.bubble_cd_error
                 BubbleState.PasteReady -> R.string.bubble_cd_paste
+                BubbleState.RetryReady -> R.string.bubble_cd_retry
             },
         )
         updateAlpha(animate = !wasIdle && newState == BubbleState.Idle)
@@ -150,6 +152,7 @@ class BubbleView(context: Context) : View(context) {
             BubbleState.Done -> drawGlyph(canvas, cx, cy, k, listOf(checkPath), BubbleStyle.DONE, BubbleStyle.CHECK_STROKE)
             is BubbleState.Error -> drawGlyph(canvas, cx, cy, k, warningPaths, BubbleStyle.AMBER, BubbleStyle.WARNING_STROKE)
             BubbleState.PasteReady -> drawGlyph(canvas, cx, cy, k, pastePaths, BubbleStyle.ON_NOTCH, BubbleStyle.PASTE_STROKE)
+            BubbleState.RetryReady -> drawGlyph(canvas, cx, cy, k, retryPaths, BubbleStyle.ON_NOTCH, BubbleStyle.RETRY_STROKE)
         }
     }
 

@@ -17,7 +17,7 @@ class Fallback(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) 
     /** (kind, endpoint, model) -> time (ms, [now]'s clock) until which it is skipped. */
     private val cooldownUntil = HashMap<Triple<String, String, String>, Long>()
 
-    private fun identity(kind: String, p: Provider) = Triple(kind, p.endpoint.trim().trimEnd('/'), p.model)
+    private fun identity(kind: String, p: Provider) = Triple(kind, p.baseUrl, p.model)
 
     /** [providers] without duplicates, the ones not cooling down first-come; all of them when none is ready. */
     @Synchronized
@@ -34,16 +34,20 @@ class Fallback(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) 
      * that answered, its result and how many failed before it. Other exceptions
      * (an empty or malformed answer) are thrown at once: another provider would get
      * the same input. When every provider fails, the last error is thrown, so a 429
-     * still reads as a rate limit to the caller.
+     * still reads as a rate limit to the caller. Once [stop] says so, no further
+     * provider is tried ([DictationCancelled]).
      */
-    fun <T> run(kind: String, providers: List<Provider>, call: (Provider) -> T): Answer<T> {
+    fun <T> run(kind: String, providers: List<Provider>, stop: () -> Boolean = { false }, call: (Provider) -> T): Answer<T> {
         require(providers.isNotEmpty()) { "no $kind provider configured" }
         var last: ProviderException? = null
         var failed = 0
         for (p in order(kind, providers)) {
+            if (stop()) throw DictationCancelled()
             val result = try {
                 call(p)
             } catch (e: ProviderException) {
+                // A cancelled request fails like a network error: don't park or retry on it.
+                if (stop()) throw DictationCancelled()
                 last = e
                 failed++
                 if (e.status == 429) park(kind, p, e.retryAfterSeconds)

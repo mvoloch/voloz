@@ -62,6 +62,7 @@ import io.github.mvoloch.voloz.android.ui.screens.SettingsCallbacks
 import io.github.mvoloch.voloz.android.ui.screens.SettingsScreen
 import io.github.mvoloch.voloz.android.ui.screens.SettingsSection
 import io.github.mvoloch.voloz.android.ui.screens.WelcomeScreen
+import io.github.mvoloch.voloz.android.ui.screens.distinctIds
 import io.github.mvoloch.voloz.android.ui.screens.modelStatusLine
 import io.github.mvoloch.voloz.android.ui.theme.VolozColors
 import kotlinx.coroutines.Dispatchers
@@ -103,7 +104,8 @@ fun VolozRoot(app: VolozApp) {
 
     var screen by rememberSaveable { mutableStateOf(if (settings.savedKeys.isEmpty()) Screen.WELCOME else Screen.HOME) }
     var section by rememberSaveable { mutableStateOf(SettingsSection.TRANSCRIPTION) }
-    var keyInput by rememberSaveable { mutableStateOf("") }
+    // Not rememberSaveable: the key must not end up in the saved instance state.
+    var keyInput by remember { mutableStateOf("") }
     var keyTest by remember { mutableStateOf<KeyTestState>(KeyTestState.Idle) }
 
     var micDenials by rememberSaveable { mutableIntStateOf(0) }
@@ -175,9 +177,9 @@ fun VolozRoot(app: VolozApp) {
     val onTab: (Tab) -> Unit = { screen = if (it == Tab.HOME) Screen.HOME else Screen.SETTINGS }
     val providerActions = remember(app) {
         object : ProviderActions {
-            override fun setProviders(kind: ProviderKind, list: List<Provider>) {
+            override fun editProviders(kind: ProviderKind, change: (List<Provider>) -> List<Provider>) {
                 scope.launch {
-                    app.settings.setProviders(kind, list)
+                    app.settings.editProviders(kind, change)
                     app.pipeline.resetCooldowns()
                 }
             }
@@ -205,6 +207,13 @@ fun VolozRoot(app: VolozApp) {
                 return result.fold({ KeySaveResult.Ok }, { KeySaveResult.Failed(describeKeyError(context, it)) })
             }
         }
+    }
+
+    // Rebuilt only when the history changes (each row asks PackageManager for the app's name),
+    // or on resume, so "Hoje" turns into "Ontem" after midnight.
+    val rows = remember(history, resumeTick) {
+        val ids = distinctIds(history.map { it.timestamp })
+        history.mapIndexed { i, e -> toRow(context, ids[i], e) }
     }
 
     when (screen) {
@@ -240,7 +249,7 @@ fun VolozRoot(app: VolozApp) {
             readiness = readiness,
             onlyInTextFields = settings.onlyInTextFields,
             modelStatus = modelStatusLine(settings),
-            history = history.mapIndexed { i, e -> toRow(context, i, e) },
+            history = rows,
             onFix = { target ->
                 when (target) {
                     FixTarget.KEY -> {
@@ -268,8 +277,8 @@ fun VolozRoot(app: VolozApp) {
                 onOnlyInTextFieldsChange = { scope.launch { app.settings.setOnlyInTextFields(it) } },
                 onBubbleSizeChange = { scope.launch { app.settings.setBubbleSize(it) } },
                 onRefineChange = { scope.launch { app.settings.setRefine(it) } },
-                onAddTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary + term) } },
-                onRemoveTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary - term) } },
+                onAddTerm = { term -> scope.launch { app.settings.addTerm(term) } },
+                onRemoveTerm = { term -> scope.launch { app.settings.removeTerm(term) } },
                 onThemeChange = { scope.launch { app.settings.setTheme(it) } },
                 onOpenAccessibility = { openAccessibilitySettings(context) },
                 onBattery = { requestBatteryExemption(context) },
@@ -284,13 +293,13 @@ fun VolozRoot(app: VolozApp) {
 private fun versionName(context: Context): String =
     runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
 
-private fun toRow(context: Context, index: Int, e: HistoryEntry): HistoryRow {
+private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
     val where = e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
     val refined = e.refineModel?.substringAfterLast('/')?.let {
         context.getString(if (e.refineBackup) R.string.home_refined_by_backup else R.string.home_refined_by, it)
     }
     return HistoryRow(
-        id = e.timestamp * 100 + index % 100,
+        id = id,
         day = dayLabel(context, e.timestamp),
         time = DateFormat.getTimeFormat(context).format(Date(e.timestamp)),
         durationMs = e.durationMs,

@@ -21,15 +21,21 @@ object FlacEncoder {
     fun encode(pcm: ByteArray, sampleRate: Int): ByteArray {
         require(sampleRate in 1..655_350) { "sample rate $sampleRate" }
         val n = pcm.size / 2
-        val samples = IntArray(n) { (pcm[2 * it].toInt() and 0xFF) or (pcm[2 * it + 1].toInt() shl 8) }
+        // One block of samples at a time: a 10-minute take is 19 MB of PCM already.
+        val md5 = MessageDigest.getInstance("MD5").apply { update(pcm, 0, n * 2) }.digest()
         val out = ByteArrayOutputStream(pcm.size / 2 + 128)
         out.write("fLaC".toByteArray(Charsets.US_ASCII))
-        out.write(streamInfo(n, sampleRate, MessageDigest.getInstance("MD5").digest(pcm.copyOf(n * 2))))
+        out.write(streamInfo(n, sampleRate, md5))
+        val block = IntArray(BLOCK_SIZE)
         var frame = 0L
         var start = 0
         while (start < n) {
             val size = minOf(BLOCK_SIZE, n - start)
-            out.write(frame(samples, start, size, frame, sampleRate))
+            for (i in 0 until size) {
+                val j = 2 * (start + i)
+                block[i] = (pcm[j].toInt() and 0xFF) or (pcm[j + 1].toInt() shl 8)
+            }
+            out.write(frame(block, 0, size, frame, sampleRate))
             start += size
             frame++
         }
@@ -216,30 +222,37 @@ object FlacEncoder {
         return crc
     }
 
-    /** MSB-first bit writer. */
+    /** MSB-first bit writer: whole values go into a 64-bit accumulator, full bytes come out. */
     private class BitWriter {
         private val out = ByteArrayOutputStream()
-        private var acc = 0
+        private var acc = 0L // the low [count] bits are pending
         private var count = 0
 
         fun bits(value: Long, n: Int) {
-            for (i in n - 1 downTo 0) bit(((value ushr i) and 1L).toInt())
+            if (n > 32) {
+                bits(value ushr 32, n - 32)
+                bits(value and 0xFFFFFFFFL, 32)
+                return
+            }
+            if (n == 0) return
+            acc = (acc shl n) or (value and ((1L shl n) - 1))
+            count += n
+            while (count >= 8) {
+                count -= 8
+                out.write(((acc ushr count) and 0xFF).toInt())
+            }
+            acc = acc and ((1L shl count) - 1)
         }
 
         fun signed(value: Int, n: Int) = bits(value.toLong() and ((1L shl n) - 1), n)
 
         fun unary(zeros: Int) {
-            repeat(zeros) { bit(0) }
-            bit(1)
-        }
-
-        private fun bit(b: Int) {
-            acc = (acc shl 1) or b
-            if (++count == 8) {
-                out.write(acc)
-                acc = 0
-                count = 0
+            var z = zeros
+            while (z >= 32) {
+                bits(0, 32)
+                z -= 32
             }
+            bits(1, z + 1)
         }
 
         /** FLAC's "UTF-8" coding of the frame number. */
@@ -255,7 +268,7 @@ object FlacEncoder {
         }
 
         fun alignToByte() {
-            while (count != 0) bit(0)
+            if (count != 0) bits(0, 8 - count)
         }
 
         /** Whole bytes written so far (call at a byte boundary). */

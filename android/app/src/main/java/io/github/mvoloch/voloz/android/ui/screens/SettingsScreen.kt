@@ -25,6 +25,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -172,11 +173,34 @@ private fun BubbleSection(settings: VolozSettings, cb: SettingsCallbacks) {
                 onSelect = cb.onBubbleSizeChange,
             )
         }
+        SizePreview(settings.bubbleSize)
     }
-    SettingsGroup(stringResource(R.string.settings_how)) {
+    SettingsGroup(title = stringResource(R.string.settings_how)) {
         GestureRow(R.string.gesture_tap, R.string.gesture_tap_body, recording = false)
         GroupDivider()
         GestureRow(R.string.gesture_hold, R.string.gesture_hold_body, recording = true)
+    }
+}
+
+/**
+ * The bubble at the size it will have over other apps: Compose dp and the
+ * overlay's dp (BubbleView: BubbleSize.dp x density) are the same unit. The box
+ * keeps the large size's height so the page doesn't jump when the size changes.
+ */
+@Composable
+private fun SizePreview(size: BubbleSize) {
+    val animated by animateDpAsState(size.dp.dp, label = "bubble size")
+    Column(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .clip(VolozShapes.Field).background(VolozColors.Mist)
+            .padding(vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.height(BubbleSize.LARGE.dp.dp), contentAlignment = Alignment.Center) {
+            BubbleGlyph(size = animated, bars = listOf(18f, 32f, 44f, 28f, 14f).map { it / 96f }, elevated = true)
+        }
+        Text(stringResource(R.string.settings_size_preview), style = VolozType.Caption, color = VolozColors.Graphite)
     }
 }
 
@@ -219,7 +243,7 @@ private fun <T> Segmented(options: List<Pair<T, Int>>, selected: T, onSelect: (T
 @Composable
 private fun VocabularySection(settings: VolozSettings, cb: SettingsCallbacks) {
     var adding by rememberSaveable { mutableStateOf(false) }
-    SettingsGroup(stringResource(R.string.settings_vocab_group)) {
+    SettingsGroup(title = stringResource(R.string.settings_vocab_group)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.settings_vocab_sub), style = VolozType.Caption, color = VolozColors.Graphite)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -298,7 +322,7 @@ private fun GeneralSection(settings: VolozSettings, readiness: Readiness, cb: Se
             )
         }
     }
-    SettingsGroup(stringResource(R.string.settings_keys_group)) {
+    SettingsGroup(title = stringResource(R.string.settings_keys_group)) {
         if (settings.savedKeys.isEmpty()) {
             SettingRow(stringResource(R.string.settings_keys_none), stringResource(R.string.settings_keys_none_sub))
         }
@@ -315,7 +339,7 @@ private fun GeneralSection(settings: VolozSettings, readiness: Readiness, cb: Se
         }
     }
     Text(stringResource(R.string.settings_keys_hint), style = VolozType.Caption, color = VolozColors.Graphite, modifier = Modifier.padding(horizontal = 4.dp))
-    SettingsGroup(stringResource(R.string.settings_dictations_group)) {
+    SettingsGroup(title = stringResource(R.string.settings_dictations_group)) {
         SettingRow(stringResource(R.string.settings_history), stringResource(R.string.settings_history_sub)) {
             SecondaryButton(stringResource(R.string.settings_history_clear), { confirmClear = true }, height = 34.dp)
         }
@@ -394,10 +418,6 @@ private fun AboutSection(versionName: String) {
     }
     SettingsGroup {
         SettingRow("GitHub", "github.com/mvoloch/voloz", onClick = { uri.openUri("https://github.com/mvoloch/voloz") }, subtitleStyle = VolozType.Mono) {
-            Icon(VolozIcons.Chevron, null, tint = VolozColors.Graphite, modifier = Modifier.size(16.dp))
-        }
-        GroupDivider()
-        SettingRow("Voicebox", "github.com/jamiepine/voicebox", onClick = { uri.openUri("https://github.com/jamiepine/voicebox") }, subtitleStyle = VolozType.Mono) {
             Icon(VolozIcons.Chevron, null, tint = VolozColors.Graphite, modifier = Modifier.size(16.dp))
         }
         GroupDivider()

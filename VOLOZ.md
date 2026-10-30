@@ -840,8 +840,8 @@ The Android prototype brought up to desktop Lite 0.8.13 (`light`,
 `app/src/index.css` / `design/lite-v2/mockup.html` as a light and a dark
 `VolozPalette` (mist `#F3F4F6` / sheet / ink `#121417`; dark `#0E0F11` /
 `#16181B` / `#ECEDEF`; graphite, faint, hair, ok; `signal` red only for the
-recording dot, the logo caret and a missing key). Theme follows the system
-or Ajustes › Geral › Tema. Fonts: Bricolage Grotesque (titles), Onest
+recording dot, the logo caret and a missing key). Light by default; Ajustes ›
+Geral › Tema offers Claro / Escuro / Seguir o sistema. Fonts: Bricolage Grotesque (titles), Onest
 (text), JetBrains Mono (keys, times, models); Bricolage and Onest are the
 desktop's own Latin WOFF2 files converted to TTF with fontTools (variable
 `wght`; Portuguese accents included), OFL texts in `android/fonts-licenses`;
@@ -936,6 +936,101 @@ Needs a phone: the new look on the owner's screen (font rendering, the
 tabs row width); a dictation through a backup (e.g. Groq out of quota);
 OpenAI and Claude keys entered on the phone; the FLAC upload on mobile
 data; that the warm-up doesn't hold the radio awake noticeably.
+
+**After the owner's first look on his phone (0.2.0, 2026-10-30).**
+- Light theme is the default (it followed the phone's dark mode); the
+  `values-night` window colours are gone, so a dark-mode phone no longer
+  flashes dark on launch. Dark stays one tap away in Geral › Tema.
+- Sobre now matches the desktop's `LiteAboutPage`: "Voloz por Marcus
+  Voloch", one credit line "Baseado no Voicebox de Jamie Pine", and only
+  the Voloz repository listed (the separate Voicebox row is gone). The
+  owner asked why Voicebox still shows there; the credit line stays by the
+  repo rule (CLAUDE.md: keep the credit to Voicebox and Jamie Pine, the
+  branding may go) until he decides otherwise.
+- Bolha: the bubble is drawn at its real size under Pequena / Média /
+  Grande (same dp as the overlay), so the size can be judged without
+  leaving the app.
+- Version 0.2.0 (versionCode 2), so Sobre tells the builds apart.
+- Found while committing: the root `.gitignore` rule `data/` also matched
+  the Android `data` package, so `SettingsRepository.kt`,
+  `HistoryRepository.kt` and `KeyCipher.kt` were never in git (the pushed
+  branch could not build from a clone). `.gitignore` now re-includes that
+  package.
+
+**Review round (0.2.1, 2026-10-30).** Two read-only reviews: the code
+against Karpathy's guidelines (simplicity, dead code, phone costs, hidden
+assumptions) and a feature-parity audit against desktop Lite 0.8.15. Each
+finding was checked in the code before fixing. Fixed:
+- *No dictation lost on failure:* when processing fails (every provider,
+  stalled network) the take is kept; after the error the bubble shows a
+  circular arrow for 30 s and a tap sends the same audio again
+  (`BubbleState.RetryReady`). A new take replaces it.
+- *Cancel and time limit:* a tap while processing cancels (OkHttp
+  `dispatcher.cancelAll()` aborts the blocking call; `Fallback.run` stops
+  trying providers via a stop signal; a cancel during refinement doesn't
+  insert the raw text); the whole run has a 150 s limit; both keep the take
+  for the retry.
+- *Insertion:* `ACTION_SET_TEXT` only into an empty field; a field with text
+  gets a paste (with the same spacing fix), so its formatting, mentions and
+  undo survive. Cost: in those fields the clipboard is used, and Android 10+
+  often can't restore the previous clip.
+- *Focus tracking:* a cursor-move event takes its field from `event.source`;
+  the window queries and the Compose tree walk run only on focus/window
+  events (they ran after every keystroke in any app).
+- *Bubble placement:* back by the field after a dictation if the field moved.
+- *Memory:* the FLAC encoder reads one 4096-sample block at a time and the
+  MD5 no longer copies the take (a 10-minute take peaked ~100 MB); the bit
+  writer works on whole values instead of one bit per call.
+- *Keys:* decrypted plaintext cached per stored blob and the Keystore key
+  cached, instead of every key decrypted on every settings change.
+- *Errors:* a 2xx that isn't JSON (captive portal) is a provider failure,
+  so the backup gets the request.
+- *Settings races:* vocabulary and provider-list edits are read-modify-write
+  inside DataStore (two quick taps both count).
+- *History:* row keys are the timestamps (unique), day headers keyed by
+  their first row (no duplicate-key crash), rows rebuilt only when the
+  history changes.
+- *Clean-up:* the pasted key no longer goes into saved instance state; dead
+  code removed (Keycap and its tokens, VSpace/HSpace, two icons,
+  `Recorder.capturedMs`, `BubbleOverlay.isShown`, `KeyScreen(standalone)`,
+  the unused material-icons dependency); one row layout for SettingRow and
+  ToggleRow; one endpoint normalisation (`Provider.baseUrl`); Recorder
+  doesn't release the AudioRecord while its thread is still reading; lint
+  fixes (`mipmap-anydpi`, "OK", data-extraction rules, Modifier order).
+Gate: unit tests 69 -> 74 (73 passed, 1 skipped; +5 `ReviewFixesTest`),
+build with no Kotlin warnings, lint 0 errors and 5 warnings (4 newer
+dependency versions, the battery-exemption Play notice kept on purpose for
+sideloading). Emulator: screens unchanged. The retry and
+cancel paths could not be reached on the emulator (its mic gives silence,
+which stops before processing); they need a phone.
+
+**Parity with desktop Lite 0.8.15** (audit, 2026-10-30). Same on both:
+hold / tap to talk, level bars, cancel by tap, providers with backups and
+429 cooldown, saved keys and the prefix check, presets, refinement on/off
+and the prompt (regenerated: byte-identical), vocabulary, totals, copy,
+theme (light default), About. Not applicable on a phone: key chords,
+start at login, dictations folder, audio retention (Android never stores
+audio). Missing on Android, by how much a phone user would notice:
+replacement rules and learning them from corrections; text shortcuts;
+per-dictation history actions (raw text, re-refine, edit, delete one);
+transcription language lock; adapt style to the app (needs an Android
+package table); errors that stay readable/copyable; recording timer and
+transcribing/refining states in the bubble; import audio from the share
+sheet; update notice; voice commands. Smaller: search covers only the final
+text, history keeps 30, onboarding has no optional Claude key, no "down"
+for providers, no UI language choice, no dictation log page.
+
+**Next release: vocabulary shared across devices.** The owner wants the
+phone to pick up the vocabulary he keeps on Windows, and the same list on
+every PC and the phone, which needs one identity across devices. Not
+decided. Options: (a) a Voloz account with a small sync service: simplest
+for users, but it is a server, against the "own keys, no relay" choice so
+far, and would come with the hosted plan; (b) a file in the user's own
+cloud drive (OneDrive / Google Drive) that each device reads and merges:
+no Voloz server, needs each platform's sign-in; (c) export / import (QR or
+file) as a first step. The desktop vocabulary is in its local database
+(`capture_settings`), the Android one in DataStore; either way a merge
+rule is needed (union, deletions as tombstones).
 
 ## Developing on GB4
 

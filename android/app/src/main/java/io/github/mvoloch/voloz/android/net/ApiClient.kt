@@ -1,6 +1,7 @@
 package io.github.mvoloch.voloz.android.net
 
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -67,7 +68,10 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             header("Authorization", "Bearer $key")
         }
 
-    private fun base(endpoint: String) = endpoint.trim().trimEnd('/')
+    private fun base(endpoint: String) = baseUrlOf(endpoint)
+
+    /** Aborts every request in flight or queued (a cancelled dictation; warm-ups go too). */
+    fun cancelAll() = http.dispatcher.cancelAll()
 
     /** GET /models; returns how many models the key can see. Throws [ProviderException] on a bad key. */
     fun testKey(endpoint: String, apiKey: String): Int {
@@ -215,14 +219,27 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
         return RefinementPrompt.extractTagged(text).takeIf { it.isNotEmpty() } ?: throw IOException("Refinement reply was empty")
     }
 
-    /** Runs [request]; HTTP errors and network failures become [ProviderException], [read] parses a 2xx body. */
+    /**
+     * Runs [request]; HTTP errors and network failures become [ProviderException], [read]
+     * parses a 2xx body. A 2xx that isn't the JSON asked for (a captive portal's HTML page)
+     * is a provider failure too, so the next provider still gets the request.
+     */
     private fun <T> execute(provider: Provider?, request: Request, read: (String) -> T): T {
         val response = try {
             http.newCall(request).execute()
         } catch (e: IOException) {
             throw ProviderException(provider, null, e.javaClass.simpleName, cause = e)
         }
-        return response.use { read(readOk(provider, it)) }
+        return response.use {
+            val body = readOk(provider, it)
+            try {
+                read(body)
+            } catch (e: SerializationException) {
+                throw ProviderException(provider, null, "reply was not JSON", cause = e)
+            } catch (e: IllegalArgumentException) {
+                throw ProviderException(provider, null, "reply had an unexpected shape", cause = e)
+            }
+        }
     }
 
     private fun readOk(provider: Provider?, response: Response): String {

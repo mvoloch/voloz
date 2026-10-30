@@ -61,6 +61,9 @@ object BubbleStyle {
     const val WARNING_STROKE = 2.2f
     val PASTE_PATHS = listOf("M11 9h7a2 2 0 0 1 2 2v7a2 2 0 0 1 -2 2h-7a2 2 0 0 1 -2 -2v-7a2 2 0 0 1 2 -2z", "M5 15V6a2 2 0 0 1 2-2h9")
     const val PASTE_STROKE = 2f
+    /** A circular arrow: tap to send the same take again. */
+    val RETRY_PATHS = listOf("M19 12a7 7 0 1 1 -2.05 -4.95", "M17.5 3.5v4h-4")
+    const val RETRY_STROKE = 2.2f
 
     // Hands-free tooltip
     const val TOOLTIP_CORNER_DP = 999f // a capsule, like the desktop pill

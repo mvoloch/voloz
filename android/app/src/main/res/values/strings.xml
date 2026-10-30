@@ -13,7 +13,7 @@
     <string name="cd_copy">Copiar</string>
     <string name="nav_home">Início</string>
     <string name="nav_settings">Ajustes</string>
-    <string name="status_ok">Ok</string>
+    <string name="status_ok">OK</string>
     <string name="status_missing">Falta</string>
     <string name="status_recommended">Recomendado</string>
     <string name="status_on">Ativada</string>
@@ -32,6 +32,7 @@
     <string name="bubble_cd_done">Texto inserido</string>
     <string name="bubble_cd_error">Não deu</string>
     <string name="bubble_cd_paste">Toque para colar o texto ditado</string>
+    <string name="bubble_cd_retry">Toque para enviar o ditado de novo</string>
     <string name="tooltip_hands_free" translatable="false">Hands Free</string>
     <string name="tooltip_tap_again">toque de novo para terminar</string>
 
@@ -56,6 +57,9 @@
     <string name="msg_key_other_provider">Isto parece uma chave da %1$s, mas o provedor é %2$s.</string>
     <string name="msg_unexpected">Erro inesperado (%1$s).</string>
     <string name="msg_copied">Copiado</string>
+    <string name="msg_cancelled">Cancelado.</string>
+    <string name="msg_too_slow">Demorou demais.</string>
+    <string name="msg_retry_hint">O áudio foi guardado: toque na bolha para enviar de novo.</string>
 
     <!-- 1. Boas-vindas -->
     <string name="welcome_headline">Fale. O texto aparece onde você está digitando.</string>
@@ -160,6 +164,7 @@
     <string name="size_small">Pequena</string>
     <string name="size_medium">Média</string>
     <string name="size_large">Grande</string>
+    <string name="settings_size_preview">No tamanho em que aparece sobre os outros apps.</string>
     <string name="settings_how">Como gravar</string>
     <string name="gesture_tap">Um toque</string>
     <string name="gesture_tap_body">Fale à vontade e toque de novo para terminar.</string>

@@ -66,7 +66,8 @@ sealed interface KeySaveResult {
 
 /** What the providers list can change; implemented by VolozRoot over the repositories. */
 interface ProviderActions {
-    fun setProviders(kind: ProviderKind, list: List<Provider>)
+    /** Changes the stored list (see SettingsRepository.editProviders). */
+    fun editProviders(kind: ProviderKind, change: (List<Provider>) -> List<Provider>)
     fun selectKey(host: String, id: String)
     fun forgetKey(id: String)
     /** Keeps [key] for [provider]'s host after an optional test against its `/models`. */
@@ -85,7 +86,7 @@ fun ProviderList(kind: ProviderKind, settings: VolozSettings, actions: ProviderA
     var adding by rememberSaveable { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsGroup(stringResource(R.string.providers_group)) {
+        SettingsGroup(title = stringResource(R.string.providers_group)) {
             list.forEachIndexed { i, p ->
                 if (i > 0) GroupDivider()
                 ProviderRow(
@@ -93,9 +94,9 @@ fun ProviderList(kind: ProviderKind, settings: VolozSettings, actions: ProviderA
                     provider = p,
                     key = settings.keyFor(p.host),
                     canRemove = list.size > 1,
-                    onUp = if (i > 0) ({ actions.setProviders(kind, list.toMutableList().apply { add(i - 1, removeAt(i)) }) }) else null,
+                    onUp = if (i > 0) ({ actions.editProviders(kind) { l -> moveUp(l, p) } }) else null,
                     onKey = { keyFor = p },
-                    onRemove = { actions.setProviders(kind, list.filterIndexed { j, _ -> j != i }) },
+                    onRemove = { actions.editProviders(kind) { l -> l.filterNot { it.sameAs(p) } } },
                 )
             }
             if (list.size < ProviderPresets.MAX_PROVIDERS) AddRow(stringResource(R.string.providers_add)) { adding = true }
@@ -111,12 +112,18 @@ fun ProviderList(kind: ProviderKind, settings: VolozSettings, actions: ProviderA
             onDismiss = { adding = false },
             onAdd = { p ->
                 adding = false
-                actions.setProviders(kind, list + p)
+                actions.editProviders(kind) { it + p }
                 // A new host without a key: ask for it right away.
                 if (settings.keyFor(p.host) == null) keyFor = p
             },
         )
     }
+}
+
+/** [p] one place up; the list as is when [p] is already first or gone. */
+internal fun moveUp(list: List<Provider>, p: Provider): List<Provider> {
+    val i = list.indexOfFirst { it.sameAs(p) }
+    return if (i > 0) list.toMutableList().apply { add(i - 1, removeAt(i)) } else list
 }
 
 @Composable

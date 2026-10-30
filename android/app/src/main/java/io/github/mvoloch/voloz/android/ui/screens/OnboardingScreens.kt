@@ -135,11 +135,10 @@ fun KeyScreen(
     onTest: () -> Unit,
     onContinue: () -> Unit,
     onBack: () -> Unit,
-    standalone: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     OnboardingFrame {
-        if (standalone) BackButton(onBack) else StepHeader(step = 1, onBack = onBack)
+        StepHeader(step = 1, onBack = onBack)
         Spacer(Modifier.height(28.dp))
         ScreenTitle(stringResource(R.string.key_title), stringResource(R.string.key_body))
         Spacer(Modifier.height(28.dp))
@@ -192,7 +191,7 @@ fun KeyScreen(
         Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PrimaryButton(
-                stringResource(if (standalone) R.string.key_save else R.string.common_continue),
+                stringResource(R.string.common_continue),
                 onContinue,
                 enabled = keyInput.isNotBlank(),
             )

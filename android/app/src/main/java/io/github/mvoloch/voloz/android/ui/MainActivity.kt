@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         val app = application as VolozApp
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle()
-            val dark = isDarkTheme(settings?.theme ?: ThemeMode.SYSTEM)
+            val dark = isDarkTheme(settings?.theme ?: ThemeMode.LIGHT)
             // Mist background everywhere: system-bar icons follow the app's theme, not the system's.
             LaunchedEffect(dark) {
                 val bars = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)

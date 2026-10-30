@@ -120,8 +120,6 @@ class BubbleOverlay(
         PixelFormat.TRANSLUCENT,
     ).apply { gravity = Gravity.TOP or Gravity.START }
 
-    val isShown: Boolean get() = attached
-
     fun show() {
         if (attached) return
         place()
@@ -144,8 +142,15 @@ class BubbleOverlay(
 
     fun setState(newState: BubbleState) {
         val tooltipBefore = (state as? BubbleState.Recording)?.handsFree == true
+        val backToIdle = state != BubbleState.Idle && newState == BubbleState.Idle
         state = newState
         bubble.setState(newState)
+        // The field may have moved or grown while the bubble was busy (setAnchor
+        // doesn't move it then): put an idle bubble back by the field.
+        if (backToIdle && attached && !dragging && !holding && snapAnimator?.isRunning != true && !store.hasUserPosition) {
+            place()
+            runCatching { wm.updateViewLayout(bubble, params) }
+        }
         // Level ticks arrive ~10x/s; only touch the tooltip window when it should appear/disappear.
         if (tooltipBefore != ((newState as? BubbleState.Recording)?.handsFree == true)) updateTooltip()
     }

@@ -381,7 +381,7 @@ fun Eyebrow(text: String, modifier: Modifier = Modifier) {
 
 /** A section header + a white card whose rows are split by hairlines. */
 @Composable
-fun SettingsGroup(title: String? = null, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun SettingsGroup(modifier: Modifier = Modifier, title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (title != null) Eyebrow(title, Modifier.padding(start = 4.dp))
         Column(
@@ -403,11 +403,25 @@ fun SettingRow(
     onClick: (() -> Unit)? = null,
     subtitleStyle: TextStyle = VolozType.Caption,
     trailing: @Composable RowScope.() -> Unit = {},
+) = RowLayout(title, subtitle, subtitleStyle, if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier, trailing)
+
+/** A [SettingRow] with the desktop's switch; the whole row toggles. */
+@Composable
+fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) =
+    RowLayout(title, subtitle, VolozType.Caption, Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange)) {
+        Toggle(checked)
+    }
+
+@Composable
+private fun RowLayout(
+    title: String,
+    subtitle: String?,
+    subtitleStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    trailing: @Composable RowScope.() -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).then(modifier).padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -416,24 +430,6 @@ fun SettingRow(
             if (subtitle != null) Text(subtitle, style = subtitleStyle, color = VolozColors.Graphite)
         }
         trailing()
-    }
-}
-
-/** A [SettingRow] with the desktop's switch; the whole row toggles. */
-@Composable
-fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = VolozType.RowTitle, color = VolozColors.Ink)
-            if (subtitle != null) Text(subtitle, style = VolozType.Caption, color = VolozColors.Graphite)
-        }
-        Toggle(checked)
     }
 }
 
@@ -512,28 +508,7 @@ fun AddRow(text: String, onClick: () -> Unit) {
     }
 }
 
-/** A physical key (mockup .kc): sheet with a 3dp edge below (CSS box-shadow 0 3px 0 edge). */
-@Composable
-fun Keycap(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val edge = VolozColors.KeyEdge
-    Box(
-        modifier
-            .padding(bottom = 3.dp)
-            .drawBehind { drawRoundRect(edge, Offset(0f, 3.dp.toPx()), size, CornerRadius(10.dp.toPx())) }
-            .clip(VolozShapes.Key).background(VolozColors.Key)
-            .border(1.dp, edge, VolozShapes.Key)
-            .widthIn(min = 52.dp).height(42.dp).padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) { content() }
-}
-
 private fun lerpColor(a: Color, b: Color, t: Float) = androidx.compose.ui.graphics.lerp(a, b, t)
-
-@Composable
-fun VSpace(h: Dp) = Spacer(Modifier.height(h))
-
-@Composable
-fun HSpace(w: Dp) = Spacer(Modifier.width(w))
 
 /** Dashed rounded outline (vocabulary "+ Adicionar" chip). */
 fun Modifier.dashedOutline(color: Color, radius: Dp = 999.dp): Modifier = this.then(

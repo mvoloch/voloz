@@ -6,6 +6,10 @@ import java.net.URI
 /** One transcription or refinement service: an OpenAI-style base URL (up to `/v1`) and a model. */
 data class Provider(val endpoint: String, val model: String) {
     val host: String get() = hostOf(endpoint)
+
+    /** The endpoint without spaces or a trailing slash: what requests are built on and providers compared by. */
+    val baseUrl: String get() = baseUrlOf(endpoint)
+
     val vendor: Vendor get() = Vendor.of(host)
 
     /** "Groq", "OpenAI"… for known hosts, the host itself otherwise. */
@@ -15,8 +19,7 @@ data class Provider(val endpoint: String, val model: String) {
     val shortModel: String get() = model.substringAfterLast('/')
 
     /** Same endpoint (ignoring a trailing slash) and model. */
-    fun sameAs(other: Provider): Boolean =
-        endpoint.trim().trimEnd('/') == other.endpoint.trim().trimEnd('/') && model == other.model
+    fun sameAs(other: Provider): Boolean = baseUrl == other.baseUrl && model == other.model
 }
 
 enum class Vendor(val label: String?, val domain: String?) {
@@ -31,6 +34,8 @@ enum class Vendor(val label: String?, val domain: String?) {
             entries.firstOrNull { it.domain != null && (host == it.domain || host.endsWith(".${it.domain}")) } ?: OTHER
     }
 }
+
+fun baseUrlOf(endpoint: String): String = endpoint.trim().trimEnd('/')
 
 /** Host of an endpoint URL, lowercased; empty when it doesn't parse. */
 fun hostOf(endpoint: String): String =
@@ -85,6 +90,9 @@ object KeyRules {
     fun mask(key: String): String =
         if (key.length <= 12) "…" + key.takeLast(2) else key.take(6) + "…" + key.takeLast(4)
 }
+
+/** The user cancelled the dictation, or it ran out of time: no further provider is tried. */
+class DictationCancelled : Exception("dictation cancelled")
 
 /**
  * A provider failed in a way another provider might not: an HTTP error status,

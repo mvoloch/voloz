@@ -86,6 +86,16 @@ data class HistoryRow(
     val meta: String,
 )
 
+/** Row keys from timestamps: equal ones (same millisecond, a clock change) are moved on by one. */
+fun distinctIds(timestamps: List<Long>): List<Long> {
+    val seen = HashSet<Long>()
+    return timestamps.map { t ->
+        var id = t
+        while (!seen.add(id)) id++
+        id
+    }
+}
+
 /** Bar length for a dictation: square root so a 5 s note and a 2 min memo both read (desktop speechBarWidth). */
 fun speechBarFraction(durationMs: Long): Float {
     val seconds = maxOf(0.0, durationMs / 1000.0)
@@ -188,7 +198,8 @@ fun HomeScreen(
             for (row in shown) {
                 if (row.day != lastDay) {
                     val day = row.day
-                    item(key = "day-$day") { DayHeader(day) }
+                    // Keyed by its first row: two groups can carry the same label (a clock change).
+                    item(key = "day-${row.id}") { DayHeader(day) }
                     lastDay = day
                 }
                 item(key = row.id) {
@@ -227,7 +238,7 @@ private fun Hero(onlyInTextFields: Boolean) {
 
 @Composable
 private fun SetupCard(r: Readiness, onFix: (FixTarget) -> Unit, modifier: Modifier = Modifier) {
-    SettingsGroup(stringResource(if (r.ready) R.string.home_setup_recommended else R.string.home_setup_missing), modifier) {
+    SettingsGroup(modifier, title = stringResource(if (r.ready) R.string.home_setup_recommended else R.string.home_setup_missing)) {
         val ok = stringResource(R.string.status_ok)
         val missing = stringResource(R.string.status_missing)
         if (!r.ready) {

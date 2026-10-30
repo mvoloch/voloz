@@ -26,6 +26,20 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         val refineBackup: Boolean,
     )
 
+    /** Stops a run: no further provider is tried and the request in flight is aborted. */
+    class Cancel(private val abort: () -> Unit) {
+        @Volatile var cancelled = false
+            private set
+
+        fun cancel() {
+            cancelled = true
+            abort()
+        }
+    }
+
+    /** A cancel signal for one run; cancelling also aborts the client's requests. */
+    fun newCancel() = Cancel { client.cancelAll() }
+
     /** What a dictation runs on: providers in order (main first) and the key for each host. */
     class Route(
         val stt: List<Provider>,
@@ -46,16 +60,16 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
 
     /** Opens the main providers' connections while the user speaks (best effort, blocking: call off the main thread). */
     fun warm(route: Route) {
-        val firsts = listOfNotNull(route.stt.firstOrNull(), route.refine.firstOrNull())
-        for (endpoint in firsts.map { it.endpoint.trim().trimEnd('/') }.distinct()) {
-            val p = firsts.first { it.endpoint.trim().trimEnd('/') == endpoint }
-            client.warm(p.endpoint, route.keyFor(p))
-        }
+        listOfNotNull(route.stt.firstOrNull(), route.refine.firstOrNull())
+            .distinctBy { it.baseUrl }
+            .forEach { client.warm(it.endpoint, route.keyFor(it)) }
     }
 
-    fun run(route: Route, audio: UploadAudio, vocabulary: List<String>, refine: Boolean): Output {
+    /** Throws [DictationCancelled] once [cancel] fires, also mid-refinement (no raw text then). */
+    fun run(route: Route, audio: UploadAudio, vocabulary: List<String>, refine: Boolean, cancel: Cancel = Cancel {}): Output {
         val t0 = System.nanoTime()
-        val stt = fallback.run("stt", route.stt) { p ->
+        val stop = { cancel.cancelled }
+        val stt = fallback.run("stt", route.stt, stop) { p ->
             client.transcribe(p, keyOrThrow(route, p), audio, RefinementPrompt.buildSttPrompt(vocabulary))
         }
         val raw = stt.value.trim()
@@ -73,9 +87,12 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
 
         val t1 = System.nanoTime()
         return try {
-            val answer = fallback.run("llm", route.refine) { p -> client.refine(p, keyOrThrow(route, p), cleaned, vocabulary) }
+            val answer = fallback.run("llm", route.refine, stop) { p -> client.refine(p, keyOrThrow(route, p), cleaned, vocabulary) }
             output(answer.value, answer, null, (System.nanoTime() - t1) / 1_000_000)
+        } catch (e: DictationCancelled) {
+            throw e
         } catch (e: Exception) {
+            if (cancel.cancelled) throw DictationCancelled()
             output(raw, null, e.message ?: e.javaClass.simpleName, (System.nanoTime() - t1) / 1_000_000)
         }
     }

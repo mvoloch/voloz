@@ -23,6 +23,7 @@ import io.github.mvoloch.voloz.android.net.ProviderException
 import io.github.mvoloch.voloz.android.service.RecordingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import io.github.mvoloch.voloz.android.net.DictationCancelled
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -38,6 +39,8 @@ sealed interface BubbleState {
     data class Error(val message: String) : BubbleState
     /** Insertion failed; the text is on the clipboard and a tap pastes it. */
     data object PasteReady : BubbleState
+    /** Processing failed or was cancelled; the take is kept and a tap sends it again. */
+    data object RetryReady : BubbleState
 }
 
 enum class InsertOutcome { SET_TEXT, PASTED, FAILED, NO_TARGET }
@@ -74,6 +77,10 @@ class DictationController(
         private const val DONE_MS = 1000L
         private const val ERROR_MS = 2000L
         private const val PASTE_READY_MS = 6000L
+        /** How long a failed take waits for a tap to send it again. */
+        private const val RETRY_READY_MS = 30_000L
+        /** Upload, transcription and refinement together, over every provider tried. */
+        private const val PROCESS_DEADLINE_MS = 150_000L
     }
 
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Idle)
@@ -98,13 +105,28 @@ class DictationController(
     }
     private val silenceProbe = Runnable { checkSilence() }
 
+    /** The take being processed and its cancel signal; null when nothing is in flight. */
+    private var processing: Pair<Take, DictationPipeline.Cancel>? = null
+    /** A take whose processing failed, kept so a tap can send it again. */
+    private var failedTake: Take? = null
+    private val toRetryReady = Runnable {
+        _state.value = BubbleState.RetryReady
+        main.postDelayed(dropRetry, RETRY_READY_MS)
+    }
+    private val dropRetry = Runnable {
+        failedTake = null
+        _state.value = BubbleState.Idle
+    }
+    private val deadline = Runnable { cancelProcessing(context.getString(R.string.msg_too_slow)) }
+
     // ---- gestures -------------------------------------------------------
 
     fun onTap() {
         when (_state.value) {
             is BubbleState.Recording -> stop()
-            BubbleState.Processing -> Unit
+            BubbleState.Processing -> cancelProcessing(context.getString(R.string.msg_cancelled))
             BubbleState.PasteReady -> pasteFromClipboard()
+            BubbleState.RetryReady -> retry()
             else -> start(handsFree = true)
         }
     }
@@ -144,6 +166,7 @@ class DictationController(
         ) return flashError(context.getString(R.string.msg_need_mic))
 
         cancelTimers()
+        failedTake = null // a new take replaces the one waiting for a retry
         startForegroundService()
         retriedAfterSilence = false
         if (!beginCapture()) {
@@ -209,23 +232,60 @@ class DictationController(
     }
 
     private fun process(take: Take) {
+        cancelTimers()
         _state.value = BubbleState.Processing
         val s = settings.current
+        val cancel = pipeline.newCancel()
+        processing = take to cancel
+        main.postDelayed(deadline, PROCESS_DEADLINE_MS)
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    pipeline.run(route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine)
+                    pipeline.run(route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine, cancel)
                 }
             }
+            // Cancelled (tap or deadline): cancelProcessing already moved the bubble on.
+            if (processing?.second !== cancel) return@launch
+            processing = null
+            main.removeCallbacks(deadline)
             result.fold(
-                onSuccess = { deliver(it, take) },
+                onSuccess = {
+                    failedTake = null
+                    deliver(it, take)
+                },
                 onFailure = {
                     // The stack trace is what makes an "Erro inesperado" diagnosable.
                     Log.w(TAG, "processing failed", it)
-                    flashError(describe(it))
+                    failKeepingTake(describe(it), take)
                 },
             )
         }
+    }
+
+    /** A tap while processing, or the deadline: abort the requests and keep the take for a retry. */
+    private fun cancelProcessing(message: String) {
+        val (take, cancel) = processing ?: return
+        processing = null
+        main.removeCallbacks(deadline)
+        cancel.cancel()
+        failKeepingTake(message, take)
+    }
+
+    /** The error shows, then the bubble offers to send the same take again (no speech is lost). */
+    private fun failKeepingTake(message: String, take: Take) {
+        cancelTimers()
+        failedTake = take
+        val shown = "$message ${context.getString(R.string.msg_retry_hint)}"
+        Log.i(TAG, "error: $message (take kept for a retry)")
+        _state.value = BubbleState.Error(shown)
+        onUserMessage?.invoke(shown)
+        main.postDelayed(toRetryReady, ERROR_MS)
+    }
+
+    private fun retry() {
+        val take = failedTake ?: return
+        failedTake = null
+        process(take)
     }
 
     private fun deliver(out: DictationPipeline.Output, take: Take) {
@@ -295,6 +355,7 @@ class DictationController(
             e.status != null -> context.getString(R.string.msg_provider_http, e.provider?.displayName ?: "", e.status)
             else -> context.getString(R.string.msg_network)
         }
+        is DictationCancelled -> context.getString(R.string.msg_cancelled)
         is IOException -> context.getString(R.string.msg_network)
         else -> context.getString(R.string.msg_unexpected, e.javaClass.simpleName)
     }
@@ -310,6 +371,8 @@ class DictationController(
     private fun cancelTimers() {
         main.removeCallbacks(toIdle)
         main.removeCallbacks(toPasteReady)
+        main.removeCallbacks(toRetryReady)
+        main.removeCallbacks(dropRetry)
     }
 
     private fun copyToClipboard(text: String) {
