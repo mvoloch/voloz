@@ -5,6 +5,20 @@
 
 # Changelog
 
+## [0.8.12] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Added
+
+- **Saved API keys:** every key you enter is kept, even when you change an endpoint or clear the field. Each endpoint offers the keys saved for its service in a list, so switching between Groq, OpenAI and Claude needs no pasting. A key that belongs to another service (a Claude key in the OpenAI endpoint) is refused with a message.
+- **Backup providers:** under transcription and under refinement you can list backups, such as OpenAI and Claude behind Groq. When the main service fails (limit reached, service down, key rejected), Voloz tries the next one, and leaves a rate-limited service alone for a while.
+
+### Improved
+
+- **Faster paste:** Voloz no longer waits before pasting when the window you dictated in is still in front.
+- **Smaller uploads:** dictations go to the transcription service as FLAC, about half the size of before, with no loss.
+
 ## [0.8.11] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
