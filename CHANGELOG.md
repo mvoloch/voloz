@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.10] - 2026-10-30
+
+Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **OpenAI for text cleanup:** the cleanup model can now be one of OpenAI's current models (endpoint `https://api.openai.com/v1`, model such as `gpt-6-luna`, your own OpenAI key). Before, they refused Voloz's request. Voloz asks them to answer without reasoning first, which keeps cleanup fast.
+
 ## [0.8.9] - 2026-10-30
 
 Voloz Lite. Windows only for now; the installer is not code-signed yet. Upgrading keeps your settings, keys and history.
