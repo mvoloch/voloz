@@ -233,6 +233,12 @@ def test_refinement_pass_through_prompt_ignores_the_vocabulary():
     assert refinement.build_refinement_prompt(off, ["Voloz"]) == refinement.build_refinement_prompt(off)
 
 
+def test_refinement_prompt_asks_for_correct_spelling_with_cleanup():
+    assert refinement._SPELLING in refinement.build_refinement_prompt(refinement.RefinementFlags())
+    no_cleanup = refinement.RefinementFlags(smart_cleanup=False)
+    assert refinement._SPELLING not in refinement.build_refinement_prompt(no_cleanup)
+
+
 @pytest.mark.asyncio
 async def test_refine_transcript_sends_the_vocabulary_to_claude():
     from backend.backends import _OPENAI_COMPAT_CACHE_KEY, _llm_backends, set_llm_config
