@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.15] - 2026-10-30
+
+Voloz Lite. Windows and, as a preview, Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Added
+
+- **Linux pastes by itself:** the text now goes into the window you dictated in, as on Windows, and your clipboard is put back afterwards. The .deb sets up the permission for this; your user needs to be in the `input` group (`sudo usermod -aG input $USER`, then restart). With the AppImage, the permission is a one-time step described in the release notes. In terminals, paste with Ctrl+Shift+V.
+
 ## [0.8.14] - 2026-10-30
 
 Voloz Lite. Windows and, as a preview, Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
