@@ -19,6 +19,7 @@ import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.res.ResourcesCompat
 import io.github.mvoloch.voloz.android.R
 import io.github.mvoloch.voloz.android.dictation.BubbleState
 import kotlin.math.hypot
@@ -312,14 +313,16 @@ class BubbleOverlay(
     private fun buildTooltip(): View {
         val label = TextView(context).apply {
             text = context.getString(R.string.tooltip_hands_free)
-            setTextColor(BubbleStyle.LIME)
+            setTextColor(BubbleStyle.ON_NOTCH)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, BubbleStyle.TOOLTIP_LABEL_SP)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            typeface = runCatching { ResourcesCompat.getFont(context, R.font.jetbrains_mono) }.getOrNull()
+                ?: Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         }
         val hint = TextView(context).apply {
             text = context.getString(R.string.tooltip_tap_again)
-            setTextColor(BubbleStyle.PAPER)
+            setTextColor(BubbleStyle.TOOLTIP_HINT)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, BubbleStyle.TOOLTIP_TEXT_SP)
+            runCatching { ResourcesCompat.getFont(context, R.font.onest) }.getOrNull()?.let { typeface = it }
         }
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -328,7 +331,7 @@ class BubbleOverlay(
             val pv = dp(BubbleStyle.TOOLTIP_PAD_V_DP)
             setPadding(ph, pv, ph, pv)
             background = GradientDrawable().apply {
-                setColor(BubbleStyle.INK)
+                setColor(BubbleStyle.NOTCH)
                 cornerRadius = BubbleStyle.TOOLTIP_CORNER_DP * density
             }
             addView(label)

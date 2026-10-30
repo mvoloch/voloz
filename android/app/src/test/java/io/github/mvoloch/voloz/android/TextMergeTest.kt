@@ -4,7 +4,7 @@ import android.text.InputType
 import io.github.mvoloch.voloz.android.text.FieldPolicy
 import io.github.mvoloch.voloz.android.text.Merge
 import io.github.mvoloch.voloz.android.text.TextMerge
-import io.github.mvoloch.voloz.android.ui.screens.maskKey
+import io.github.mvoloch.voloz.android.net.KeyRules
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -93,8 +93,8 @@ class TextMergeTest {
 
     @Test
     fun keyMasking() {
-        assertNull(maskKey(""))
-        assertEquals("abc_4fJ2 ••••• Qx9", maskKey("abc_4fJ2abcdefghijklmnopQx9"))
-        assertEquals("••••• 89", maskKey("123456789"))
+        // Desktop style (settings API): first 6, an ellipsis, last 4; never the whole key.
+        assertEquals("abc_4f…nQx9", KeyRules.mask("abc_4fJ2abcdefghijklmnQx9"))
+        assertEquals("…89", KeyRules.mask("123456789"))
     }
 }

@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.format.DateFormat
 import android.text.format.DateUtils
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -38,26 +39,42 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.mvoloch.voloz.android.R
 import io.github.mvoloch.voloz.android.VolozApp
 import io.github.mvoloch.voloz.android.data.HistoryEntry
-import io.github.mvoloch.voloz.android.net.GroqHttpException
+import io.github.mvoloch.voloz.android.data.KeyMismatchException
+import io.github.mvoloch.voloz.android.data.ProviderKind
+import io.github.mvoloch.voloz.android.net.KeyRules
+import io.github.mvoloch.voloz.android.net.Provider
+import io.github.mvoloch.voloz.android.net.ProviderException
+import io.github.mvoloch.voloz.android.net.ProviderPresets
+import io.github.mvoloch.voloz.android.net.hostOf
 import io.github.mvoloch.voloz.android.service.VolozAccessibilityService
+import io.github.mvoloch.voloz.android.ui.components.Tab
 import io.github.mvoloch.voloz.android.ui.screens.AccessibilityScreen
 import io.github.mvoloch.voloz.android.ui.screens.FixTarget
 import io.github.mvoloch.voloz.android.ui.screens.HistoryRow
 import io.github.mvoloch.voloz.android.ui.screens.HomeScreen
+import io.github.mvoloch.voloz.android.ui.screens.KeySaveResult
 import io.github.mvoloch.voloz.android.ui.screens.KeyScreen
 import io.github.mvoloch.voloz.android.ui.screens.KeyTestState
 import io.github.mvoloch.voloz.android.ui.screens.MicScreen
+import io.github.mvoloch.voloz.android.ui.screens.ProviderActions
 import io.github.mvoloch.voloz.android.ui.screens.Readiness
+import io.github.mvoloch.voloz.android.ui.screens.SettingsCallbacks
 import io.github.mvoloch.voloz.android.ui.screens.SettingsScreen
+import io.github.mvoloch.voloz.android.ui.screens.SettingsSection
 import io.github.mvoloch.voloz.android.ui.screens.WelcomeScreen
+import io.github.mvoloch.voloz.android.ui.screens.modelStatusLine
 import io.github.mvoloch.voloz.android.ui.theme.VolozColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.Date
 
-/** Screens, in onboarding order, then the two main ones. KEY_EDIT = Chave opened from Ajustes. */
-enum class Screen { WELCOME, KEY, MIC, ACCESSIBILITY, HOME, SETTINGS, KEY_EDIT }
+/** Screens, in onboarding order, then the two main ones. */
+enum class Screen { WELCOME, KEY, MIC, ACCESSIBILITY, HOME, SETTINGS }
+
+/** Onboarding asks for a Groq key: the free way in. Other providers are added in Ajustes. */
+private val GROQ_HOST = hostOf(ProviderPresets.GROQ)
 
 /**
  * Navigation and wiring only: reads repositories/permissions and hands plain
@@ -80,11 +97,12 @@ fun VolozRoot(app: VolozApp) {
     val batteryOk = remember(resumeTick) { batteryUnrestricted(context) }
 
     val settings = settingsOrNull ?: run {
-        Box(Modifier.fillMaxSize().background(VolozColors.Paper))
+        Box(Modifier.fillMaxSize().background(VolozColors.Mist))
         return
     }
 
-    var screen by rememberSaveable { mutableStateOf(if (settings.groqKey.isBlank()) Screen.WELCOME else Screen.HOME) }
+    var screen by rememberSaveable { mutableStateOf(if (settings.savedKeys.isEmpty()) Screen.WELCOME else Screen.HOME) }
+    var section by rememberSaveable { mutableStateOf(SettingsSection.TRANSCRIPTION) }
     var keyInput by rememberSaveable { mutableStateOf("") }
     var keyTest by remember { mutableStateOf<KeyTestState>(KeyTestState.Idle) }
 
@@ -114,8 +132,9 @@ fun VolozRoot(app: VolozApp) {
             // Saving runs here too: the Keystore is slow on first use and can throw on some phones.
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    app.groq.testKey(key)
-                    app.settings.setGroqKey(key)
+                    KeyRules.mismatch(key, GROQ_HOST)?.let { throw KeyMismatchException(it, GROQ_HOST) }
+                    app.api.testKey(ProviderPresets.GROQ, key)
+                    app.settings.addKey(GROQ_HOST, key)
                 }
             }
             keyTest = result.fold(
@@ -128,7 +147,7 @@ fun VolozRoot(app: VolozApp) {
     fun saveKey(next: Screen) {
         val key = keyInput.trim()
         scope.launch {
-            withContext(Dispatchers.IO) { runCatching { app.settings.setGroqKey(key) } }.onFailure {
+            withContext(Dispatchers.IO) { runCatching { app.settings.addKey(GROQ_HOST, key) } }.onFailure {
                 keyTest = KeyTestState.Failed(describeKeyError(context, it))
                 return@launch
             }
@@ -142,17 +161,56 @@ fun VolozRoot(app: VolozApp) {
         screen = when (screen) {
             Screen.KEY -> Screen.WELCOME
             Screen.MIC -> Screen.KEY
-            Screen.ACCESSIBILITY -> Screen.MIC
-            Screen.KEY_EDIT -> Screen.SETTINGS
+            Screen.ACCESSIBILITY -> if (settings.savedKeys.isEmpty()) Screen.MIC else Screen.HOME
             else -> Screen.HOME
+        }
+    }
+
+    val readiness = Readiness(
+        hasKey = settings.hasMainKey,
+        micGranted = micGranted,
+        accessibilityOn = a11yOn,
+        batteryUnrestricted = batteryOk,
+    )
+    val onTab: (Tab) -> Unit = { screen = if (it == Tab.HOME) Screen.HOME else Screen.SETTINGS }
+    val providerActions = remember(app) {
+        object : ProviderActions {
+            override fun setProviders(kind: ProviderKind, list: List<Provider>) {
+                scope.launch {
+                    app.settings.setProviders(kind, list)
+                    app.pipeline.resetCooldowns()
+                }
+            }
+
+            override fun selectKey(host: String, id: String) {
+                scope.launch { app.settings.selectKey(host, id) }
+            }
+
+            override fun forgetKey(id: String) {
+                scope.launch { app.settings.forgetKey(id) }
+            }
+
+            override suspend fun saveKey(provider: Provider, key: String, test: Boolean): KeySaveResult {
+                val trimmed = key.trim()
+                KeyRules.mismatch(trimmed, provider.host)?.let {
+                    return KeySaveResult.Failed(context.getString(R.string.msg_key_other_provider, it, provider.host))
+                }
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        if (test) app.api.testKey(provider.endpoint, trimmed)
+                        app.settings.addKey(provider.host, trimmed)
+                        app.pipeline.resetCooldowns()
+                    }
+                }
+                return result.fold({ KeySaveResult.Ok }, { KeySaveResult.Failed(describeKeyError(context, it)) })
+            }
         }
     }
 
     when (screen) {
         Screen.WELCOME -> WelcomeScreen(onStart = { screen = Screen.KEY })
-        Screen.KEY, Screen.KEY_EDIT -> {
-            val standalone = screen == Screen.KEY_EDIT
-            LaunchedEffect(screen) { if (keyInput.isEmpty() && !standalone) keyInput = settings.groqKey }
+        Screen.KEY -> {
+            LaunchedEffect(screen) { if (keyInput.isEmpty()) keyInput = settings.keyFor(GROQ_HOST)?.key.orEmpty() }
             KeyScreen(
                 keyInput = keyInput,
                 onKeyInputChange = {
@@ -161,9 +219,8 @@ fun VolozRoot(app: VolozApp) {
                 },
                 testState = keyTest,
                 onTest = ::testKey,
-                onContinue = { saveKey(if (standalone) Screen.SETTINGS else Screen.MIC) },
-                onBack = { screen = if (standalone) Screen.SETTINGS else Screen.WELCOME },
-                standalone = standalone,
+                onContinue = { saveKey(Screen.MIC) },
+                onBack = { screen = Screen.WELCOME },
             )
         }
         Screen.MIC -> MicScreen(
@@ -177,20 +234,19 @@ fun VolozRoot(app: VolozApp) {
             onOpenSettings = { openAccessibilitySettings(context) },
             onOpenAppInfo = { openAppInfo(context) },
             onDone = { screen = Screen.HOME },
-            onBack = { screen = Screen.MIC },
+            onBack = { screen = if (settings.savedKeys.isEmpty()) Screen.MIC else Screen.HOME },
         )
         Screen.HOME -> HomeScreen(
-            readiness = Readiness(
-                hasKey = settings.groqKey.isNotBlank(),
-                micGranted = micGranted,
-                accessibilityOn = a11yOn,
-                batteryUnrestricted = batteryOk,
-            ),
+            readiness = readiness,
             onlyInTextFields = settings.onlyInTextFields,
+            modelStatus = modelStatusLine(settings),
             history = history.mapIndexed { i, e -> toRow(context, i, e) },
             onFix = { target ->
                 when (target) {
-                    FixTarget.KEY -> screen = Screen.KEY_EDIT
+                    FixTarget.KEY -> {
+                        section = SettingsSection.TRANSCRIPTION
+                        screen = Screen.SETTINGS
+                    }
                     FixTarget.MIC -> requestMic()
                     FixTarget.ACCESSIBILITY -> screen = Screen.ACCESSIBILITY
                     FixTarget.BATTERY -> requestBatteryExemption(context)
@@ -200,31 +256,55 @@ fun VolozRoot(app: VolozApp) {
                 clipboard.setText(AnnotatedString(row.text))
                 Toast.makeText(context, R.string.msg_copied, Toast.LENGTH_SHORT).show()
             },
-            onOpenSettings = { screen = Screen.SETTINGS },
+            onTab = onTab,
         )
         Screen.SETTINGS -> SettingsScreen(
+            section = section,
+            onSection = { section = it },
             settings = settings,
-            onOnlyInTextFieldsChange = { scope.launch { app.settings.setOnlyInTextFields(it) } },
-            onBubbleSizeChange = { scope.launch { app.settings.setBubbleSize(it) } },
-            onRefineChange = { scope.launch { app.settings.setRefine(it) } },
-            onAddTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary + term) } },
-            onRemoveTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary - term) } },
-            onChangeKey = {
-                keyInput = ""
-                keyTest = KeyTestState.Idle
-                screen = Screen.KEY_EDIT
-            },
-            onBack = { screen = Screen.HOME },
+            readiness = readiness,
+            versionName = remember { versionName(context) },
+            callbacks = SettingsCallbacks(
+                onOnlyInTextFieldsChange = { scope.launch { app.settings.setOnlyInTextFields(it) } },
+                onBubbleSizeChange = { scope.launch { app.settings.setBubbleSize(it) } },
+                onRefineChange = { scope.launch { app.settings.setRefine(it) } },
+                onAddTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary + term) } },
+                onRemoveTerm = { term -> scope.launch { app.settings.setVocabulary(settings.vocabulary - term) } },
+                onThemeChange = { scope.launch { app.settings.setTheme(it) } },
+                onOpenAccessibility = { openAccessibilitySettings(context) },
+                onBattery = { requestBatteryExemption(context) },
+                onClearHistory = { app.history.clear() },
+                providers = providerActions,
+            ),
+            onTab = onTab,
         )
     }
 }
 
-private fun toRow(context: Context, index: Int, e: HistoryEntry): HistoryRow = HistoryRow(
-    id = e.timestamp * 100 + index % 100,
-    appLabel = e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard),
-    whenLabel = DateUtils.getRelativeTimeSpanString(e.timestamp, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString(),
-    text = e.text,
-)
+private fun versionName(context: Context): String =
+    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
+
+private fun toRow(context: Context, index: Int, e: HistoryEntry): HistoryRow {
+    val where = e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
+    val refined = e.refineModel?.substringAfterLast('/')?.let {
+        context.getString(if (e.refineBackup) R.string.home_refined_by_backup else R.string.home_refined_by, it)
+    }
+    return HistoryRow(
+        id = e.timestamp * 100 + index % 100,
+        day = dayLabel(context, e.timestamp),
+        time = DateFormat.getTimeFormat(context).format(Date(e.timestamp)),
+        durationMs = e.durationMs,
+        text = e.text,
+        meta = listOfNotNull(where, refined).joinToString(" · "),
+    )
+}
+
+/** "Hoje", "Ontem", else the short date ("28 de out."). */
+private fun dayLabel(context: Context, ts: Long): String = when {
+    DateUtils.isToday(ts) -> context.getString(R.string.home_today)
+    DateUtils.isToday(ts + DateUtils.DAY_IN_MILLIS) -> context.getString(R.string.home_yesterday)
+    else -> DateUtils.formatDateTime(context, ts, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH or DateUtils.FORMAT_NO_YEAR)
+}
 
 private fun appLabel(context: Context, pkg: String): String = try {
     val pm = context.packageManager
@@ -234,9 +314,10 @@ private fun appLabel(context: Context, pkg: String): String = try {
 }
 
 private fun describeKeyError(context: Context, e: Throwable): String = when {
-    e is GroqHttpException && (e.status == 401 || e.status == 403) -> context.getString(R.string.msg_key_invalid)
-    e is GroqHttpException && e.status == 429 -> context.getString(R.string.msg_rate_limit)
-    e is GroqHttpException -> context.getString(R.string.msg_groq_http, e.status)
+    e is KeyMismatchException -> context.getString(R.string.msg_key_other_provider, e.keyProvider, e.host)
+    e is ProviderException && (e.status == 401 || e.status == 403) -> context.getString(R.string.msg_key_invalid)
+    e is ProviderException && e.status == 429 -> context.getString(R.string.msg_rate_limit)
+    e is ProviderException && e.status != null -> context.getString(R.string.msg_provider_http, e.provider?.displayName.orEmpty(), e.status)
     e is IOException -> context.getString(R.string.msg_network)
     else -> context.getString(R.string.msg_unexpected, e.javaClass.simpleName)
 }

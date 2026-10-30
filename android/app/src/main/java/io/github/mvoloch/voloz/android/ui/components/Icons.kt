@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
-import io.github.mvoloch.voloz.android.ui.theme.VolozColors
+import androidx.compose.ui.graphics.Color
 
 /** Stroke icons copied from the design mockups' inline SVGs (24-unit viewBox). */
 object VolozIcons {
@@ -16,7 +16,7 @@ object VolozIcons {
                 for (d in paths) {
                     addPath(
                         pathData = addPathNodes(d),
-                        stroke = SolidColor(VolozColors.Ink),
+                        stroke = SolidColor(Color.Black), // tinted where used
                         strokeLineWidth = width,
                         strokeLineCap = StrokeCap.Round,
                         strokeLineJoin = StrokeJoin.Round,
@@ -38,6 +38,11 @@ object VolozIcons {
         "M8 11V8a4 4 0 0 1 8 0v3",
     )
     val Close = stroke("close", 2f, "M7 7l10 10", "M17 7l-10 10")
+    val Up = stroke("up", 2f, "M12 19V5", "M6 11l6-6 6 6")
+    val More = stroke("more", 2.6f, "M5.5 12h.01", "M12 12h.01", "M18.5 12h.01")
+    val Search = stroke("search", 2f, "M17 11a6 6 0 1 1 -12 0a6 6 0 1 1 12 0z", "M15.5 15.5L20 20")
+    val Plus = stroke("plus", 2f, "M12 5v14", "M5 12h14")
+    val Chevron = stroke("chevron", 2f, "M9 6l6 6-6 6")
     val Gear = stroke(
         "gear", 1.8f,
         "M15 12a3 3 0 1 1 -6 0a3 3 0 1 1 6 0z",

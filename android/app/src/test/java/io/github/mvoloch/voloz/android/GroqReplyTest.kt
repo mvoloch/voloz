@@ -1,6 +1,6 @@
 package io.github.mvoloch.voloz.android
 
-import io.github.mvoloch.voloz.android.net.GroqClient
+import io.github.mvoloch.voloz.android.net.ApiClient
 import io.github.mvoloch.voloz.android.text.TextMerge
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,18 +14,18 @@ class GroqReplyTest {
 
     @Test
     fun completeReplyIsReturnedTrimmed() {
-        assertEquals("Olá, tudo bem?", GroqClient().refinedText(reply(" Olá, tudo bem? ", "stop")))
+        assertEquals("Olá, tudo bem?", ApiClient().refinedText(reply(" Olá, tudo bem? ", "stop")))
     }
 
     @Test(expected = IOException::class)
     fun replyCutAtMaxTokensIsRejected() {
         // Inserting this would silently drop the end of a long dictation.
-        GroqClient().refinedText(reply("Primeira parte do texto e", "length"))
+        ApiClient().refinedText(reply("Primeira parte do texto e", "length"))
     }
 
     @Test(expected = IOException::class)
     fun emptyReplyIsRejected() {
-        GroqClient().refinedText(reply("  ", "stop"))
+        ApiClient().refinedText(reply("  ", "stop"))
     }
 
     @Test

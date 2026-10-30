@@ -773,10 +773,11 @@ Windows folder (`wisprclone\voicebox\docs\android\screens\`, not in git).
   `ACTION_PASTE` (an app that hides its text would be wiped by SET_TEXT).
   If both fail the text stays on the clipboard and the bubble offers to
   paste it.
-- **Key:** the user's own Groq key, encrypted with an Android Keystore
-  AES-GCM key (DataStore); audio goes straight to Groq.
+- **Keys:** the user's own keys, every one kept per host and encrypted
+  with an Android Keystore AES-GCM key (DataStore); audio goes straight to
+  the provider. See "Lite look and desktop fixes" below.
 - **Prompt:** STT `whisper-large-v3`, refinement `openai/gpt-oss-120b`, both
-  on Groq. The refinement prompt is generated from the desktop's
+  on Groq by default, with backups. The refinement prompt is generated from the desktop's
   `backend/services/refinement.py` by `android/tools/gen_prompt.py`, and the
   unit tests compare it with fixtures made by the desktop's own functions.
   Regenerate after any desktop prompt change.
@@ -829,6 +830,112 @@ corrected (há/a, por que/porque, crase, accents, words that don't exist)
 while word choice, order and register stay — on Haiku, 22 of 24 known
 mistakes fixed, up from 7. The Android prompt was generated after it and
 includes the rule.
+
+### Lite look and desktop fixes (`feat/android`, 2026-10-30, not committed)
+
+The Android prototype brought up to desktop Lite 0.8.13 (`light`,
+`lite-v0.8.13`): its look and the dictation fixes of 0.8.10–0.8.13.
+
+**Look.** `ui/theme/Theme.kt` holds the Lite tokens of
+`app/src/index.css` / `design/lite-v2/mockup.html` as a light and a dark
+`VolozPalette` (mist `#F3F4F6` / sheet / ink `#121417`; dark `#0E0F11` /
+`#16181B` / `#ECEDEF`; graphite, faint, hair, ok; `signal` red only for the
+recording dot, the logo caret and a missing key). Theme follows the system
+or Ajustes › Geral › Tema. Fonts: Bricolage Grotesque (titles), Onest
+(text), JetBrains Mono (keys, times, models); Bricolage and Onest are the
+desktop's own Latin WOFF2 files converted to TTF with fontTools (variable
+`wght`; Portuguese accents included), OFL texts in `android/fonts-licenses`;
+Familjen Grotesk is gone. Screens:
+- Top bar as the desktop's `LiteTopBar`: logo (four bars, red caret),
+  Início | Ajustes.
+- Início: "Toque na [bolha] e fale." with the bubble drawn inline like the
+  desktop's keycaps, the models in use with a dot (`Groq · whisper-large-v3
+  → gpt-oss-120b`), a "Falta configurar" card only while something is
+  missing, the test field, totals as one sentence, search, day headers, and
+  rows with the time, a bar as long as the speech (desktop
+  `speechBarWidth`: square root of seconds over 120 s), the text (tap to
+  open) and "app · refinado por modelo (reserva)". History entries now keep
+  the take's length and the model that refined it.
+- Ajustes: the desktop's six sections as a row of tabs (Bolha in place of
+  Atalhos, Transcrição, Refinamento, Vocabulário, Geral, Sobre) with
+  grouped cards; providers as one ordered list (rank, provider, model, key
+  status, move up, menu); Geral has the theme, Accessibility and battery
+  status, the saved keys and clearing the history; Sobre keeps the credit
+  to Voicebox / Jamie Pine.
+- Onboarding: same screens on the new tokens (olive and lime are gone).
+- Bubble (`overlay/BubbleStyle.kt`): the desktop notch's colours: black
+  `#0B0B0C`, white bars (dimmed while idle), red dot only while recording,
+  emerald check, amber warning; a faint white rim so it keeps its outline
+  over dark apps; the hands-free tooltip is a black capsule in JetBrains
+  Mono / Onest. Shape, size and placement unchanged: on a phone it floats by
+  the field, it can't hang from the top edge as on the desktop.
+- Launcher icon: the Lite logo (white bars, red caret) on black.
+
+**Fixes ported** (each checked against the Kotlin code first):
+- *Keys per host* (desktop "Saved keys"): every key pasted is kept
+  (`saved_keys`, encrypted, `{id, host, enc, added}`) and the one in use is
+  picked per host (`active_keys`); without a pick the newest is used. The
+  prototype's single `groq_key_enc` is read as a saved Groq key and dropped
+  at the first key change, so an installed prototype keeps its key. A key
+  whose prefix names another provider (`sk-ant-`, `gsk_`, `sk-or-`) is
+  refused naming both (`KeyRules.mismatch`, also in onboarding). Masking is
+  the desktop's (`gsk_ab…wxyz`). Forgetting a key asks first.
+- *Backup providers* (`net/Fallback.kt`, port of `services/providers.py`):
+  STT and refinement each have up to five providers in order; the next one
+  gets the same request after a `ProviderException` (HTTP error, timeout,
+  unreachable, or no key saved for its host); a 429 parks that provider for
+  its `Retry-After` (default 60 s, max 10 min) and when all are parked all
+  are tried; an empty or malformed reply is not retried elsewhere. A
+  refinement that fails everywhere still inserts the raw transcript.
+  Presets as the desktop's: STT Groq `whisper-large-v3`, OpenAI
+  `gpt-transcribe`; refinement Groq `openai/gpt-oss-120b` (default, as the
+  desktop's Groq-only setup), Groq `qwen/qwen3.8-27b`, OpenAI `gpt-6-luna`,
+  Anthropic `claude-haiku-5-5`; any other OpenAI-compatible URL + model.
+  Changing providers or keys clears the cooldowns.
+- *OpenAI GPT-5/6*: for `api.openai.com` the request sends
+  `max_completion_tokens` and `reasoning_effort: "none"`, dropping the latter
+  for that model after a 400 that names it. Groq's gpt-oss models keep the
+  prototype's `reasoning_effort: "low"`; other models get the plain request.
+- *Claude refinement*: Messages API (`x-api-key`, `anthropic-version
+  2023-06-01`, `max_tokens` 2048 + 1024, `output_config.effort: "low"`, no
+  temperature), the tagged-output prompt and tagged examples, only the text
+  inside `<transcript>` kept; refusal or `max_tokens` falls back to the raw
+  text. `TAGGED_OUTPUT_INSTRUCTION` is hand-copied (gen_prompt.py skips
+  f-strings).
+- *Pooled connection, warmed*: one `OkHttpClient` for the app already kept a
+  pooled connection per host; now `HEAD {endpoint}/models` runs when
+  recording starts, once per distinct main endpoint, so the TLS handshake
+  happens while the user speaks.
+- *FLAC upload* (`audio/FlacEncoder.kt`): 16 kHz mono 16-bit FLAC from a
+  small pure-Kotlin encoder (fixed predictors 0–4, partitioned Rice,
+  CONSTANT for silence, VERBATIM when smaller; MD5 in STREAMINFO). WAV is
+  sent if encoding fails or doesn't shrink the audio. Android has no FLAC
+  muxer, and a JVM encoder runs in the unit tests.
+
+Skipped, and why: the paste settle (desktop Windows Ctrl+V timing; Android
+inserts with `ACTION_SET_TEXT`/`ACTION_PASTE`, no settle exists); the pill
+taking the foreground (Windows window activation; the Android overlay is
+already `FLAG_NOT_FOCUSABLE`); the desktop's per-endpoint key pick (Android
+picks per host, which is what the desktop falls back to for backups).
+UPSTREAM.md: no new rows: Voicebox has no Android app; the desktop
+counterparts are already listed on `light`.
+
+Gate on GB4: baseline (`648d26b`) `assembleDebug` OK, unit tests 42: 41
+passed, 1 skipped (Groq e2e). After: `assembleDebug` OK, 69: 68 passed, 1
+skipped (+19 `ProvidersTest`, +8 `FlacEncoderTest`; `TextMergeTest`'s mask
+test follows the new masking). The encoder's output decodes bit for bit in
+ffmpeg (with CRC checks) and libsndfile, and through the test's own reader.
+Groq e2e with the owner's key (24 s Portuguese sample): FLAC accepted,
+374 KB vs 774 KB of PCM, STT 0.51 s, refinement 0.86 s. Emulator (fake
+key): every screen in light and dark, the providers list, add-provider and
+key dialogs, theme switch, the bubble idle / recording with the tooltip /
+warning in both themes (screenshots in the owner's Windows folder
+`wisprclone\voicebox\docs\android\screens\lite-0.8.13\`, not in git).
+
+Needs a phone: the new look on the owner's screen (font rendering, the
+tabs row width); a dictation through a backup (e.g. Groq out of quota);
+OpenAI and Claude keys entered on the phone; the FLAC upload on mobile
+data; that the warm-up doesn't hold the radio awake noticeably.
 
 ## Developing on GB4
 

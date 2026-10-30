@@ -1,134 +1,206 @@
 package io.github.mvoloch.voloz.android.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import io.github.mvoloch.voloz.android.R
-import androidx.compose.ui.text.font.FontVariation
+import io.github.mvoloch.voloz.android.data.ThemeMode
 
 /**
- * The single place for the app's look: colour tokens, type and shapes from the
- * desktop Voloz brand. (The overlay bubble has its own tokens in overlay/BubbleStyle.kt.)
+ * The single place for the app's look: the desktop Voloz Lite tokens
+ * (app/src/index.css `.edition-lite`, approved mockup design/lite-v2): cool grey,
+ * white cards, ink, and red ([VolozPalette.signal]) only for voice: the
+ * recording dot and the logo caret. (The overlay bubble has its own tokens in
+ * overlay/BubbleStyle.kt.)
  */
+@Immutable
+data class VolozPalette(
+    val mist: Color, // page background
+    val sheet: Color, // cards, fields
+    val ink: Color, // text, primary buttons
+    val graphite: Color, // secondary text
+    val faint: Color, // meta, section labels
+    val hair: Color, // borders, dividers
+    val signal: Color, // voice only (and a key that is missing)
+    val signalSoft: Color,
+    val ok: Color,
+    val key: Color, // keycaps
+    val keyEdge: Color,
+    val dark: Boolean,
+)
+
+val LightPalette = VolozPalette(
+    mist = Color(0xFFF3F4F6),
+    sheet = Color(0xFFFFFFFF),
+    ink = Color(0xFF121417),
+    graphite = Color(0xFF5E6470),
+    faint = Color(0xFF9AA0AA),
+    hair = Color(0xFFE4E6EA),
+    signal = Color(0xFFE5483C),
+    signalSoft = Color(0xFFFDECEA),
+    ok = Color(0xFF1F9D63),
+    key = Color(0xFFFFFFFF),
+    keyEdge = Color(0xFFD5D8DE),
+    dark = false,
+)
+
+val DarkPalette = VolozPalette(
+    mist = Color(0xFF0E0F11),
+    sheet = Color(0xFF16181B),
+    ink = Color(0xFFECEDEF),
+    graphite = Color(0xFF9097A3),
+    faint = Color(0xFF5F6570),
+    hair = Color(0xFF25282D),
+    signal = Color(0xFFFF5A4E),
+    signalSoft = Color(0xFF2A1614),
+    ok = Color(0xFF3CC487),
+    key = Color(0xFF1E2125),
+    keyEdge = Color(0xFF33373D),
+    dark = true,
+)
+
+val LocalVolozPalette = staticCompositionLocalOf { LightPalette }
+
+/** The current palette's colours, by token name. */
 object VolozColors {
-    val Paper = Color(0xFFF2F2F0)
-    val Card = Color(0xFFFFFFFF)
-    val CardHairline = Color(0xFFE0E0DB) // 1dp line under the mic preview card
-    val Divider = Color(0xFFECECE7)
-    val FieldBorder = Color(0xFFCFCFC9)
-    val ProgressTrack = Color(0xFFD3D3CE)
-    val Ink = Color(0xFF0D0D0D)
-    val InkRaised = Color(0xFF1E1E1C) // chips/tiles on ink surfaces
-    val OnInkSecondary = Color(0xFFB5B5AE)
-    val OnInkChip = Color(0xFFE4E4DE)
-    val TextSecondary = Color(0xFF45453F)
-    val TextTertiary = Color(0xFF5C5C57)
-    val Olive = Color(0xFF4C7A0F)
-    val OliveDark = Color(0xFF3A5E0B)
-    val OliveTint = Color(0xFFEEF3E4)
-    val OliveTintText = Color(0xFF2E4A08)
-    val OliveDashed = Color(0xFF9BA88A)
-    val Lime = Color(0xFFC7FF38) // only on ink surfaces
-    val RecRed = Color(0xFFFF4D4F)
-    val Amber = Color(0xFFFFB224)
-    val AmberText = Color(0xFF8A4B00)
+    val Mist: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.mist
+    val Sheet: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.sheet
+    val Ink: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.ink
+    val Graphite: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.graphite
+    val Faint: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.faint
+    val Hair: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.hair
+    val Signal: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.signal
+    val SignalSoft: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.signalSoft
+    val Ok: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.ok
+    val Key: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.key
+    val KeyEdge: Color @Composable @ReadOnlyComposable get() = LocalVolozPalette.current.keyEdge
+
+    /** The desktop pill/notch: black like the phone's hardware in both themes. */
+    val Notch = Color(0xFF0B0B0C)
+    val OnNotch = Color(0xE6FFFFFF)
 }
 
 /**
- * Fonts. The spec asks for Familjen Grotesk (display), Roboto Flex (body) and
- * JetBrains Mono (API key). Display and Mono are bundled; body uses the system
- * Roboto, which is visually close to Roboto Flex at these sizes.
+ * Bricolage Grotesque (titles), Onest (text) and JetBrains Mono (keys, times,
+ * model names), as on the desktop. Variable TTFs in res/font, OFL (licences in
+ * android/fonts-licenses); Bricolage and Onest are the Latin subsets of the
+ * desktop's own WOFF2 files, converted with fontTools.
  */
 @OptIn(ExperimentalTextApi::class)
 object VolozFonts {
-    // Familjen Grotesk and JetBrains Mono: variable TTFs from google/fonts (OFL,
-    // licences in android/fonts-licenses). Body text stays the system Roboto.
-    val Display: FontFamily = FontFamily(
-        Font(R.font.familjen_grotesk, FontWeight.SemiBold, variationSettings = FontVariation.Settings(FontVariation.weight(600))),
-        Font(R.font.familjen_grotesk, FontWeight.Bold, variationSettings = FontVariation.Settings(FontVariation.weight(700))),
+    private fun weights(res: Int, vararg w: Int) = FontFamily(
+        w.map { Font(res, FontWeight(it), variationSettings = FontVariation.Settings(FontVariation.weight(it))) },
     )
-    val Body: FontFamily = FontFamily.Default
-    val Mono: FontFamily = FontFamily(
-        Font(R.font.jetbrains_mono, FontWeight.Medium, variationSettings = FontVariation.Settings(FontVariation.weight(500))),
-    )
+
+    val Display: FontFamily = weights(R.font.bricolage_grotesque, 500, 650)
+    val Body: FontFamily = weights(R.font.onest, 400, 500, 600)
+    val Mono: FontFamily = weights(R.font.jetbrains_mono, 500)
 }
 
 object VolozType {
-    val Headline = TextStyle(fontFamily = VolozFonts.Display, fontWeight = FontWeight.Bold, fontSize = 32.sp, lineHeight = 35.sp, letterSpacing = (-0.02).em)
-    val HeadlineXL = Headline.copy(fontSize = 40.sp, lineHeight = 42.sp)
-    val Wordmark = TextStyle(fontFamily = VolozFonts.Display, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.01).em)
-    val CardTitle = TextStyle(fontFamily = VolozFonts.Display, fontWeight = FontWeight.SemiBold, fontSize = 21.sp)
-    val BodyLarge = TextStyle(fontFamily = VolozFonts.Body, fontSize = 17.sp, lineHeight = 25.sp)
-    val Body = TextStyle(fontFamily = VolozFonts.Body, fontSize = 16.sp, lineHeight = 24.sp)
-    val BodySmall = TextStyle(fontFamily = VolozFonts.Body, fontSize = 15.sp, lineHeight = 22.sp)
+    private val Title = FontWeight(650)
+
+    /** Home hero: mockup h1 (650, line 1.05, -0.035em), sized for a phone. */
+    val Hero = TextStyle(fontFamily = VolozFonts.Display, fontWeight = Title, fontSize = 34.sp, lineHeight = 38.sp, letterSpacing = (-0.035).em)
+    val Headline = TextStyle(fontFamily = VolozFonts.Display, fontWeight = Title, fontSize = 30.sp, lineHeight = 33.sp, letterSpacing = (-0.03).em)
+    val HeadlineXL = Hero.copy(fontSize = 38.sp, lineHeight = 41.sp)
+    /** Settings page title: mockup h2. */
+    val PageTitle = TextStyle(fontFamily = VolozFonts.Display, fontWeight = Title, fontSize = 28.sp, lineHeight = 31.sp, letterSpacing = (-0.03).em)
+    val Wordmark = TextStyle(fontFamily = VolozFonts.Display, fontWeight = Title, fontSize = 20.sp, letterSpacing = (-0.02).em)
+    val CardTitle = TextStyle(fontFamily = VolozFonts.Display, fontWeight = Title, fontSize = 20.sp, letterSpacing = (-0.02).em)
+    val BodyLarge = TextStyle(fontFamily = VolozFonts.Body, fontSize = 16.sp, lineHeight = 24.sp)
+    val Body = TextStyle(fontFamily = VolozFonts.Body, fontSize = 15.sp, lineHeight = 22.sp)
+    val BodySmall = TextStyle(fontFamily = VolozFonts.Body, fontSize = 14.sp, lineHeight = 21.sp)
+    val RowTitle = TextStyle(fontFamily = VolozFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp)
     val Label = TextStyle(fontFamily = VolozFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-    val Caption = TextStyle(fontFamily = VolozFonts.Body, fontSize = 13.sp, lineHeight = 19.sp)
-    val Button = TextStyle(fontFamily = VolozFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
+    val Caption = TextStyle(fontFamily = VolozFonts.Body, fontSize = 13.sp, lineHeight = 18.sp)
+    val Meta = TextStyle(fontFamily = VolozFonts.Body, fontSize = 12.sp, lineHeight = 16.sp)
+    val Button = TextStyle(fontFamily = VolozFonts.Body, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
     val MonoKey = TextStyle(fontFamily = VolozFonts.Mono, fontWeight = FontWeight.Medium, fontSize = 15.sp)
+    val Mono = TextStyle(fontFamily = VolozFonts.Mono, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp)
+    /** Group headers ("PROVEDORES, NA ORDEM") and day labels: mockup .gh / .day. */
+    val Eyebrow = TextStyle(fontFamily = VolozFonts.Mono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 0.08.em)
 }
 
 object VolozShapes {
-    val Card = RoundedCornerShape(20.dp)
-    val CardLarge = RoundedCornerShape(24.dp)
-    val Group = RoundedCornerShape(18.dp)
-    val ListItem = RoundedCornerShape(16.dp)
-    val Field = RoundedCornerShape(14.dp)
-    val Button = RoundedCornerShape(16.dp)
-    val Small = RoundedCornerShape(12.dp)
+    val Card = RoundedCornerShape(14.dp) // mockup .group
+    val CardLarge = RoundedCornerShape(18.dp)
+    val Field = RoundedCornerShape(12.dp) // mockup .search
+    val Small = RoundedCornerShape(9.dp) // mockup .sel / .ctl
+    val Key = RoundedCornerShape(10.dp) // mockup .kc
     val Pill = RoundedCornerShape(999.dp)
 }
 
 object VolozDimens {
-    val ScreenPadding = 24.dp
-    val ButtonHeight = 56.dp
-    val FieldHeight = 52.dp
+    val ScreenPadding = 20.dp
+    val ButtonHeight = 52.dp
+    val FieldHeight = 48.dp
     val MinTouch = 44.dp
 }
 
-private val LightScheme = lightColorScheme(
-    primary = VolozColors.Ink,
-    onPrimary = VolozColors.Paper,
-    secondary = VolozColors.Olive,
-    onSecondary = Color.White,
-    tertiary = VolozColors.Olive,
-    background = VolozColors.Paper,
-    onBackground = VolozColors.Ink,
-    surface = VolozColors.Card,
-    onSurface = VolozColors.Ink,
-    surfaceVariant = VolozColors.Paper,
-    onSurfaceVariant = VolozColors.TextTertiary,
-    outline = VolozColors.FieldBorder,
-    outlineVariant = VolozColors.Divider,
-)
-
-/** Light only for the prototype: the spec defines a single (paper) palette. */
+/** Follows the system unless the user picked a theme in Ajustes › Geral. */
 @Composable
-fun VolozTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = LightScheme,
-        typography = Typography(
-            bodyLarge = VolozType.Body,
-            bodyMedium = VolozType.BodySmall,
-            bodySmall = VolozType.Caption,
-            labelLarge = VolozType.Label,
-        ),
-        shapes = Shapes(
-            small = VolozShapes.Small,
-            medium = VolozShapes.Field,
-            large = VolozShapes.Card,
-        ),
-        content = content,
+fun isDarkTheme(mode: ThemeMode): Boolean = when (mode) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
+}
+
+@Composable
+fun VolozTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    val p = if (dark) DarkPalette else LightPalette
+    val base = if (dark) darkColorScheme() else lightColorScheme()
+    val scheme = base.copy(
+        primary = p.ink,
+        onPrimary = p.mist,
+        secondary = p.ink,
+        onSecondary = p.mist,
+        tertiary = p.ink,
+        background = p.mist,
+        onBackground = p.ink,
+        surface = p.sheet,
+        onSurface = p.ink,
+        surfaceVariant = p.mist,
+        onSurfaceVariant = p.graphite,
+        surfaceContainerHigh = p.sheet,
+        surfaceContainerHighest = p.sheet,
+        outline = p.hair,
+        outlineVariant = p.hair,
+        error = p.signal,
     )
+    CompositionLocalProvider(LocalVolozPalette provides p, LocalContentColor provides p.ink) {
+        MaterialTheme(
+            colorScheme = scheme,
+            typography = Typography(
+                bodyLarge = VolozType.Body,
+                bodyMedium = VolozType.BodySmall,
+                bodySmall = VolozType.Caption,
+                labelLarge = VolozType.Label,
+                titleLarge = VolozType.CardTitle,
+                headlineSmall = VolozType.CardTitle,
+            ),
+            shapes = Shapes(small = VolozShapes.Small, medium = VolozShapes.Field, large = VolozShapes.Card),
+            content = content,
+        )
+    }
 }

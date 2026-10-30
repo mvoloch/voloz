@@ -16,7 +16,7 @@ import io.github.mvoloch.voloz.android.dictation.BubbleState
 import kotlin.math.max
 import kotlin.math.min
 
-/** The bubble itself: an ink squircle with symbol-only content per [BubbleState]. */
+/** The bubble itself: a black squircle (the desktop notch pill) with symbol-only content per [BubbleState]. */
 @SuppressLint("ViewConstructor")
 class BubbleView(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
@@ -39,8 +39,9 @@ class BubbleView(context: Context) : View(context) {
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
-    private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleStyle.INK }
+    private val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = BubbleStyle.NOTCH }
     private val rect = RectF()
+    private val rimRect = RectF()
 
     private val levelHistory = FloatArray(BubbleStyle.BAR_COUNT)
     private var spinAngle = 0f
@@ -128,6 +129,11 @@ class BubbleView(context: Context) : View(context) {
         rect.set(pad, pad, pad + size, pad + size)
         bodyPaint.setShadowLayer(dp(BubbleStyle.SHADOW_RADIUS_DP), 0f, dp(BubbleStyle.SHADOW_DY_DP), BubbleStyle.SHADOW)
         canvas.drawRoundRect(rect, corner, corner, bodyPaint)
+        stroke.color = BubbleStyle.RIM
+        stroke.strokeWidth = dp(BubbleStyle.RIM_DP)
+        val inset = stroke.strokeWidth / 2
+        rimRect.set(rect.left + inset, rect.top + inset, rect.right - inset, rect.bottom - inset)
+        canvas.drawRoundRect(rimRect, corner - inset, corner - inset, stroke)
 
         val cx = rect.centerX()
         val cy = rect.centerY()
@@ -135,15 +141,15 @@ class BubbleView(context: Context) : View(context) {
             BubbleState.Idle -> drawBars(canvas, cx, cy, k, null)
             is BubbleState.Recording -> {
                 drawBars(canvas, cx, cy, k, s.level)
-                fill.color = BubbleStyle.REC_RED
+                fill.color = BubbleStyle.SIGNAL
                 val r = dp(BubbleStyle.REC_DOT_DP) * k / 2
                 val inset = dp(BubbleStyle.REC_DOT_INSET_DP) * k
                 canvas.drawCircle(rect.right - inset - r, rect.top + inset + r, r, fill)
             }
             BubbleState.Processing -> drawSpinner(canvas, cx, cy, k)
-            BubbleState.Done -> drawGlyph(canvas, cx, cy, k, listOf(checkPath), BubbleStyle.LIME, BubbleStyle.CHECK_STROKE)
+            BubbleState.Done -> drawGlyph(canvas, cx, cy, k, listOf(checkPath), BubbleStyle.DONE, BubbleStyle.CHECK_STROKE)
             is BubbleState.Error -> drawGlyph(canvas, cx, cy, k, warningPaths, BubbleStyle.AMBER, BubbleStyle.WARNING_STROKE)
-            BubbleState.PasteReady -> drawGlyph(canvas, cx, cy, k, pastePaths, BubbleStyle.LIME, BubbleStyle.PASTE_STROKE)
+            BubbleState.PasteReady -> drawGlyph(canvas, cx, cy, k, pastePaths, BubbleStyle.ON_NOTCH, BubbleStyle.PASTE_STROKE)
         }
     }
 
@@ -155,7 +161,7 @@ class BubbleView(context: Context) : View(context) {
         val maxH = dp(BubbleStyle.BAR_MAX_HEIGHT_DP) * k
         val total = n * w + (n - 1) * gap
         var x = cx - total / 2
-        fill.color = BubbleStyle.LIME
+        fill.color = if (level == null) BubbleStyle.IDLE_BAR else BubbleStyle.ON_NOTCH
         for (i in 0 until n) {
             val h = if (level == null) {
                 minH
@@ -175,7 +181,7 @@ class BubbleView(context: Context) : View(context) {
         stroke.strokeWidth = sw
         stroke.color = BubbleStyle.RING_TRACK
         canvas.drawCircle(cx, cy, r, stroke)
-        stroke.color = BubbleStyle.LIME
+        stroke.color = BubbleStyle.ON_NOTCH
         rect.set(cx - r, cy - r, cx + r, cy + r)
         canvas.drawArc(rect, spinAngle - 90f, 90f, false, stroke)
     }

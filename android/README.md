@@ -3,7 +3,9 @@
 Wispr Flow-style dictation: a floating bubble appears over the focused text
 field in any app; tap it (or hold it) and speak, and the cleaned-up text is
 inserted at the cursor. Speech goes straight from the phone to Groq with the
-user's own API key (no Voloz server).
+user's own API keys (no Voloz server). The look and the dictation fixes
+follow the desktop Voloz Lite 0.8.13 (see VOLOZ.md, "Lite look and desktop
+fixes").
 
 Status: first prototype. It compiles, its pure parts are unit-tested and its
 Groq pipeline was run end to end from a JVM. It has run on an API 34
@@ -46,14 +48,18 @@ Toolchain: AGP 8.7.3, Gradle 8.11.1 (wrapper), Kotlin 2.0.21, Compose BOM
 | State machine (tap / hold / process / insert / errors) | `dictation/DictationController.kt` |
 | 16 kHz mono PCM16 capture, 10 min cap | `audio/Recorder.kt` |
 | WAV header, RMS level | `audio/WavWriter.kt` |
+| FLAC for the upload (pure Kotlin) | `audio/FlacEncoder.kt` |
 | Microphone foreground service + notification | `service/RecordingService.kt` |
-| Groq Whisper + refinement calls | `net/GroqClient.kt`, `net/DictationPipeline.kt` |
+| Providers, presets, key/host check | `net/Providers.kt` |
+| HTTP calls (OpenAI-compatible and Anthropic), warm-up | `net/ApiClient.kt` |
+| Backup providers with 429 cooldown | `net/Fallback.kt` |
+| Audio -> text over the providers | `net/DictationPipeline.kt` |
 | Desktop refinement prompt (verbatim port) | `refine/RefinementPromptText.kt` (generated), `refine/RefinementPrompt.kt` |
 | Insert-at-cursor merge, field eligibility | `text/TextMerge.kt`, `text/FieldPolicy.kt` |
-| Settings (DataStore, key encrypted with Android Keystore AES-GCM) | `data/SettingsRepository.kt`, `data/KeyCipher.kt` |
+| Settings (DataStore; saved keys per host, encrypted with Android Keystore AES-GCM; providers; theme) | `data/SettingsRepository.kt`, `data/KeyCipher.kt` |
 | History (last 30, on device only) | `data/HistoryRepository.kt` |
-| Screens (stateless composables) | `ui/screens/*.kt`; wiring/navigation in `ui/VolozRoot.kt` |
-| Theme (colours, type, shapes) | `ui/theme/Theme.kt` |
+| Screens (stateless composables) | `ui/screens/*.kt` (providers list and key dialog: `ProvidersSection.kt`); wiring/navigation in `ui/VolozRoot.kt` |
+| Theme (Lite tokens light/dark, type, shapes) | `ui/theme/Theme.kt` |
 | Strings (pt-BR default) | `res/values/strings.xml` |
 
 ### Dictation flow
@@ -76,12 +82,19 @@ Toolchain: AGP 8.7.3, Gradle 8.11.1 (wrapper), Kotlin 2.0.21, Compose BOM
 3. Audio: `AudioRecord`, `VOICE_RECOGNITION` source, 16 kHz mono PCM16, kept in
    memory, capped at 10 minutes (auto-stops). Takes under 0.5 s are discarded
    ("Curto demais").
-4. Groq `POST /audio/transcriptions`: `whisper-large-v3`, `response_format=json`,
-   `temperature=0`, language auto, vocabulary as `prompt` (desktop
-   `build_stt_prompt`: whole terms, ≤ 400 chars).
-5. Refinement (on by default): Groq `POST /chat/completions`,
-   `openai/gpt-oss-120b`, `reasoning_effort=low`, `temperature=0.2`,
-   `max_tokens=2048`. System prompt = desktop `build_refinement_prompt` with all
+4. Upload as 16 kHz mono FLAC (WAV if it would not shrink). Transcription
+   `POST /audio/transcriptions` on the main STT provider (default Groq
+   `whisper-large-v3`), `response_format=json`, `temperature=0`, language
+   auto, vocabulary as `prompt` (desktop `build_stt_prompt`: whole terms,
+   ≤ 400 chars); on a provider error the next provider in the list gets
+   the same request (`net/Fallback.kt`; a 429 parks a provider for its
+   `Retry-After`, default 60 s). The main endpoints' connections are warmed
+   with `HEAD /models` when recording starts.
+5. Refinement (on by default), same fallback: default Groq
+   `POST /chat/completions`, `openai/gpt-oss-120b`, `reasoning_effort=low`,
+   `temperature=0.2`, `max_tokens=2048` (OpenAI API: `max_completion_tokens`
+   and `reasoning_effort: "none"`; Claude: Messages API with tagged output).
+   System prompt = desktop `build_refinement_prompt` with all
    flags on (+ `_SPELLING`, `_VOCABULARY` when there is vocabulary) + "Write the
    output in the same language as the transcript. Never translate."; the 7
    few-shot `REFINEMENT_EXAMPLES` go as real chat turns. The desktop's
@@ -142,20 +155,23 @@ left on the clipboard, the bubble shows the warning for ~2 s and then a paste
 glyph for 6 s: tapping it runs `ACTION_PASTE` again. Existing text is never
 replaced except a selection the user made.
 
-**Settings:** DataStore Preferences; the Groq key is encrypted with a
-non-exportable Android Keystore AES-256-GCM key (no deprecated
-`security-crypto` dependency). `allowBackup=false` (Keystore keys don't
-migrate anyway).
+**Settings:** DataStore Preferences; every API key is kept per host and
+encrypted with a non-exportable Android Keystore AES-256-GCM key (no
+deprecated `security-crypto` dependency); a key whose prefix names another
+provider is refused. `allowBackup=false` (Keystore keys don't migrate
+anyway).
 
 **Battery:** Home shows a "Bateria sem restrição" chip
 (`PowerManager.isIgnoringBatteryOptimizations`); tapping it when amber opens
 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (permission declared; fine for
 sideload, would need justification on Play).
 
-**Fonts:** Familjen Grotesk (headlines) and JetBrains Mono (key field) are
-bundled as variable TTFs in `res/font` since `7184d16` (OFL, licences in
-`fonts-licenses`); body text uses the system Roboto in place of Roboto Flex
-(`ui/theme/Theme.kt`, `VolozFonts`).
+**Fonts:** as the desktop Lite: Bricolage Grotesque (titles), Onest (text)
+and JetBrains Mono (keys, times, model names), variable TTFs in `res/font`
+(OFL, licences in `fonts-licenses`). Bricolage and Onest are the desktop's
+Latin WOFF2 files (`app/src/assets/fonts`) converted with fontTools
+(`TTFont(src); flavor = None; save(dst)`); JetBrains Mono is google/fonts'
+variable TTF (`ui/theme/Theme.kt`, `VolozFonts`).
 
 ## Not verified (needs a real phone)
 

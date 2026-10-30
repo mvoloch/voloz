@@ -1,8 +1,8 @@
 package io.github.mvoloch.voloz.android
 
-import io.github.mvoloch.voloz.android.audio.WavWriter
 import io.github.mvoloch.voloz.android.net.DictationPipeline
-import io.github.mvoloch.voloz.android.net.GroqClient
+import io.github.mvoloch.voloz.android.net.ApiClient
+import io.github.mvoloch.voloz.android.net.ProviderPresets
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assume.assumeTrue
@@ -23,7 +23,7 @@ class GroqEndToEndTest {
         val wavPath = System.getenv("VOLOZ_E2E_WAV").orEmpty()
         assumeTrue("GROQ_API_KEY / VOLOZ_E2E_WAV not set", key.isNotBlank() && wavPath.isNotBlank())
 
-        // Re-wrap the fixture's PCM with the app's WavWriter so the upload is byte-for-byte what the app sends.
+        // Re-encode the fixture's PCM as the app does (FLAC) so the upload is byte-for-byte what the app sends.
         val file = File(wavPath).readBytes()
         val bb = ByteBuffer.wrap(file).order(ByteOrder.LITTLE_ENDIAN)
         val sampleRate = bb.getInt(24)
@@ -43,18 +43,21 @@ class GroqEndToEndTest {
             offset += 8 + size + (size and 1)
         }
         val audio = checkNotNull(pcm) { "no data chunk" }
-        val wav = WavWriter.pcm16ToWav(audio, sampleRate)
+        val upload = DictationPipeline.uploadAudio(audio, sampleRate)
 
-        val groq = GroqClient()
+        val client = ApiClient()
         val vocabulary = listOf("Voloz", "Groq")
         val t0 = System.nanoTime()
-        val models = groq.testKey(key)
+        val models = client.testKey(ProviderPresets.GROQ, key)
         val testKeyMs = (System.nanoTime() - t0) / 1_000_000
-        val out = DictationPipeline(groq).run(key, wav, vocabulary, refine = true)
+        val route = DictationPipeline.Route(listOf(ProviderPresets.DEFAULT_STT), listOf(ProviderPresets.DEFAULT_REFINE)) { key }
+        val out = DictationPipeline(client).run(route, upload, vocabulary, refine = true)
 
         val report = buildJsonObject {
             put("audio_seconds", audio.size / 2.0 / sampleRate)
-            put("upload_bytes", wav.size)
+            put("upload_bytes", upload.bytes.size)
+            put("upload_type", upload.mime)
+            put("pcm_bytes", audio.size)
             put("models_visible", models)
             put("test_key_ms", testKeyMs)
             put("stt_ms", out.sttMs)

@@ -27,8 +27,21 @@ object RefinementPrompt {
     private val WHITESPACE = Regex(WHITESPACE_PATTERN)
     private val NON_WORD = Regex(NON_WORD_PATTERN)
 
-    /** System prompt: base + smart cleanup + spelling + self-correction + technical (+ vocabulary) + keep-language. */
-    fun buildSystemPrompt(vocabulary: List<String>): String {
+    /**
+     * refinement.py `_TRANSCRIPT_TAG` / `_TAGGED_OUTPUT_INSTRUCTION`: Claude models get the
+     * transcript back inside tags and only the tagged text is kept (they sometimes add a
+     * note about their edits after the text). Hand-copied: gen_prompt.py skips f-strings.
+     */
+    const val TRANSCRIPT_TAG = "transcript"
+    const val TAGGED_OUTPUT_INSTRUCTION =
+        "Return the cleaned transcript inside <$TRANSCRIPT_TAG></$TRANSCRIPT_TAG> tags and nothing outside them."
+    private val TAGGED = Regex("<$TRANSCRIPT_TAG>(.*?)</$TRANSCRIPT_TAG>", RegexOption.DOT_MATCHES_ALL)
+
+    /**
+     * System prompt: base + smart cleanup + spelling + self-correction + technical (+ vocabulary),
+     * then the keep-language rule, or for Claude ([tagged]) the tagged-output rule.
+     */
+    fun buildSystemPrompt(vocabulary: List<String>, tagged: Boolean = false): String {
         val sections = mutableListOf(
             RefinementPromptText.BASE_INSTRUCTIONS,
             RefinementPromptText.SMART_CLEANUP,
@@ -40,8 +53,16 @@ object RefinementPrompt {
         if (terms.isNotEmpty()) {
             sections += RefinementPromptText.VOCABULARY_TEMPLATE.replace("{terms}", terms.joinToString(", "))
         }
-        return sections.joinToString("\n\n") + "\n\n" + RefinementPromptText.KEEP_LANGUAGE
+        val last = if (tagged) TAGGED_OUTPUT_INSTRUCTION else RefinementPromptText.KEEP_LANGUAGE
+        return sections.joinToString("\n\n") + "\n\n" + last
     }
+
+    /** The few-shot pairs with each answer inside the transcript tags (Claude). */
+    fun taggedExamples(): List<Pair<String, String>> =
+        RefinementPromptText.EXAMPLES.map { (user, assistant) -> user to "<$TRANSCRIPT_TAG>$assistant</$TRANSCRIPT_TAG>" }
+
+    /** The text inside the transcript tags, or [text] when there are none (refinement.py `extract_tagged_transcript`). */
+    fun extractTagged(text: String): String = TAGGED.find(text)?.groupValues?.get(1)?.trim() ?: text
 
     /** Chat messages: system, the few-shot pairs as real turns, then the transcript. */
     fun buildMessages(transcript: String, vocabulary: List<String>): JsonArray = buildJsonArray {

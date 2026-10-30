@@ -8,14 +8,21 @@ import android.graphics.Color
  * 60dp design size and scale with the bubble-size setting.
  */
 object BubbleStyle {
-    // Colours (desktop Voloz tokens)
-    val INK = Color.parseColor("#0D0D0D")
-    val LIME = Color.parseColor("#C7FF38")
-    val REC_RED = Color.parseColor("#FF4D4F")
+    // Colours: the desktop Lite pill (CapturePill, notch): black like the phone's
+    // hardware, white marks, red only for the recording dot.
+    val NOTCH = Color.parseColor("#0B0B0C")
+    val ON_NOTCH = Color.WHITE
+    /** Idle bars: the desktop's white/30, a little stronger since the idle bubble is also translucent. */
+    val IDLE_BAR = Color.argb(140, 255, 255, 255)
+    val SIGNAL = Color.parseColor("#FF5A4E") // --signal (dark), on black
+    val DONE = Color.parseColor("#34D399") // desktop pill check (emerald-400)
     val AMBER = Color.parseColor("#FFB224")
-    val RING_TRACK = Color.parseColor("#3A3A38")
-    val PAPER = Color.parseColor("#F2F2F0")
-    val SHADOW = Color.argb(70, 13, 13, 13)
+    val RING_TRACK = Color.argb(38, 255, 255, 255)
+    val TOOLTIP_HINT = Color.argb(178, 255, 255, 255)
+    val SHADOW = Color.argb(70, 0, 0, 0)
+    /** Faint rim so the black bubble keeps its outline over dark apps. */
+    val RIM = Color.argb(36, 255, 255, 255)
+    const val RIM_DP = 1f
 
     /** Opacity of the idle bubble; touch and every active state are fully opaque. */
     const val IDLE_ALPHA = 0.6f
@@ -56,7 +63,7 @@ object BubbleStyle {
     const val PASTE_STROKE = 2f
 
     // Hands-free tooltip
-    const val TOOLTIP_CORNER_DP = 10f
+    const val TOOLTIP_CORNER_DP = 999f // a capsule, like the desktop pill
     const val TOOLTIP_PAD_H_DP = 12f
     const val TOOLTIP_PAD_V_DP = 8f
     const val TOOLTIP_GAP_DP = 10f

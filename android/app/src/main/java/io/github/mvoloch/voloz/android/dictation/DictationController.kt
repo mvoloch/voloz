@@ -14,12 +14,12 @@ import io.github.mvoloch.voloz.android.R
 import io.github.mvoloch.voloz.android.audio.AudioMath
 import io.github.mvoloch.voloz.android.audio.Recorder
 import io.github.mvoloch.voloz.android.audio.Take
-import io.github.mvoloch.voloz.android.audio.WavWriter
 import io.github.mvoloch.voloz.android.data.HistoryEntry
 import io.github.mvoloch.voloz.android.data.HistoryRepository
 import io.github.mvoloch.voloz.android.data.SettingsRepository
+import io.github.mvoloch.voloz.android.data.VolozSettings
 import io.github.mvoloch.voloz.android.net.DictationPipeline
-import io.github.mvoloch.voloz.android.net.GroqHttpException
+import io.github.mvoloch.voloz.android.net.ProviderException
 import io.github.mvoloch.voloz.android.service.RecordingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -138,7 +138,7 @@ class DictationController(
 
     private fun start(handsFree: Boolean) {
         val s = settings.current
-        if (s.groqKey.isBlank()) return flashError(context.getString(R.string.msg_need_key))
+        if (!s.hasMainKey) return flashError(context.getString(R.string.msg_need_key))
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) return flashError(context.getString(R.string.msg_need_mic))
@@ -152,7 +152,11 @@ class DictationController(
         }
         _state.value = BubbleState.Recording(0f, handsFree)
         main.postDelayed(silenceProbe, SILENCE_PROBE_MS)
+        // The TLS handshake happens while the user speaks, not after they stop.
+        scope.launch(Dispatchers.IO) { pipeline.warm(route(s)) }
     }
+
+    private fun route(s: VolozSettings) = DictationPipeline.Route(s.sttProviders, s.refineProviders) { s.keyFor(it) }
 
     private fun beginCapture(): Boolean {
         val rec = Recorder()
@@ -210,7 +214,7 @@ class DictationController(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    pipeline.run(s.groqKey, WavWriter.pcm16ToWav(take.pcm, take.sampleRate), s.vocabulary, s.refine)
+                    pipeline.run(route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine)
                 }
             }
             result.fold(
@@ -238,9 +242,13 @@ class DictationController(
                 timestamp = System.currentTimeMillis(),
                 refined = out.refined,
                 targetPackage = if (ok) inserted.packageName else null,
+                durationMs = take.durationMs,
+                refineModel = out.refineModel,
+                refineBackup = out.refineBackup,
             ),
         )
         if (out.refineError != null) Log.w(TAG, "refinement failed, inserted raw: ${out.refineError}")
+        if (out.sttBackup || out.refineBackup) Log.i(TAG, "served by a backup: stt=${out.sttModel} refine=${out.refineModel}")
         if (ok) {
             if (out.refineError != null) onUserMessage?.invoke(context.getString(R.string.msg_refine_failed))
             _state.value = BubbleState.Done
@@ -279,11 +287,13 @@ class DictationController(
     }
 
     private fun describe(e: Throwable): String = when (e) {
-        is GroqHttpException -> when (e.status) {
-            401, 403 -> context.getString(R.string.msg_key_invalid)
-            429 -> context.getString(R.string.msg_rate_limit)
-            413 -> context.getString(R.string.msg_too_large)
-            else -> context.getString(R.string.msg_groq_http, e.status)
+        is ProviderException -> when {
+            e.missingKey -> context.getString(R.string.msg_need_key)
+            e.status == 401 || e.status == 403 -> context.getString(R.string.msg_key_invalid)
+            e.status == 429 -> context.getString(R.string.msg_rate_limit)
+            e.status == 413 -> context.getString(R.string.msg_too_large)
+            e.status != null -> context.getString(R.string.msg_provider_http, e.provider?.displayName ?: "", e.status)
+            else -> context.getString(R.string.msg_network)
         }
         is IOException -> context.getString(R.string.msg_network)
         else -> context.getString(R.string.msg_unexpected, e.javaClass.simpleName)

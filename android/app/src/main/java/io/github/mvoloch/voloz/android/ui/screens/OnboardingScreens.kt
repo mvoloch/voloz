@@ -1,6 +1,7 @@
 package io.github.mvoloch.voloz.android.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,9 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -79,7 +77,7 @@ sealed interface KeyTestState {
 @Composable
 private fun OnboardingFrame(top: Int = 28, content: @Composable ColumnScope.() -> Unit) {
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(VolozColors.Paper).safeDrawingPadding().imePadding(),
+        Modifier.fillMaxSize().background(VolozColors.Mist).safeDrawingPadding().imePadding(),
     ) {
         val viewport = maxHeight
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
@@ -108,11 +106,11 @@ fun WelcomeScreen(onStart: () -> Unit) {
                     bars = listOf(18f, 32f, 44f, 28f, 14f).map { it / 96f },
                     elevated = true,
                 )
-                Text(stringResource(R.string.app_name), style = VolozType.Wordmark.copy(fontSize = 30.sp))
+                Text("voloz", style = VolozType.Wordmark.copy(fontSize = 34.sp), color = VolozColors.Ink)
             }
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text(stringResource(R.string.welcome_headline), style = VolozType.HeadlineXL, color = VolozColors.Ink)
-                Text(stringResource(R.string.welcome_body), style = VolozType.BodyLarge, color = VolozColors.TextSecondary)
+                Text(stringResource(R.string.welcome_body), style = VolozType.BodyLarge, color = VolozColors.Graphite)
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -168,7 +166,7 @@ fun KeyScreen(
                     onClick = onTest,
                     enabled = keyInput.isNotBlank() && testState != KeyTestState.Testing,
                     shape = VolozShapes.Field,
-                    border = androidx.compose.foundation.BorderStroke(1.5.dp, VolozColors.Ink),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, VolozColors.Ink),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = VolozColors.Ink),
                     modifier = Modifier.height(VolozDimens.FieldHeight),
                 ) {
@@ -180,12 +178,12 @@ fun KeyScreen(
             }
             when (testState) {
                 KeyTestState.Ok -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(VolozIcons.Check, null, tint = VolozColors.Olive, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.key_ok), fontSize = 14.sp, color = VolozColors.OliveDark)
+                    Icon(VolozIcons.Check, null, tint = VolozColors.Ok, modifier = Modifier.size(18.dp))
+                    Text(stringResource(R.string.key_ok), style = VolozType.BodySmall, color = VolozColors.Ok)
                 }
                 is KeyTestState.Failed -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatusDot(VolozColors.Amber)
-                    Text(testState.message, fontSize = 14.sp, color = VolozColors.AmberText)
+                    StatusDot(VolozColors.Signal)
+                    Text(testState.message, style = VolozType.BodySmall, color = VolozColors.Signal)
                 }
                 else -> Unit
             }
@@ -215,22 +213,20 @@ fun MicScreen(micGranted: Boolean, onAllow: () -> Unit, onContinue: () -> Unit, 
         Box(Modifier.fillMaxWidth().weight(1f).padding(vertical = 28.dp), contentAlignment = Alignment.Center) {
         Column(
             Modifier.fillMaxWidth()
-                .drawBehind { // 1dp hairline under the card (mockup: box-shadow 0 1px 0 #E0E0DB)
-                    drawRoundRect(VolozColors.CardHairline, topLeft = Offset(0f, 1.dp.toPx()), size = size, cornerRadius = CornerRadius(24.dp.toPx()))
-                }
-                .clip(VolozShapes.CardLarge).background(VolozColors.Card)
+                .clip(VolozShapes.CardLarge).background(VolozColors.Sheet)
+                .border(1.dp, VolozColors.Hair, VolozShapes.CardLarge)
                 .padding(horizontal = 22.dp, vertical = 28.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 BubbleGlyph(size = 52.dp, bars = listOf(10f, 18f, 24f, 16f, 9f).map { it / 52f }, recDot = true)
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(stringResource(R.string.notif_recording_title), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                    Text(stringResource(R.string.notif_recording_text), fontSize = 14.sp, color = VolozColors.TextTertiary)
+                    Text(stringResource(R.string.notif_recording_title), style = VolozType.RowTitle, color = VolozColors.Ink)
+                    Text(stringResource(R.string.notif_recording_text), fontSize = 14.sp, color = VolozColors.Graphite)
                 }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(VolozColors.Divider))
-            Text(stringResource(R.string.mic_preview_note), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.TextSecondary)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(VolozColors.Hair))
+            Text(stringResource(R.string.mic_preview_note), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.Graphite)
         }
         }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -267,7 +263,8 @@ fun AccessibilityScreen(
             Text(
                 stringResource(R.string.a11y_open_app_info),
                 fontSize = 15.sp,
-                color = VolozColors.Olive,
+                color = VolozColors.Ink,
+                fontWeight = FontWeight.SemiBold,
                 textDecoration = TextDecoration.Underline,
                 modifier = Modifier.padding(start = 38.dp).heightIn(min = VolozDimens.MinTouch)
                     .clickable(onClick = onOpenAppInfo).wrapContentHeight(Alignment.CenterVertically),
@@ -275,8 +272,8 @@ fun AccessibilityScreen(
         }
         Spacer(Modifier.height(22.dp))
         Row(Modifier.padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(VolozIcons.Lock, null, tint = VolozColors.Olive, modifier = Modifier.size(20.dp).padding(top = 1.dp))
-            Text(stringResource(R.string.a11y_privacy), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.TextSecondary)
+            Icon(VolozIcons.Lock, null, tint = VolozColors.Graphite, modifier = Modifier.size(20.dp).padding(top = 1.dp))
+            Text(stringResource(R.string.a11y_privacy), fontSize = 14.sp, lineHeight = 20.sp, color = VolozColors.Graphite)
         }
         Spacer(Modifier.height(22.dp))
         Spacer(Modifier.weight(1f))
@@ -285,11 +282,11 @@ fun AccessibilityScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusDot(if (enabled) VolozColors.Olive else VolozColors.Amber)
+            StatusDot(if (enabled) VolozColors.Ok else VolozColors.Signal)
             Text(
                 stringResource(if (enabled) R.string.a11y_status_on else R.string.a11y_status_off),
                 fontSize = 14.sp,
-                color = if (enabled) VolozColors.OliveDark else VolozColors.AmberText,
+                color = if (enabled) VolozColors.Ok else VolozColors.Signal,
             )
         }
         Spacer(Modifier.height(22.dp))

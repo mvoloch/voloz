@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Lite tokens (ui/theme/Theme.kt DarkPalette) for the window behind Compose. -->
+    <color name="mist">#0E0F11</color>
+</resources>

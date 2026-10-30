@@ -8,9 +8,16 @@
     <string name="common_continue">Continuar</string>
     <string name="common_add">Adicionar</string>
     <string name="common_cancel">Cancelar</string>
+    <string name="common_done">Pronto</string>
     <string name="cd_back">Voltar</string>
-    <string name="cd_settings">Ajustes</string>
     <string name="cd_copy">Copiar</string>
+    <string name="nav_home">Início</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="status_ok">Ok</string>
+    <string name="status_missing">Falta</string>
+    <string name="status_recommended">Recomendado</string>
+    <string name="status_on">Ativada</string>
+    <string name="status_off">Desativada</string>
 
     <!-- Recording notification -->
     <string name="notif_channel_name">Ditado</string>
@@ -29,23 +36,24 @@
     <string name="tooltip_tap_again">toque de novo para terminar</string>
 
     <!-- Dictation messages (toasts) -->
-    <string name="msg_need_key">Coloque a sua chave da Groq no app Voloz.</string>
+    <string name="msg_need_key">Falta a chave do provedor de transcrição. Abra o Voloz › Ajustes › Transcrição.</string>
     <string name="msg_need_mic">Permita o microfone no app Voloz.</string>
     <string name="msg_too_short">Curto demais. Fale um pouco mais.</string>
     <string name="msg_mic_unavailable">Não deu para abrir o microfone.</string>
     <string name="msg_mic_silent">O microfone só entregou silêncio. O Android pode ter bloqueado a gravação.</string>
     <string name="msg_nothing_heard">Nada foi ouvido.</string>
-    <!-- History line for a failed take: seconds, loudest volume %, what Groq returned. -->
-    <string name="diag_nothing_heard">Nada foi ouvido · %1$s s de áudio · volume máximo %2$d%% · a Groq devolveu: %3$s</string>
+    <!-- History line for a failed take: seconds, loudest volume %, what the transcription returned. -->
+    <string name="diag_nothing_heard">Nada foi ouvido · %1$s s de áudio · volume máximo %2$d%% · a transcrição devolveu: %3$s</string>
     <string name="diag_empty">(nada)</string>
     <string name="msg_insert_failed">Não deu para inserir aqui. O texto ficou copiado: toque na bolha para colar.</string>
     <string name="msg_paste_failed">Não deu para colar. O texto continua copiado.</string>
-    <string name="msg_refine_failed">A correção falhou; entrou o texto sem correção.</string>
-    <string name="msg_key_invalid">Chave da Groq inválida.</string>
-    <string name="msg_rate_limit">Limite da Groq atingido. Tente de novo em instantes.</string>
-    <string name="msg_too_large">Gravação grande demais para a Groq.</string>
-    <string name="msg_network">Sem conexão com a Groq.</string>
-    <string name="msg_groq_http">Erro da Groq (%1$d).</string>
+    <string name="msg_refine_failed">O refinamento falhou; entrou o texto sem correção.</string>
+    <string name="msg_key_invalid">Chave inválida. Confira em Ajustes › Transcrição.</string>
+    <string name="msg_rate_limit">Limite do provedor atingido. Tente de novo em instantes, ou adicione um provedor reserva.</string>
+    <string name="msg_too_large">Gravação grande demais para o provedor.</string>
+    <string name="msg_network">Sem conexão com o provedor.</string>
+    <string name="msg_provider_http">Erro do provedor %1$s (%2$d).</string>
+    <string name="msg_key_other_provider">Isto parece uma chave da %1$s, mas o provedor é %2$s.</string>
     <string name="msg_unexpected">Erro inesperado (%1$s).</string>
     <string name="msg_copied">Copiado</string>
 
@@ -68,6 +76,14 @@
     <string name="key_ok">Chave funcionando</string>
     <string name="key_save">Salvar</string>
     <string name="key_footnote">A chave fica guardada criptografada, só neste celular.</string>
+    <string name="key_test_save">Testar e salvar</string>
+    <string name="key_dialog_title">Chave da %1$s</string>
+    <string name="key_dialog_saved">Guardadas</string>
+    <string name="key_dialog_paste">Cole a chave</string>
+    <string name="key_dialog_paste_other">Ou cole outra</string>
+    <string name="key_dialog_forget">Esquecer</string>
+    <string name="key_forget_title">Esquecer esta chave?</string>
+    <string name="key_forget_body">A chave %1$s sai deste celular. Para usar %2$s com ela de novo, será preciso colá-la outra vez.</string>
 
     <!-- 3. Microfone -->
     <string name="mic_title">Deixe o Voloz ouvir você</string>
@@ -90,24 +106,54 @@
     <string name="a11y_done">Testar o ditado</string>
 
     <!-- 5. Início -->
-    <string name="home_ready_title">Pronto para ditar</string>
-    <string name="home_ready_sub">A bolha aparece quando você toca num campo de texto.</string>
-    <string name="home_ready_sub_always">A bolha fica sempre na borda da tela.</string>
-    <string name="home_missing_title">Falta pouco</string>
-    <string name="home_missing_sub">Toque no que está em amarelo para resolver.</string>
-    <string name="chip_key">Chave Groq</string>
+    <string name="home_hero_before">Toque na</string>
+    <string name="home_hero_after">e fale.</string>
+    <string name="home_hero_sub">A bolha aparece quando você toca num campo de texto. Segure enquanto fala e solte: o texto entra onde estiver o cursor. Para falar sem segurar, um toque.</string>
+    <string name="home_hero_sub_always">A bolha fica sempre na borda da tela. Segure enquanto fala e solte: o texto entra onde estiver o cursor. Para falar sem segurar, um toque.</string>
+    <string name="home_setup_missing">Falta configurar</string>
+    <string name="home_setup_recommended">Recomendado</string>
+    <string name="chip_key">Chave do provedor</string>
     <string name="chip_mic">Microfone</string>
     <string name="chip_a11y">Acessibilidade</string>
     <string name="chip_battery">Bateria sem restrição</string>
-    <string name="home_try_label">Teste aqui</string>
-    <string name="home_try_placeholder">Toque aqui e use a bolha</string>
-    <string name="home_recent">Últimos ditados</string>
-    <string name="home_empty">Os seus ditados aparecem aqui.</string>
+    <string name="home_fix_key">A chave de quem transcreve a sua voz.</string>
+    <string name="home_fix_mic">Só liga quando você toca na bolha.</string>
+    <string name="home_fix_a11y">Mostra a bolha e põe o texto no campo.</string>
+    <string name="home_fix_battery">Para o Android não fechar o Voloz.</string>
+    <string name="home_try_placeholder">Teste aqui: toque e use a bolha</string>
+    <string name="home_search">Buscar no que você ditou</string>
+    <plurals name="home_words">
+        <item quantity="one">%1$s palavra</item>
+        <item quantity="other">%1$s palavras</item>
+    </plurals>
+    <string name="home_totals_in">em</string>
+    <string name="home_minutes">%1$s min</string>
+    <string name="home_totals_speech">de fala</string>
+    <plurals name="home_count">
+        <item quantity="one">%1$d ditado</item>
+        <item quantity="other">%1$d ditados</item>
+    </plurals>
+    <string name="home_today">Hoje</string>
+    <string name="home_yesterday">Ontem</string>
+    <string name="home_empty">Nenhum ditado ainda. Os seus ditados ficam aqui, só neste celular.</string>
+    <string name="home_no_matches">Nenhum ditado com “%1$s”.</string>
     <string name="home_app_clipboard">Copiado</string>
+    <string name="home_refined_by">refinado por %1$s</string>
+    <string name="home_refined_by_backup">refinado por %1$s (reserva)</string>
 
-    <!-- 6. Ajustes -->
-    <string name="settings_title">Ajustes</string>
-    <string name="settings_group_bubble">Bolha</string>
+    <!-- 6. Ajustes (the desktop Lite sections) -->
+    <string name="section_bubble">Bolha</string>
+    <string name="section_bubble_lede">Onde a bolha aparece e como você grava.</string>
+    <string name="section_transcription">Transcrição</string>
+    <string name="section_transcription_lede">Quem transforma sua voz em texto. Se o primeiro falhar, o Voloz passa para o próximo da lista sozinho.</string>
+    <string name="section_refinement">Refinamento</string>
+    <string name="section_refinement_lede">Quem limpa o texto antes de inserir: pontuação, hesitações, mudanças de ideia no meio da frase.</string>
+    <string name="section_vocabulary">Vocabulário</string>
+    <string name="section_vocabulary_lede">Nomes e termos que a transcrição erra.</string>
+    <string name="section_general">Geral</string>
+    <string name="section_general_lede">Como o Voloz se comporta no seu celular.</string>
+    <string name="section_about">Sobre</string>
+    <string name="section_about_lede">Versão e créditos.</string>
     <string name="settings_only_fields">Só em campos de texto</string>
     <string name="settings_only_fields_sub">Desligado: a bolha fica sempre na tela</string>
     <string name="settings_size">Tamanho</string>
@@ -115,18 +161,50 @@
     <string name="size_medium">Média</string>
     <string name="size_large">Grande</string>
     <string name="settings_how">Como gravar</string>
-    <string name="settings_how_body">Toque uma vez para falar à vontade e toque de novo para terminar. Ou segure enquanto fala e solte para terminar.</string>
-    <string name="settings_group_text">Texto</string>
-    <string name="settings_refine">Corrigir o texto</string>
-    <string name="settings_refine_sub">Pontuação, ortografia e vícios de fala</string>
-    <string name="settings_vocab">Vocabulário</string>
-    <string name="settings_vocab_sub">Nomes e termos que o Voloz deve escrever assim</string>
+    <string name="gesture_tap">Um toque</string>
+    <string name="gesture_tap_body">Fale à vontade e toque de novo para terminar.</string>
+    <string name="gesture_hold">Segure</string>
+    <string name="gesture_hold_body">Fale enquanto segura; ao soltar, o texto entra.</string>
+    <string name="settings_refine">Refinar automaticamente</string>
+    <string name="settings_refine_sub">Roda depois de cada ditado. Desligado, o texto entra como foi transcrito.</string>
+    <string name="providers_group">Provedores, na ordem</string>
+    <string name="providers_hint">O primeiro é o principal. Se ele falhar ou atingir o limite, o próximo da lista recebe o mesmo pedido. Quem atingiu o limite fica de fora até passar a espera que pediu.</string>
+    <string name="providers_add">Adicionar provedor</string>
+    <string name="providers_other">Outro serviço…</string>
+    <string name="providers_endpoint">Endereço (URL)</string>
+    <string name="providers_model">Modelo</string>
+    <string name="providers_up">Subir</string>
+    <string name="providers_more">Mais opções</string>
+    <string name="providers_key_menu">Chave…</string>
+    <string name="providers_remove">Remover</string>
+    <string name="providers_key_ok">Chave %1$s</string>
+    <string name="providers_key_missing">Falta a chave</string>
+    <string name="settings_vocab_group">Termos</string>
+    <string name="settings_vocab_sub">O Voloz passa estes termos para a transcrição e para o refinamento, para escrever assim. Toque num termo para tirar.</string>
     <string name="settings_vocab_add">+ Adicionar</string>
     <string name="settings_vocab_dialog_title">Adicionar ao vocabulário</string>
     <string name="settings_vocab_dialog_hint">Ex.: Voloz</string>
     <string name="settings_vocab_remove_cd">Remover %1$s</string>
-    <string name="settings_group_account">Conta</string>
-    <string name="settings_key">Chave da Groq</string>
-    <string name="settings_key_none">Nenhuma chave</string>
-    <string name="settings_key_change">Trocar</string>
+    <string name="settings_theme">Tema</string>
+    <string name="theme_system">Seguir o sistema</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Escuro</string>
+    <string name="settings_keys_group">Suas chaves</string>
+    <string name="settings_keys_none">Nenhuma chave guardada</string>
+    <string name="settings_keys_none_sub">Cole uma em Transcrição.</string>
+    <string name="settings_key_in_use">Em uso</string>
+    <string name="settings_key_kept">Guardada</string>
+    <string name="settings_keys_hint">Toda chave que você cola fica guardada, criptografada, só neste celular. Para escolher ou esquecer uma, toque na chave do provedor em Transcrição ou Refinamento.</string>
+    <string name="settings_dictations_group">Seus ditados</string>
+    <string name="settings_history">Histórico</string>
+    <string name="settings_history_sub">Os últimos 30, só neste celular.</string>
+    <string name="settings_history_clear">Apagar</string>
+    <string name="settings_history_clear_title">Apagar o histórico?</string>
+    <string name="settings_history_clear_body">Os ditados somem da tela inicial. O texto já inserido nos apps fica onde está.</string>
+    <string name="about_tagline">Fale em qualquer lugar e receba o texto pronto em qualquer app.</string>
+    <string name="about_fork_by">Voloz por</string>
+    <string name="about_based_on">Baseado no</string>
+    <string name="about_by">de</string>
+    <string name="about_license">Licença MIT</string>
+    <string name="about_license_sub">Fontes Bricolage Grotesque, Onest e JetBrains Mono sob a SIL Open Font License.</string>
 </resources>
