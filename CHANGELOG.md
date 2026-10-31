@@ -5,7 +5,7 @@
 
 # Changelog
 
-## [0.8.17] - 2026-10-30
+## [0.8.18] - 2026-10-30
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
 

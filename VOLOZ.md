@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: the release workflow drops the bundled libwayland from the AppImage; released in Lite 0.8.17). Update this file whenever state or decisions change._
+_Last updated: 2026-10-30 (`light`: the release workflow drops the bundled libwayland from the AppImage; released in Lite 0.8.18). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1042,7 +1042,8 @@ Right Shift (releasing Super opens the KDE/GNOME launcher, which would take
 the focus before the paste); "adapt to the app" has no app name on Wayland;
 KDE asks once for microphone access ("Allow Apps to Use the Camera?").
 
-AppImage (Lite 0.8.17): the 24.04 build alone did not fix the abort; the
+AppImage (Lite 0.8.18; the 0.8.17 run failed because appimagetool needs
+`desktop-file-validate`, now installed on the runner): the 24.04 build alone did not fix the abort; the
 cause was the `libwayland-*.so*` that linuxdeploy bundles. With them
 removed (and repacked with appimagetool 1.9.0 on the AppImage's own
 runtime) it starts on GB4 with no EGL abort, mounted through fuse3 alone
@@ -1052,6 +1053,16 @@ does this after the build.
 Checking the window while GB4's screen is locked: KWin screenshots come out
 black (display off), which once looked like a blank window. `xwd -id` on the
 app's X11 window reads it from XWayland and works while locked.
+
+Icon: up to 0.8.15 the app ran Wayland-native with app id `voloz`, which
+does not match the installed `Voloz.desktop`, so KDE showed the generic
+Wayland icon. From 0.8.16 (X11) the window class is `Voloz` and the window
+carries its own icon; KWin then names `Voloz` as its desktop file. GB4's
+Latte Dock kept showing an empty slot until it was restarted (its cache
+from the 0.8.15 window). The AppImage has no installer, so the guide for
+the owner's son extracts `Voloz.png` and writes `Voloz.desktop` with
+`Icon=voloz`. Still open: with no XWayland at all the app id stays
+`voloz`.
 
 Not tested on Linux yet: a full dictation with a real key and voice, GNOME,
 CachyOS.
