@@ -12,6 +12,17 @@ Groq pipeline was run end to end from a JVM. It has run on an API 34
 emulator (screens compared with the mockups, bubble states, recording path),
 but **nothing has been run on a phone yet**. See "Not verified" below.
 
+## What it does (0.3.0)
+
+Everything the desktop Voloz Lite does that makes sense on a phone:
+dictation by tap (hands-free) or hold, voice commands (double tap: rewrite
+the selection or draft text), providers with backups and saved keys,
+transcription language, refinement with its toggles and per-app style,
+vocabulary, replacement rules, text shortcuts, history with details
+(correct, learn, refine again, delete), import of audio files (share menu),
+dictation log, light/dark theme, Portuguese/English, update notice.
+VOLOZ.md has the details and what was left out.
+
 ## Build
 
 ```sh

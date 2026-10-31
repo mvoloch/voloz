@@ -98,6 +98,9 @@ class SettingsCallbacks(
     val onRefineFlagsChange: (io.github.mvoloch.voloz.android.refine.RefineFlags) -> Unit,
     val onLanguageChange: (String) -> Unit,
     val onAdaptToAppChange: (Boolean) -> Unit,
+    /** The app's language ("" = follow the system, "pt-BR", "en"); null below Android 13 (no per-app language). */
+    val appLanguage: String?,
+    val onAppLanguageChange: (String) -> Unit,
     val readLog: () -> String,
     val clearLog: () -> Unit,
     val copy: (String) -> Unit,
@@ -349,6 +352,16 @@ private fun GeneralSection(settings: VolozSettings, readiness: Readiness, cb: Se
                 onSelect = cb.onThemeChange,
             )
         }
+        if (cb.appLanguage != null) {
+            GroupDivider()
+            SettingRow(stringResource(R.string.settings_app_language)) {
+                Select(
+                    options = listOf("" to R.string.app_lang_system, "pt-BR" to R.string.app_lang_pt, "en" to R.string.app_lang_en),
+                    selected = cb.appLanguage.takeIf { it in setOf("", "pt-BR", "en") } ?: "",
+                    onSelect = cb.onAppLanguageChange,
+                )
+            }
+        }
         GroupDivider()
         SettingRow(stringResource(R.string.chip_a11y), stringResource(R.string.home_fix_a11y), onClick = cb.onOpenAccessibility) {
             StatusPill(stringResource(if (readiness.accessibilityOn) R.string.status_on else R.string.status_off), if (readiness.accessibilityOn) PillTone.OK else PillTone.WARN)
@@ -493,6 +506,10 @@ private fun AboutSection(versionName: String) {
         )
     }
     SettingsGroup {
+        SettingRow(stringResource(R.string.about_changelog), stringResource(R.string.about_changelog_sub), onClick = { uri.openUri("https://github.com/mvoloch/voloz/releases") }) {
+            Icon(VolozIcons.Chevron, null, tint = VolozColors.Graphite, modifier = Modifier.size(16.dp))
+        }
+        GroupDivider()
         SettingRow("GitHub", "github.com/mvoloch/voloz", onClick = { uri.openUri("https://github.com/mvoloch/voloz") }, subtitleStyle = VolozType.Mono) {
             Icon(VolozIcons.Chevron, null, tint = VolozColors.Graphite, modifier = Modifier.size(16.dp))
         }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Default locale is pt-BR for now (design copy). Strings with markup use CDATA and are rendered with AnnotatedString.fromHtml. -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pt-BR">
     <string name="app_name" translatable="false">Voloz</string>
     <string name="a11y_description">Mostra a bolha de ditado quando um campo de texto está ativo e coloca o texto ditado onde está o cursor. O Voloz só olha qual campo está ativo. Não lê nem guarda o que aparece na tela.</string>
 
@@ -272,6 +272,10 @@
     <string name="theme_system">Seguir o sistema</string>
     <string name="theme_light">Claro</string>
     <string name="theme_dark">Escuro</string>
+    <string name="settings_app_language">Idioma do app</string>
+    <string name="app_lang_system">Seguir o sistema</string>
+    <string name="app_lang_pt">Português (Brasil)</string>
+    <string name="app_lang_en">English</string>
     <string name="settings_keys_group">Suas chaves</string>
     <string name="settings_keys_none">Nenhuma chave guardada</string>
     <string name="settings_keys_none_sub">Cole uma em Transcrição.</string>
@@ -293,6 +297,8 @@
     <string name="about_fork_by">Voloz por</string>
     <string name="about_based_on">Baseado no</string>
     <string name="about_by">de</string>
+    <string name="about_changelog">Novidades</string>
+    <string name="about_changelog_sub">O que mudou em cada versão.</string>
     <string name="about_license">Licença MIT</string>
     <string name="about_license_sub">Fontes Bricolage Grotesque, Onest e JetBrains Mono sob a SIL Open Font License.</string>
 </resources>

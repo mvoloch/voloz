@@ -1054,6 +1054,36 @@ over them and keeps the saved keys. On OneDrive (`Voloz\Voloz-android-0.2.2.apk`
 and as the public prerelease `android-v0.2.2` on mvoloch/voloz. A dedicated
 release key would need an uninstall first (the saved keys go with it).
 
+**Desktop features on Android (0.3.0, 2026-10-30).** The owner asked for
+every feature of the Windows Lite on the phone. Ported, each with unit tests
+(106 -> see the release commit) and checked on the emulator with the
+`emutest` build and the mock API:
+- *Replacement rules* ("Substituições") and *text shortcuts* ("Atalhos de
+  texto"): ports of vocabulary.py and snippets.py with the desktop's own
+  test cases; same order as the desktop's capture flow (rules after
+  transcription; a dictation that is only a trigger skips refinement;
+  triggers inside a dictation go through refinement as [[S1]] placeholders).
+- *Dictation details*: text and original, copy, correct by hand (and learn
+  the replacement rules the correction implies, via a port of difflib),
+  refine again, delete; search covers the original; 200 entries kept.
+- *Transcription language* (auto + the desktop's 8), *refinement toggles*
+  (cleanup, self-correction, technical terms; prompt checked for all 8
+  combinations against fixtures from the desktop's function), *adapt to the
+  app* (app_context.py with an Android package table; browsers not
+  classified, no tab title on Android).
+- *Dictation log* (Geral › Registro de ditados), *recording timer and
+  steps* in the bubble's tooltip, cancel by tap.
+- *Import audio* (share menu or "Importar áudio"; the file goes as it is),
+  *update notice* (newest android-v* release), providers *up and down*.
+- *Voice commands*: double tap on the bubble; applies the spoken instruction
+  to the selection, or drafts when nothing is selected (voice_commands.py).
+- *App language*: English strings (values-en) and Android 13+ per-app
+  language in Geral; *Novidades* links to the releases.
+Not ported, and why: start at login and the dictations folder (no meaning
+on a phone), audio retention (Android never stores audio), browser-tab
+styles (no tab title), the optional Claude key in the first-run setup (any
+provider's key is added in Ajustes).
+
 **Next release: vocabulary shared across devices.** The owner wants the
 phone to pick up the vocabulary he keeps on Windows, and the same list on
 every PC and the phone, which needs one identity across devices. Not

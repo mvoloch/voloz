@@ -357,6 +357,8 @@ fun VolozRoot(app: VolozApp) {
                 onRefineFlagsChange = { scope.launch { app.settings.setRefineFlags(it) } },
                 onLanguageChange = { scope.launch { app.settings.setLanguage(it) } },
                 onAdaptToAppChange = { scope.launch { app.settings.setAdaptToApp(it) } },
+                appLanguage = appLanguage(context),
+                onAppLanguageChange = { setAppLanguage(context, it) },
                 readLog = { app.log.read() },
                 clearLog = { app.log.clear() },
                 copy = { historyActions.copy(it) },
@@ -370,6 +372,17 @@ fun VolozRoot(app: VolozApp) {
             onTab = onTab,
         )
     }
+}
+
+/** Android 13+ per-app language: "" follows the system; null where the platform has none. */
+private fun appLanguage(context: Context): String? =
+    if (Build.VERSION.SDK_INT < 33) null
+    else context.getSystemService(android.app.LocaleManager::class.java)?.applicationLocales?.toLanguageTags().orEmpty()
+
+private fun setAppLanguage(context: Context, tag: String) {
+    if (Build.VERSION.SDK_INT < 33) return
+    context.getSystemService(android.app.LocaleManager::class.java)?.applicationLocales =
+        if (tag.isEmpty()) android.os.LocaleList.getEmptyLocaleList() else android.os.LocaleList.forLanguageTags(tag)
 }
 
 private fun versionName(context: Context): String =
