@@ -1,5 +1,6 @@
 package io.github.mvoloch.voloz.android.net
 
+import io.github.mvoloch.voloz.android.refine.PromptOptions
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -94,13 +95,15 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
     }
 
     /** POST /audio/transcriptions (json, temperature 0, language auto, vocabulary as prompt). */
-    fun transcribe(provider: Provider, apiKey: String, audio: UploadAudio, prompt: String?): String {
+    fun transcribe(provider: Provider, apiKey: String, audio: UploadAudio, prompt: String?, language: String? = null): String {
         val form = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("model", provider.model)
             .addFormDataPart("response_format", "json")
             .addFormDataPart("temperature", "0")
         if (!prompt.isNullOrBlank()) form.addFormDataPart("prompt", prompt)
+        // ISO-639-1 code when the user locked the language; left out for auto-detect.
+        if (!language.isNullOrBlank()) form.addFormDataPart("language", language)
         form.addFormDataPart("file", audio.fileName, audio.bytes.toRequestBody(audio.mime.toMediaType()))
         val request = Request.Builder()
             .url("${base(provider.endpoint)}/audio/transcriptions")
@@ -115,16 +118,19 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
 
     /** The desktop refinement prompt on [provider]: tagged output for Claude, the keep-language rule for the rest. */
     fun refine(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): String =
+        refine(provider, apiKey, transcript, PromptOptions(vocabulary, placeholders = placeholders))
+
+    fun refine(provider: Provider, apiKey: String, transcript: String, opts: PromptOptions): String =
         if (provider.vendor == Vendor.ANTHROPIC) {
-            refineAnthropic(provider, apiKey, transcript, vocabulary, placeholders)
+            refineAnthropic(provider, apiKey, transcript, opts)
         } else {
-            refineOpenAiCompatible(provider, apiKey, transcript, vocabulary, placeholders)
+            refineOpenAiCompatible(provider, apiKey, transcript, opts)
         }
 
-    private fun refineOpenAiCompatible(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String>): String {
+    private fun refineOpenAiCompatible(provider: Provider, apiKey: String, transcript: String, opts: PromptOptions): String {
         val id = "${base(provider.endpoint)}|${provider.model}"
         val reasoningOff = isOpenAiApi(provider.endpoint) && id !in reasoningRefused
-        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary, placeholders), reasoningOff)
+        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff)
         try {
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         } catch (e: ProviderException) {
@@ -132,7 +138,7 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             // reason (gpt-4.1) refuse the field outright: drop it for good, once.
             if (!(reasoningOff && e.status == 400 && e.detail?.contains("reasoning_effort") == true)) throw e
             reasoningRefused += id
-            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, vocabulary, placeholders), reasoningOff = false)
+            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff = false)
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         }
     }
@@ -171,20 +177,23 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
         return content?.trim()?.takeIf { it.isNotEmpty() } ?: throw IOException("Refinement reply was empty")
     }
 
-    private fun refineAnthropic(provider: Provider, apiKey: String, transcript: String, vocabulary: List<String>, placeholders: List<String>): String {
+    private fun refineAnthropic(provider: Provider, apiKey: String, transcript: String, opts: PromptOptions): String {
         val request = Request.Builder()
             .url("${base(provider.endpoint)}/messages")
             .auth(provider.endpoint, apiKey)
-            .post(anthropicPayload(provider, transcript, vocabulary, placeholders).toString().toRequestBody("application/json".toMediaType()))
+            .post(anthropicPayload(provider, transcript, opts).toString().toRequestBody("application/json".toMediaType()))
             .build()
         return execute(provider, request) { anthropicText(provider, it) }
     }
 
     /** Messages API body as the desktop's anthropic_backend sends it (no temperature: current Claude models reject it). */
-    internal fun anthropicPayload(provider: Provider, transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): JsonObject = buildJsonObject {
+    internal fun anthropicPayload(provider: Provider, transcript: String, vocabulary: List<String>): JsonObject =
+        anthropicPayload(provider, transcript, PromptOptions(vocabulary))
+
+    internal fun anthropicPayload(provider: Provider, transcript: String, opts: PromptOptions): JsonObject = buildJsonObject {
         put("model", provider.model)
         put("max_tokens", MAX_TOKENS + THINKING_HEADROOM_TOKENS)
-        put("system", RefinementPrompt.buildSystemPrompt(vocabulary, tagged = true, placeholders = placeholders))
+        put("system", RefinementPrompt.buildSystemPrompt(opts, tagged = true))
         put(
             "messages",
             buildJsonArray {

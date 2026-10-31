@@ -3,7 +3,8 @@
 Serves GET/HEAD /openai/v1/models, POST /openai/v1/audio/transcriptions and
 POST /openai/v1/chat/completions on 127.0.0.1:8765 (the emulator reaches it as
 10.0.2.2). The mode is read from the file given as the second argument on every
-request: "ok", "fail" (HTTP 503) or "hang" (no answer for 300 s); MODEFILE.text, when
+request: "ok", "fail" (HTTP 503), "hang" (no answer for 300 s) or "hangrefine"
+(transcription answers, refinement hangs); MODEFILE.text, when
 present, is the transcription returned (default below). Each request is
 logged on stdout: method, path, upload size and type, never the Authorization.
 
@@ -57,8 +58,11 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(size)
         kind = "flac" if b'filename="audio.flac"' in body else ("wav" if b'filename="audio.wav"' in body else "-")
         m = mode()
-        log(f"POST {self.path} bytes={size} upload={kind} mode={m}")
-        if m == "hang":
+        lang = "-"
+        if b'name="language"' in body:
+            lang = body.split(b'name="language"', 1)[1].split(b"\r\n")[2].decode(errors="replace")
+        log(f"POST {self.path} bytes={size} upload={kind} language={lang} mode={m}")
+        if m == "hang" or (m == "hangrefine" and self.path.endswith("/chat/completions")):
             time.sleep(300)
             return
         if m == "fail":

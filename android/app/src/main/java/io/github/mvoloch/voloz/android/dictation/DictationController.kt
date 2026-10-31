@@ -69,6 +69,7 @@ class DictationController(
     private val history: HistoryRepository,
     private val pipeline: DictationPipeline,
     private val scope: CoroutineScope,
+    private val log: io.github.mvoloch.voloz.android.data.DictationLog? = null,
 ) {
     companion object {
         private const val TAG = "VolozDictation"
@@ -88,6 +89,10 @@ class DictationController(
 
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Idle)
     val state: StateFlow<BubbleState> = _state
+
+    /** While processing: which step runs (a string resource), for the bubble's tooltip. */
+    private val _step = MutableStateFlow<Int?>(null)
+    val step: StateFlow<Int?> = _step
 
     var inserter: TextInserter? = null
     /** Shows a short message to the user (a Toast from the service). */
@@ -236,6 +241,7 @@ class DictationController(
 
     private fun process(take: Take) {
         cancelTimers()
+        _step.value = R.string.step_transcribing
         _state.value = BubbleState.Processing
         val s = settings.current
         val cancel = pipeline.newCancel()
@@ -246,7 +252,9 @@ class DictationController(
                 runCatching {
                     pipeline.run(
                         route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine, cancel,
-                        DictationPipeline.TextRules(s.replacements, s.snippets),
+                        DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags,
+                        language = s.language.takeIf { it != "auto" },
+                        onTranscribed = { if (s.refine) main.post { if (processing?.second === cancel) _step.value = R.string.step_refining } },
                     )
                 }
             }
@@ -262,6 +270,7 @@ class DictationController(
                 onFailure = {
                     // The stack trace is what makes an "Erro inesperado" diagnosable.
                     Log.w(TAG, "processing failed", it)
+                    log?.add("processing failed: ${it.javaClass.simpleName}: ${it.message.orEmpty().take(300)}")
                     failKeepingTake(describe(it), take)
                 },
             )
@@ -283,6 +292,7 @@ class DictationController(
         failedTake = take
         val shown = "$message ${context.getString(R.string.msg_retry_hint)}"
         Log.i(TAG, "error: $message (take kept for a retry)")
+        log?.add("error: $message (audio kept for a retry)")
         _state.value = BubbleState.Error(shown)
         onUserMessage?.invoke(shown)
         main.postDelayed(toRetryReady, ERROR_MS)
@@ -316,6 +326,16 @@ class DictationController(
         )
         if (out.refineError != null) Log.w(TAG, "refinement failed, inserted the unrefined text: ${out.refineError}")
         if (out.sttBackup || out.refineBackup) Log.i(TAG, "served by a backup: stt=${out.sttModel} refine=${out.refineModel}")
+        log?.add(
+            "stt=${out.sttModel}${if (out.sttBackup) " (backup)" else ""} ${out.sttMs} ms; " +
+                when {
+                    out.shortcut -> "text shortcut"
+                    out.refined -> "refine ok (${out.refineModel}${if (out.refineBackup) ", backup" else ""}) ${out.refineMs} ms"
+                    out.refineError != null -> "refine failed: ${out.refineError}"
+                    else -> "not refined"
+                } + "; ${take.durationMs / 1000.0} s of audio; " +
+                "insert ${inserted.outcome.name.lowercase()}${inserted.packageName?.let { " ($it)" } ?: ""}",
+        )
         if (ok) {
             if (out.refineError != null) onUserMessage?.invoke(context.getString(R.string.msg_refine_failed))
             _state.value = BubbleState.Done
@@ -340,6 +360,7 @@ class DictationController(
         val groq = out.raw.ifBlank { context.getString(R.string.diag_empty) }.take(120)
         val line = context.getString(R.string.diag_nothing_heard, seconds, peak, groq)
         Log.i(TAG, line)
+        log?.add(line)
         history.add(HistoryEntry(text = line, raw = out.raw, timestamp = System.currentTimeMillis(), refined = false, targetPackage = null))
     }
 
@@ -372,6 +393,7 @@ class DictationController(
     private fun flashError(message: String) {
         cancelTimers()
         Log.i(TAG, "error: $message")
+        log?.add("error: $message")
         _state.value = BubbleState.Error(message)
         onUserMessage?.invoke(message)
         main.postDelayed(toIdle, ERROR_MS)

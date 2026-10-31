@@ -1,6 +1,7 @@
 package io.github.mvoloch.voloz.android
 
 import android.app.Application
+import io.github.mvoloch.voloz.android.data.DictationLog
 import io.github.mvoloch.voloz.android.data.HistoryRepository
 import io.github.mvoloch.voloz.android.data.SettingsRepository
 import io.github.mvoloch.voloz.android.dictation.DictationController
@@ -22,12 +23,15 @@ class VolozApp : Application() {
         private set
     lateinit var pipeline: DictationPipeline
         private set
+    lateinit var log: DictationLog
+        private set
 
     override fun onCreate() {
         super.onCreate()
         settings = SettingsRepository(this, appScope)
         history = HistoryRepository(this, appScope)
         pipeline = DictationPipeline(api)
-        controller = DictationController(this, settings, history, pipeline, appScope)
+        log = DictationLog(this)
+        controller = DictationController(this, settings, history, pipeline, appScope, log)
     }
 }

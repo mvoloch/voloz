@@ -103,4 +103,26 @@ class RefinementPromptTest {
         assertEquals("fim", RefinementPrompt.collapseRepetitiveArtifacts("olá\u00A0olá\u2009olá olá olá olá fim"))
         assertEquals("Voloz Pascoal", RefinementPrompt.normalizeVocabulary(listOf("Voloz\u00A0 Pascoal")).single())
     }
+
+    @Test
+    fun everyToggleCombinationMatchesDesktop() {
+        val combos = Json.parseToJsonElement(fixture("prompt_flags.json")).jsonArray
+        assertEquals(8, combos.size)
+        val keep = "\n\n" + RefinementPromptText.KEEP_LANGUAGE
+        for (c in combos) {
+            val o = c.jsonObject
+            val f = o["flags"]!!.jsonArray.map { it.jsonPrimitive.content.toBoolean() }
+            val flags = io.github.mvoloch.voloz.android.refine.RefineFlags(f[0], f[1], f[2])
+            assertEquals(
+                "flags $f",
+                o["plain"]!!.jsonPrimitive.content + keep,
+                RefinementPrompt.buildSystemPrompt(io.github.mvoloch.voloz.android.refine.PromptOptions(flags = flags)),
+            )
+            assertEquals(
+                "flags $f + vocabulary",
+                o["vocab"]!!.jsonPrimitive.content + keep,
+                RefinementPrompt.buildSystemPrompt(io.github.mvoloch.voloz.android.refine.PromptOptions(listOf("Voloz", "Groq"), flags)),
+            )
+        }
+    }
 }

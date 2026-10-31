@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -407,8 +408,12 @@ fun SettingRow(
 
 /** A [SettingRow] with the desktop's switch; the whole row toggles. */
 @Composable
-fun ToggleRow(title: String, subtitle: String?, checked: Boolean, onChange: (Boolean) -> Unit) =
-    RowLayout(title, subtitle, VolozType.Caption, Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange)) {
+fun ToggleRow(title: String, subtitle: String?, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) =
+    RowLayout(
+        title, subtitle, VolozType.Caption,
+        Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange)
+            .then(if (enabled) Modifier else Modifier.alpha(0.45f)),
+    ) {
         Toggle(checked)
     }
 

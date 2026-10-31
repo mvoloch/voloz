@@ -80,7 +80,19 @@ class BubbleOverlay(
     private val params = overlayParams(touchable = true)
     private var attached = false
 
+    private lateinit var tooltipLabel: TextView
+    private lateinit var tooltipHint: TextView
     private val tooltip = buildTooltip()
+    /** The step shown while processing (string resource), from DictationController.step. */
+    private var step: Int? = null
+    private var recordingSince = 0L
+    private val tick = object : Runnable {
+        override fun run() {
+            if (state !is BubbleState.Recording) return
+            updateTooltip()
+            handler.postDelayed(this, 1000)
+        }
+    }
     private val tooltipParams = overlayParams(touchable = false)
     private var tooltipAttached = false
 
@@ -140,8 +152,26 @@ class BubbleOverlay(
         updateTooltip()
     }
 
+    fun setStep(newStep: Int?) {
+        if (newStep == step) return
+        step = newStep
+        if (state == BubbleState.Processing) updateTooltip()
+    }
+
+    /** What the tooltip says for [s], or null when it is hidden; level ticks don't change it. */
+    private fun tooltipKey(s: BubbleState): String? = when (s) {
+        is BubbleState.Recording -> "rec-${s.handsFree}"
+        BubbleState.Processing -> "proc"
+        else -> null
+    }
+
     fun setState(newState: BubbleState) {
-        val tooltipBefore = (state as? BubbleState.Recording)?.handsFree == true
+        val tooltipBefore = tooltipKey(state)
+        if (newState is BubbleState.Recording && state !is BubbleState.Recording) {
+            recordingSince = android.os.SystemClock.elapsedRealtime()
+            handler.removeCallbacks(tick)
+            handler.postDelayed(tick, 1000)
+        }
         val backToIdle = state != BubbleState.Idle && newState == BubbleState.Idle
         state = newState
         bubble.setState(newState)
@@ -152,7 +182,7 @@ class BubbleOverlay(
             runCatching { wm.updateViewLayout(bubble, params) }
         }
         // Level ticks arrive ~10x/s; only touch the tooltip window when it should appear/disappear.
-        if (tooltipBefore != ((newState as? BubbleState.Recording)?.handsFree == true)) updateTooltip()
+        if (tooltipBefore != tooltipKey(newState)) updateTooltip()
     }
 
     fun setBubbleSizeDp(sizeDp: Int) {
@@ -316,14 +346,14 @@ class BubbleOverlay(
     // ---- hands-free tooltip ---------------------------------------------
 
     private fun buildTooltip(): View {
-        val label = TextView(context).apply {
+        tooltipLabel = TextView(context).apply {
             text = context.getString(R.string.tooltip_hands_free)
             setTextColor(BubbleStyle.ON_NOTCH)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, BubbleStyle.TOOLTIP_LABEL_SP)
             typeface = runCatching { ResourcesCompat.getFont(context, R.font.jetbrains_mono) }.getOrNull()
                 ?: Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
         }
-        val hint = TextView(context).apply {
+        tooltipHint = TextView(context).apply {
             text = context.getString(R.string.tooltip_tap_again)
             setTextColor(BubbleStyle.TOOLTIP_HINT)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, BubbleStyle.TOOLTIP_TEXT_SP)
@@ -339,17 +369,31 @@ class BubbleOverlay(
                 setColor(BubbleStyle.NOTCH)
                 cornerRadius = BubbleStyle.TOOLTIP_CORNER_DP * density
             }
-            addView(label)
-            addView(hint, LinearLayout.LayoutParams(
+            addView(tooltipLabel)
+            addView(tooltipHint, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { marginStart = dp(10f) })
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
     }
 
+    /**
+     * Recording: the elapsed time (as the desktop pill) and how to stop; processing:
+     * the step and that a tap cancels.
+     */
     private fun updateTooltip() {
-        val want = attached && !dragging && (state as? BubbleState.Recording)?.handsFree == true
+        val s = state
+        val want = attached && !dragging && (s is BubbleState.Recording || s == BubbleState.Processing)
         if (!want) return hideTooltip()
+        if (s is BubbleState.Recording) {
+            val secs = (android.os.SystemClock.elapsedRealtime() - recordingSince) / 1000
+            val clock = "%d:%02d".format(secs / 60, secs % 60)
+            tooltipLabel.text = if (s.handsFree) "${context.getString(R.string.tooltip_hands_free)} $clock" else clock
+            tooltipHint.setText(if (s.handsFree) R.string.tooltip_tap_again else R.string.tooltip_release)
+        } else {
+            tooltipLabel.setText(step ?: R.string.step_transcribing)
+            tooltipHint.setText(R.string.tooltip_tap_cancel)
+        }
         val (w, h) = screenSize()
         tooltip.measure(
             View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.AT_MOST),

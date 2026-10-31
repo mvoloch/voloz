@@ -11,6 +11,21 @@ import kotlinx.serialization.json.buildJsonArray
  * plus `_KEEP_LANGUAGE_INSTRUCTION` as used for non-Claude backends) and of
  * backend/services/vocabulary.py `build_stt_prompt`.
  */
+/** Desktop `RefinementFlags`: which refinement behaviours apply (all on by default). */
+data class RefineFlags(
+    val smartCleanup: Boolean = true,
+    val selfCorrection: Boolean = true,
+    val preserveTechnical: Boolean = true,
+)
+
+/** Everything the refinement prompt depends on besides the transcript. */
+data class PromptOptions(
+    val vocabulary: List<String> = emptyList(),
+    val flags: RefineFlags = RefineFlags(),
+    /** Text-shortcut placeholders in the transcript (see text/Snippets.kt). */
+    val placeholders: List<String> = emptyList(),
+)
+
 object RefinementPrompt {
     /** vocabulary.py STT_PROMPT_MAX_CHARS: keeps Whisper's prompt under its 224-token window. */
     const val STT_PROMPT_MAX_CHARS = 400
@@ -41,20 +56,32 @@ object RefinementPrompt {
      * System prompt: base + smart cleanup + spelling + self-correction + technical (+ vocabulary),
      * then the keep-language rule, or for Claude ([tagged]) the tagged-output rule.
      */
-    fun buildSystemPrompt(vocabulary: List<String>, tagged: Boolean = false, placeholders: List<String> = emptyList()): String {
-        val sections = mutableListOf(
-            RefinementPromptText.BASE_INSTRUCTIONS,
-            RefinementPromptText.SMART_CLEANUP,
-            RefinementPromptText.SPELLING,
-            RefinementPromptText.SELF_CORRECTION,
-            RefinementPromptText.PRESERVE_TECHNICAL,
-        )
-        val terms = vocabulary.map { it.trim() }.filter { it.isNotEmpty() }
-        if (terms.isNotEmpty()) {
-            sections += RefinementPromptText.VOCABULARY_TEMPLATE.replace("{terms}", terms.joinToString(", "))
+    fun buildSystemPrompt(vocabulary: List<String>, tagged: Boolean = false, placeholders: List<String> = emptyList()): String =
+        buildSystemPrompt(PromptOptions(vocabulary, placeholders = placeholders), tagged)
+
+    /**
+     * build_refinement_prompt for [opts]'s flags: cleanup (+ spelling), self-correction,
+     * technical terms; with every toggle off, the desktop's pass-through line and no
+     * vocabulary. Then the placeholder line and the keep-language / tagged-output rule.
+     */
+    fun buildSystemPrompt(opts: PromptOptions, tagged: Boolean = false): String {
+        val sections = mutableListOf(RefinementPromptText.BASE_INSTRUCTIONS)
+        if (opts.flags.smartCleanup) {
+            sections += RefinementPromptText.SMART_CLEANUP
+            sections += RefinementPromptText.SPELLING
         }
-        if (placeholders.isNotEmpty()) {
-            sections += PLACEHOLDER_INSTRUCTION.replace("{tokens}", placeholders.joinToString(", "))
+        if (opts.flags.selfCorrection) sections += RefinementPromptText.SELF_CORRECTION
+        if (opts.flags.preserveTechnical) sections += RefinementPromptText.PRESERVE_TECHNICAL
+        if (sections.size == 1) {
+            sections += PASS_THROUGH
+        } else {
+            val terms = opts.vocabulary.map { it.trim() }.filter { it.isNotEmpty() }
+            if (terms.isNotEmpty()) {
+                sections += RefinementPromptText.VOCABULARY_TEMPLATE.replace("{terms}", terms.joinToString(", "))
+            }
+        }
+        if (opts.placeholders.isNotEmpty()) {
+            sections += PLACEHOLDER_INSTRUCTION.replace("{tokens}", opts.placeholders.joinToString(", "))
         }
         val last = if (tagged) TAGGED_OUTPUT_INSTRUCTION else RefinementPromptText.KEEP_LANGUAGE
         return sections.joinToString("\n\n") + "\n\n" + last
@@ -64,6 +91,9 @@ object RefinementPrompt {
      * refinement.py `_PLACEHOLDER_INSTRUCTION`, added only when the transcript holds text-shortcut
      * placeholders (see text/Snippets.kt), so other prompts stay as they were. Hand-copied.
      */
+    /** build_refinement_prompt's line when every toggle is off (hand-copied; inline in the desktop function). */
+    const val PASS_THROUGH = "No transformations are enabled. Return the transcript unchanged."
+
     const val PLACEHOLDER_INSTRUCTION =
         "Copy each of these placeholders exactly once, unchanged, where it stands in the sentence: {tokens}. Each stands for text inserted later."
 
@@ -75,8 +105,11 @@ object RefinementPrompt {
     fun extractTagged(text: String): String = TAGGED.find(text)?.groupValues?.get(1)?.trim() ?: text
 
     /** Chat messages: system, the few-shot pairs as real turns, then the transcript. */
-    fun buildMessages(transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): JsonArray = buildJsonArray {
-        add(message("system", buildSystemPrompt(vocabulary, placeholders = placeholders)))
+    fun buildMessages(transcript: String, vocabulary: List<String>, placeholders: List<String> = emptyList()): JsonArray =
+        buildMessages(transcript, PromptOptions(vocabulary, placeholders = placeholders))
+
+    fun buildMessages(transcript: String, opts: PromptOptions): JsonArray = buildJsonArray {
+        add(message("system", buildSystemPrompt(opts)))
         for ((user, assistant) in RefinementPromptText.EXAMPLES) {
             add(message("user", user))
             add(message("assistant", assistant))

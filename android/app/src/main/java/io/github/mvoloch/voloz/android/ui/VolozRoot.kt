@@ -237,7 +237,7 @@ fun VolozRoot(app: VolozApp) {
                 val s = app.settings.current
                 val route = DictationPipeline.Route(s.sttProviders, s.refineProviders) { s.keyFor(it) }
                 val result = withContext(Dispatchers.IO) {
-                    runCatching { app.pipeline.refineAgain(route, row.raw, s.vocabulary, DictationPipeline.TextRules(s.replacements, s.snippets)) }
+                    runCatching { app.pipeline.refineAgain(route, row.raw, s.vocabulary, DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags) }
                 }.getOrElse { return describeKeyError(context, it) }
                 if (result.answer == null && !result.shortcut) return context.getString(R.string.history_refine_failed)
                 app.history.update(row.timestamp) {
@@ -329,6 +329,11 @@ fun VolozRoot(app: VolozApp) {
                 onBattery = { requestBatteryExemption(context) },
                 onClearHistory = { app.history.clear() },
                 providers = providerActions,
+                onRefineFlagsChange = { scope.launch { app.settings.setRefineFlags(it) } },
+                onLanguageChange = { scope.launch { app.settings.setLanguage(it) } },
+                readLog = { app.log.read() },
+                clearLog = { app.log.clear() },
+                copy = { historyActions.copy(it) },
                 textRules = TextRuleActions(
                     addReplacement = { from, to -> scope.launch { app.settings.addReplacement(from, to) } },
                     removeReplacement = { from -> scope.launch { app.settings.removeReplacement(from) } },

@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import io.github.mvoloch.voloz.android.net.KeyRules
 import io.github.mvoloch.voloz.android.net.Provider
 import io.github.mvoloch.voloz.android.net.ProviderPresets
+import io.github.mvoloch.voloz.android.refine.RefineFlags
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
 import io.github.mvoloch.voloz.android.text.Replacement
 import io.github.mvoloch.voloz.android.text.Replacements
@@ -58,6 +59,10 @@ data class VolozSettings(
     val sttProviders: List<Provider> = listOf(ProviderPresets.DEFAULT_STT),
     val refineProviders: List<Provider> = listOf(ProviderPresets.DEFAULT_REFINE),
     val refine: Boolean = true,
+    /** What refinement does (desktop "O que limpar"). */
+    val refineFlags: RefineFlags = RefineFlags(),
+    /** Transcription language, ISO-639-1, or "auto" (desktop's list). */
+    val language: String = "auto",
     val vocabulary: List<String> = emptyList(),
     /** "Ouvido como" -> "escrever como", applied right after transcription. */
     val replacements: List<Replacement> = emptyList(),
@@ -102,6 +107,10 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         val STT_PROVIDERS = stringPreferencesKey("stt_providers")
         val REFINE_PROVIDERS = stringPreferencesKey("refine_providers")
         val REFINE = booleanPreferencesKey("refine")
+        val SMART_CLEANUP = booleanPreferencesKey("smart_cleanup")
+        val SELF_CORRECTION = booleanPreferencesKey("self_correction")
+        val PRESERVE_TECHNICAL = booleanPreferencesKey("preserve_technical")
+        val LANGUAGE = stringPreferencesKey("language")
         val VOCABULARY = stringPreferencesKey("vocabulary")
         val REPLACEMENTS = stringPreferencesKey("replacements")
         val SNIPPETS = stringPreferencesKey("snippets")
@@ -186,6 +195,8 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         sttProviders = providers(p[STT_PROVIDERS], ProviderPresets.DEFAULT_STT),
         refineProviders = providers(p[REFINE_PROVIDERS], ProviderPresets.DEFAULT_REFINE),
         refine = p[REFINE] ?: true,
+        refineFlags = RefineFlags(p[SMART_CLEANUP] ?: true, p[SELF_CORRECTION] ?: true, p[PRESERVE_TECHNICAL] ?: true),
+        language = p[LANGUAGE] ?: "auto",
         vocabulary = p[VOCABULARY]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
         replacements = pairs(p[REPLACEMENTS], "from", "to").map { (a, b) -> Replacement(a, b) },
         snippets = pairs(p[SNIPPETS], "trigger", "text").map { (a, b) -> Snippet(a, b) },
@@ -240,6 +251,12 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
     }
 
     suspend fun setRefine(on: Boolean) = store.edit { it[REFINE] = on }
+    suspend fun setRefineFlags(flags: RefineFlags) = store.edit {
+        it[SMART_CLEANUP] = flags.smartCleanup
+        it[SELF_CORRECTION] = flags.selfCorrection
+        it[PRESERVE_TECHNICAL] = flags.preserveTechnical
+    }
+    suspend fun setLanguage(code: String) = store.edit { it[LANGUAGE] = code }
     suspend fun setOnlyInTextFields(on: Boolean) = store.edit { it[ONLY_TEXT_FIELDS] = on }
     suspend fun setBubbleSize(size: BubbleSize) = store.edit { it[BUBBLE_SIZE] = size.name }
     suspend fun setTheme(mode: ThemeMode) = store.edit { it[THEME] = mode.name }

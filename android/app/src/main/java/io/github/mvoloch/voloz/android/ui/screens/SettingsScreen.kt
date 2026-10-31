@@ -95,6 +95,17 @@ class SettingsCallbacks(
     val onClearHistory: () -> Unit,
     val providers: ProviderActions,
     val textRules: TextRuleActions,
+    val onRefineFlagsChange: (io.github.mvoloch.voloz.android.refine.RefineFlags) -> Unit,
+    val onLanguageChange: (String) -> Unit,
+    val readLog: () -> String,
+    val clearLog: () -> Unit,
+    val copy: (String) -> Unit,
+)
+
+/** The desktop's transcription languages (LiteSettings/pages.tsx LANGUAGES). */
+private val LANGUAGES = listOf(
+    "auto" to R.string.lang_auto, "pt" to R.string.lang_pt, "en" to R.string.lang_en, "es" to R.string.lang_es,
+    "fr" to R.string.lang_fr, "de" to R.string.lang_de, "ja" to R.string.lang_ja, "zh" to R.string.lang_zh, "hi" to R.string.lang_hi,
 )
 
 @Composable
@@ -121,12 +132,33 @@ fun SettingsScreen(
             }
             when (section) {
                 SettingsSection.BUBBLE -> BubbleSection(settings, callbacks)
-                SettingsSection.TRANSCRIPTION -> ProviderList(ProviderKind.STT, settings, callbacks.providers)
+                SettingsSection.TRANSCRIPTION -> {
+                    ProviderList(ProviderKind.STT, settings, callbacks.providers)
+                    SettingsGroup(title = stringResource(R.string.group_speech)) {
+                        SettingRow(stringResource(R.string.settings_language), stringResource(R.string.settings_language_sub)) {
+                            Select(LANGUAGES, settings.language.takeIf { code -> LANGUAGES.any { it.first == code } } ?: "auto", callbacks.onLanguageChange)
+                        }
+                    }
+                }
                 SettingsSection.REFINEMENT -> {
                     SettingsGroup {
-                        ToggleRow(stringResource(R.string.settings_refine), stringResource(R.string.settings_refine_sub), settings.refine, callbacks.onRefineChange)
+                        ToggleRow(stringResource(R.string.settings_refine), stringResource(R.string.settings_refine_sub), settings.refine, onChange = callbacks.onRefineChange)
                     }
                     ProviderList(ProviderKind.REFINE, settings, callbacks.providers)
+                    val f = settings.refineFlags
+                    SettingsGroup(title = stringResource(R.string.group_cleanup)) {
+                        ToggleRow(stringResource(R.string.refine_cleanup), stringResource(R.string.refine_cleanup_sub), f.smartCleanup, enabled = settings.refine) {
+                            callbacks.onRefineFlagsChange(f.copy(smartCleanup = it))
+                        }
+                        GroupDivider()
+                        ToggleRow(stringResource(R.string.refine_self_correction), stringResource(R.string.refine_self_correction_sub), f.selfCorrection, enabled = settings.refine) {
+                            callbacks.onRefineFlagsChange(f.copy(selfCorrection = it))
+                        }
+                        GroupDivider()
+                        ToggleRow(stringResource(R.string.refine_technical), stringResource(R.string.refine_technical_sub), f.preserveTechnical, enabled = settings.refine) {
+                            callbacks.onRefineFlagsChange(f.copy(preserveTechnical = it))
+                        }
+                    }
                 }
                 SettingsSection.VOCABULARY -> VocabularySection(settings, callbacks)
                 SettingsSection.GENERAL -> GeneralSection(settings, readiness, callbacks)
@@ -165,7 +197,7 @@ private fun SectionTabs(current: SettingsSection, onSection: (SettingsSection) -
 @Composable
 private fun BubbleSection(settings: VolozSettings, cb: SettingsCallbacks) {
     SettingsGroup {
-        ToggleRow(stringResource(R.string.settings_only_fields), stringResource(R.string.settings_only_fields_sub), settings.onlyInTextFields, cb.onOnlyInTextFieldsChange)
+        ToggleRow(stringResource(R.string.settings_only_fields), stringResource(R.string.settings_only_fields_sub), settings.onlyInTextFields, onChange = cb.onOnlyInTextFieldsChange)
         GroupDivider()
         SettingRow(stringResource(R.string.settings_size)) {
             Segmented(
@@ -342,11 +374,17 @@ private fun GeneralSection(settings: VolozSettings, readiness: Readiness, cb: Se
         }
     }
     Text(stringResource(R.string.settings_keys_hint), style = VolozType.Caption, color = VolozColors.Graphite, modifier = Modifier.padding(horizontal = 4.dp))
+    var showLog by remember { mutableStateOf(false) }
     SettingsGroup(title = stringResource(R.string.settings_dictations_group)) {
         SettingRow(stringResource(R.string.settings_history), stringResource(R.string.settings_history_sub)) {
             SecondaryButton(stringResource(R.string.settings_history_clear), { confirmClear = true }, height = 34.dp)
         }
+        GroupDivider()
+        SettingRow(stringResource(R.string.settings_log), stringResource(R.string.settings_log_sub)) {
+            SecondaryButton(stringResource(R.string.settings_log_view), { showLog = true }, height = 34.dp)
+        }
     }
+    if (showLog) LogDialog(cb, onDismiss = { showLog = false })
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -361,6 +399,34 @@ private fun GeneralSection(settings: VolozSettings, readiness: Readiness, cb: Se
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(stringResource(R.string.common_cancel), color = VolozColors.Graphite) } },
         )
     }
+}
+
+/** The dictation log, newest last, monospace; copy or clear. */
+@Composable
+private fun LogDialog(cb: SettingsCallbacks, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(cb.readLog()) }
+    val scroll = rememberScrollState()
+    LaunchedEffect(text) { scroll.scrollTo(scroll.maxValue) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = VolozColors.Sheet,
+        title = { Text(stringResource(R.string.settings_log), style = VolozType.CardTitle) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(
+                    Modifier.fillMaxWidth().heightIn(max = 380.dp).clip(VolozShapes.Small).background(VolozColors.Mist)
+                        .verticalScroll(scroll).padding(10.dp),
+                ) {
+                    Text(text.ifBlank { stringResource(R.string.settings_log_empty) }, style = VolozType.Mono.copy(fontSize = VolozType.Eyebrow.fontSize), color = VolozColors.Ink)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton(stringResource(R.string.cd_copy), { cb.copy(text) }, enabled = text.isNotBlank(), height = 34.dp)
+                    SecondaryButton(stringResource(R.string.settings_log_clear), { cb.clearLog(); text = "" }, enabled = text.isNotBlank(), height = 34.dp)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_done), color = VolozColors.Ink, fontWeight = FontWeight.SemiBold) } },
+    )
 }
 
 /** Mockup .sel: a mist box with the current value and a chevron, opening a menu. */

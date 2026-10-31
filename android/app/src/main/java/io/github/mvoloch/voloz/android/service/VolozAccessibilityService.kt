@@ -53,6 +53,8 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         val connected: StateFlow<Boolean> = _connected
     }
 
+    private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
+
     /** Where the bubble may appear right now, and where the field is (for placement). */
     private data class FocusInfo(
         val eligibleField: Boolean,
@@ -87,10 +89,11 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         _connected.value = true
 
         scope.launch {
-            combine(focus, app.settings.settings, controller.state) { f, s, st -> Triple(f, s ?: VolozSettings(), st) }
-                .collect { (f, s, st) ->
+            combine(focus, app.settings.settings, controller.state, controller.step) { f, s, st, step -> Quad(f, s ?: VolozSettings(), st, step) }
+                .collect { (f, s, st, step) ->
                     overlay.setBubbleSizeDp(s.bubbleSize.dp)
                     overlay.setAnchor(f.anchor)
+                    overlay.setStep(step)
                     overlay.setState(st)
                     val active = st != BubbleState.Idle
                     val visible = when {

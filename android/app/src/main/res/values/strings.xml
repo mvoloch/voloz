@@ -35,6 +35,10 @@
     <string name="bubble_cd_retry">Toque para enviar o ditado de novo</string>
     <string name="tooltip_hands_free" translatable="false">Hands Free</string>
     <string name="tooltip_tap_again">toque de novo para terminar</string>
+    <string name="tooltip_release">solte para terminar</string>
+    <string name="tooltip_tap_cancel">toque para cancelar</string>
+    <string name="step_transcribing">Transcrevendo…</string>
+    <string name="step_refining">Refinando…</string>
 
     <!-- Dictation messages (toasts) -->
     <string name="msg_need_key">Falta a chave do provedor de transcrição. Abra o Voloz › Ajustes › Transcrição.</string>
@@ -188,6 +192,25 @@
     <string name="settings_refine">Refinar automaticamente</string>
     <string name="settings_refine_sub">Roda depois de cada ditado. Desligado, o texto entra como foi transcrito.</string>
     <string name="providers_group">Provedores, na ordem</string>
+    <string name="group_speech">Fala</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_sub">A detecção automática funciona para a maioria dos ditados. Trave o idioma se você sempre fala o mesmo.</string>
+    <string name="lang_auto">Detecção automática</string>
+    <string name="lang_pt">Português</string>
+    <string name="lang_en">Inglês</string>
+    <string name="lang_es">Espanhol</string>
+    <string name="lang_fr">Francês</string>
+    <string name="lang_de">Alemão</string>
+    <string name="lang_ja">Japonês</string>
+    <string name="lang_zh">Chinês</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="group_cleanup">O que limpar</string>
+    <string name="refine_cleanup">Limpeza inteligente</string>
+    <string name="refine_cleanup_sub">Remove palavras de preenchimento (hum, é, tipo), restaura a pontuação e corrige o uso de maiúsculas sem reformular.</string>
+    <string name="refine_self_correction">Remover autocorreções</string>
+    <string name="refine_self_correction_sub">Quando você muda de ideia no meio da frase (“na verdade, não…”, “espera, quis dizer…”), descarta a parte retratada e mantém a intenção final.</string>
+    <string name="refine_technical">Preservar termos técnicos</string>
+    <string name="refine_technical_sub">Mantém identificadores de código, nomes de comandos e siglas exatamente como falados.</string>
     <string name="providers_hint">O primeiro é o principal. Se ele falhar ou atingir o limite, o próximo da lista recebe o mesmo pedido. Quem atingiu o limite fica de fora até passar a espera que pediu.</string>
     <string name="providers_add">Adicionar provedor</string>
     <string name="providers_other">Outro serviço…</string>
@@ -238,6 +261,11 @@
     <string name="settings_history">Histórico</string>
     <string name="settings_history_sub">Os últimos 200, só neste celular.</string>
     <string name="settings_history_clear">Apagar</string>
+    <string name="settings_log">Registro de ditados</string>
+    <string name="settings_log_sub">Para investigar um ditado que não entrou ou demorou: modelos, tempos, erros.</string>
+    <string name="settings_log_view">Ver</string>
+    <string name="settings_log_empty">Nenhum ditado registrado ainda.</string>
+    <string name="settings_log_clear">Limpar</string>
     <string name="settings_history_clear_title">Apagar o histórico?</string>
     <string name="settings_history_clear_body">Os ditados somem da tela inicial. O texto já inserido nos apps fica onde está.</string>
     <string name="about_tagline">Fale em qualquer lugar e receba o texto pronto em qualquer app.</string>

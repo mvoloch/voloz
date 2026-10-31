@@ -2,6 +2,8 @@ package io.github.mvoloch.voloz.android.net
 
 import io.github.mvoloch.voloz.android.audio.FlacEncoder
 import io.github.mvoloch.voloz.android.audio.WavWriter
+import io.github.mvoloch.voloz.android.refine.PromptOptions
+import io.github.mvoloch.voloz.android.refine.RefineFlags
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
 import io.github.mvoloch.voloz.android.text.Replacement
 import io.github.mvoloch.voloz.android.text.Replacements
@@ -88,15 +90,21 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         refine: Boolean,
         cancel: Cancel = Cancel {},
         rules: TextRules = TextRules(),
+        flags: RefineFlags = RefineFlags(),
+        /** ISO-639-1 code, or null to auto-detect. */
+        language: String? = null,
+        /** Called (on the calling thread) once the transcript is in, before refinement. */
+        onTranscribed: () -> Unit = {},
     ): Output {
         val t0 = System.nanoTime()
         val stop = { cancel.cancelled }
         val stt = fallback.run("stt", route.stt, stop) { p ->
-            client.transcribe(p, keyOrThrow(route, p), audio, RefinementPrompt.buildSttPrompt(vocabulary))
+            client.transcribe(p, keyOrThrow(route, p), audio, RefinementPrompt.buildSttPrompt(vocabulary), language)
         }
         val raw = Replacements.apply(stt.value.trim(), rules.replacements)
         val sttMs = (System.nanoTime() - t0) / 1_000_000
-        val r = finish(route, raw, vocabulary, refine, cancel, rules)
+        onTranscribed()
+        val r = finish(route, raw, vocabulary, refine, cancel, rules, flags)
         return Output(
             raw = raw, text = r.text, refined = r.answer != null, refineError = r.error, sttMs = sttMs, refineMs = r.ms,
             sttModel = stt.provider.model, refineModel = r.answer?.provider?.model,
@@ -112,10 +120,18 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
      * dictation (shortcuts, placeholders, providers with backups). [Finished.error] says why
      * the text came back unrefined.
      */
-    fun refineAgain(route: Route, raw: String, vocabulary: List<String>, rules: TextRules): Finished =
-        finish(route, raw.trim(), vocabulary, refine = true, cancel = Cancel {}, rules = rules)
+    fun refineAgain(route: Route, raw: String, vocabulary: List<String>, rules: TextRules, flags: RefineFlags = RefineFlags()): Finished =
+        finish(route, raw.trim(), vocabulary, refine = true, cancel = Cancel {}, rules = rules, flags = flags)
 
-    private fun finish(route: Route, raw: String, vocabulary: List<String>, refine: Boolean, cancel: Cancel, rules: TextRules): Finished {
+    private fun finish(
+        route: Route,
+        raw: String,
+        vocabulary: List<String>,
+        refine: Boolean,
+        cancel: Cancel,
+        rules: TextRules,
+        flags: RefineFlags,
+    ): Finished {
         if (raw.isEmpty()) return Finished(raw, null, null, 0, false)
         Snippets.matchWhole(raw, rules.snippets)?.let { return Finished(it, null, null, 0, shortcut = true) }
         val unrefined = Snippets.expand(raw, rules.snippets)
@@ -130,7 +146,7 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         fun ms() = (System.nanoTime() - t1) / 1_000_000
         return try {
             val answer = fallback.run("llm", route.refine, { cancel.cancelled }) { p ->
-                client.refine(p, keyOrThrow(route, p), cleaned, vocabulary, tokens.keys.toList())
+                client.refine(p, keyOrThrow(route, p), cleaned, PromptOptions(vocabulary, flags, tokens.keys.toList()))
             }
             val restored = Snippets.restore(answer.value, tokens)
             // A lost or repeated placeholder: guessing where a shortcut belonged could put it

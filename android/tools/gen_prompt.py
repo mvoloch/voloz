@@ -112,4 +112,17 @@ cases = [
 ]
 (fixture_dir / "collapse_cases.json").write_text(json.dumps(
     [[c, ns["collapse_repetitive_artifacts"](c)] for c in cases], ensure_ascii=False))
-print("ok", len(no_vocab), len(with_vocab))
+# Every on/off combination of the refinement toggles, with and without vocabulary,
+# from the desktop's own build_refinement_prompt (keep-language added on the Kotlin side).
+combos = []
+for c in (True, False):
+    for sc in (True, False):
+        for t in (True, False):
+            f = ns["RefinementFlags"](smart_cleanup=c, self_correction=sc, preserve_technical=t)
+            combos.append({
+                "flags": [c, sc, t],
+                "plain": ns["build_refinement_prompt"](f),
+                "vocab": ns["build_refinement_prompt"](f, ["Voloz", "Groq"]),
+            })
+(fixture_dir / "prompt_flags.json").write_text(json.dumps(combos, ensure_ascii=False))
+print("ok", len(no_vocab), len(with_vocab), len(combos))

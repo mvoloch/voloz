@@ -105,4 +105,20 @@ class ReviewFixesTest {
         assertEquals(listOf(oss, luna), moveUp(listOf(oss, luna), gone))
         assertTrue(oss.sameAs(Provider(" https://api.groq.com/openai/v1/ ", "openai/gpt-oss-120b")))
     }
+
+    @Test
+    fun aLockedLanguageIsSentAndAutoIsLeftOut() {
+        val bodies = mutableListOf<String>()
+        val interceptor = Interceptor { chain ->
+            val req = chain.request()
+            bodies += okio.Buffer().also { req.body!!.writeTo(it) }.readUtf8()
+            Response.Builder().request(req).protocol(Protocol.HTTP_1_1).code(200).message("x")
+                .body("""{"text":"oi"}""".toResponseBody("application/json".toMediaType())).build()
+        }
+        val api = ApiClient(OkHttpClient.Builder().addInterceptor(interceptor).build())
+        api.transcribe(groq, "k", audio, null, "pt")
+        api.transcribe(groq, "k", audio, null, null)
+        assertTrue(bodies[0].contains("name=\"language\"") && bodies[0].contains("\r\n\r\npt\r\n"))
+        assertTrue(!bodies[1].contains("name=\"language\""))
+    }
 }
