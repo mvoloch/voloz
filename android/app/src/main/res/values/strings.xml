@@ -39,6 +39,8 @@
     <string name="tooltip_tap_cancel">toque para cancelar</string>
     <string name="step_transcribing">Transcrevendo…</string>
     <string name="step_refining">Refinando…</string>
+    <string name="step_command">Executando o comando…</string>
+    <string name="tooltip_command">Comando</string>
 
     <!-- Dictation messages (toasts) -->
     <string name="msg_need_key">Falta a chave do provedor de transcrição. Abra o Voloz › Ajustes › Transcrição.</string>
@@ -152,6 +154,8 @@
     <string name="home_shortcut">atalho de texto</string>
     <string name="home_edited">corrigido à mão</string>
     <string name="home_imported">áudio importado</string>
+    <string name="home_command">comando de voz</string>
+    <string name="home_command_in">%1$s · comando de voz</string>
     <string name="import_button">Importar áudio</string>
     <string name="import_share_label">Transcrever com o Voloz</string>
     <string name="import_title">Importar áudio</string>
@@ -201,6 +205,8 @@
     <string name="gesture_tap_body">Fale à vontade e toque de novo para terminar.</string>
     <string name="gesture_hold">Segure</string>
     <string name="gesture_hold_body">Fale enquanto segura; ao soltar, o texto entra.</string>
+    <string name="gesture_double">Dois toques: comando de voz</string>
+    <string name="gesture_double_body">Com texto selecionado, diga o que fazer com ele (“deixa mais formal”, “traduz para o inglês”) e o resultado substitui a seleção. Sem seleção, o Voloz escreve o que você pedir (“responde dizendo que eu aceito”). Toque de novo para terminar.</string>
     <string name="settings_refine">Refinar automaticamente</string>
     <string name="settings_refine_sub">Roda depois de cada ditado. Desligado, o texto entra como foi transcrito.</string>
     <string name="providers_group">Provedores, na ordem</string>

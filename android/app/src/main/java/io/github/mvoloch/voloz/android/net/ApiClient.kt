@@ -1,6 +1,8 @@
 package io.github.mvoloch.voloz.android.net
 
+import io.github.mvoloch.voloz.android.refine.AppStyle
 import io.github.mvoloch.voloz.android.refine.PromptOptions
+import io.github.mvoloch.voloz.android.refine.VoiceCommand
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -155,12 +157,18 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
      * `reasoning_effort: "none"`; Groq's gpt-oss models keep the prototype's
      * `reasoning_effort: "low"`; other models get the plain request.
      */
-    internal fun chatPayload(provider: Provider, messages: JsonArray, reasoningOff: Boolean): JsonObject = buildJsonObject {
+    internal fun chatPayload(
+        provider: Provider,
+        messages: JsonArray,
+        reasoningOff: Boolean,
+        maxTokens: Int = MAX_TOKENS,
+        temperature: Double = TEMPERATURE,
+    ): JsonObject = buildJsonObject {
         val openAi = isOpenAiApi(provider.endpoint)
         put("model", provider.model)
         put("messages", messages)
-        put("temperature", TEMPERATURE)
-        put(if (openAi) "max_completion_tokens" else "max_tokens", MAX_TOKENS)
+        put("temperature", temperature)
+        put(if (openAi) "max_completion_tokens" else "max_tokens", maxTokens)
         when {
             openAi && reasoningOff -> put("reasoning_effort", "none")
             provider.vendor == Vendor.GROQ && provider.model.contains("gpt-oss") -> put("reasoning_effort", "low")
@@ -213,7 +221,7 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
     }
 
     /** Text blocks joined, then only what is inside the transcript tags. */
-    internal fun anthropicText(provider: Provider, body: String): String {
+    internal fun anthropicText(provider: Provider, body: String, tagged: Boolean = true): String {
         val root = json.parseToJsonElement(body).jsonObject
         when (root["stop_reason"]?.jsonPrimitive?.contentOrNull) {
             "refusal" -> throw IOException("Claude (${provider.model}) declined to process this text")
@@ -225,7 +233,42 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             .joinToString("") { it["text"]?.jsonPrimitive?.contentOrNull.orEmpty() }
             .trim()
         if (text.isEmpty()) throw IOException("No text in the Claude reply")
+        if (!tagged) return text
         return RefinementPrompt.extractTagged(text).takeIf { it.isNotEmpty() } ?: throw IOException("Refinement reply was empty")
+    }
+
+    /**
+     * A voice command (desktop voice_commands.run_command): [instruction] applied to
+     * [selection], or a draft from it when the selection is empty. Same request rules as
+     * refinement (OpenAI parameters, Claude tagged output), 4096 tokens, temperature 0.3.
+     */
+    fun command(provider: Provider, apiKey: String, instruction: String, selection: String, style: AppStyle?): String {
+        val claude = provider.vendor == Vendor.ANTHROPIC
+        val system = VoiceCommand.prompt(style, tagged = claude)
+        val user = VoiceCommand.message(instruction, selection)
+        if (claude) {
+            val payload = buildJsonObject {
+                put("model", provider.model)
+                put("max_tokens", VoiceCommand.MAX_OUTPUT_TOKENS + THINKING_HEADROOM_TOKENS)
+                put("system", system)
+                put("messages", buildJsonArray { add(message("user", user)) })
+                putJsonObject("output_config") { put("effort", ANTHROPIC_EFFORT) }
+            }
+            val request = Request.Builder()
+                .url("${base(provider.endpoint)}/messages")
+                .auth(provider.endpoint, apiKey)
+                .post(payload.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            return execute(provider, request) { VoiceCommand.extractTagged(anthropicText(provider, it, tagged = false)) }
+        }
+        val messages = buildJsonArray {
+            add(message("system", system))
+            add(message("user", user))
+        }
+        val id = "${base(provider.endpoint)}|${provider.model}"
+        val reasoningOff = isOpenAiApi(provider.endpoint) && id !in reasoningRefused
+        val payload = chatPayload(provider, messages, reasoningOff, VoiceCommand.MAX_OUTPUT_TOKENS, VoiceCommand.TEMPERATURE)
+        return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
     }
 
     /**

@@ -217,6 +217,8 @@ private fun BubbleSection(settings: VolozSettings, cb: SettingsCallbacks) {
         GestureRow(R.string.gesture_tap, R.string.gesture_tap_body, recording = false)
         GroupDivider()
         GestureRow(R.string.gesture_hold, R.string.gesture_hold_body, recording = true)
+        GroupDivider()
+        GestureRow(R.string.gesture_double, R.string.gesture_double_body, recording = true)
     }
 }
 

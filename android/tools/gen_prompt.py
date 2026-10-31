@@ -1,7 +1,7 @@
 """Port the desktop refinement prompt text to Kotlin verbatim, and write a
 test fixture produced by the real Python build_refinement_prompt.
 
-Usage: python3 -I gen_prompt.py <refinement.py> <kotlin_out> <fixture_dir> [<app_context.py>]
+Usage: python3 -I gen_prompt.py <refinement.py> <kotlin_out> <fixture_dir> [<app_context.py> [<voice_commands.py>]]
 With app_context.py, the per-app style texts are ported too and the prompt is
 built with the desktop's real style_instruction.
 """
@@ -12,6 +12,8 @@ from pathlib import Path
 
 src_path, kt_out, fixture_dir = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
 app_context_path = sys.argv[4] if len(sys.argv) > 4 else None
+voice_commands_path = sys.argv[5] if len(sys.argv) > 5 else None
+voice_commands_path = sys.argv[5] if len(sys.argv) > 5 else None
 src = Path(src_path).read_text()
 tree = ast.parse(src)
 
@@ -143,4 +145,16 @@ if ctx:
     chat = ["Beleza, valeu.", "Beleza, valeu...", "Tudo certo. Até amanhã.", "Ok.\nTchau.", "Pergunta?", "x" * 130 + "."]
     (fixture_dir / "finish_chat.json").write_text(json.dumps(
         [[t, ctx["finish_for_style"](t, "chat")] for t in chat], ensure_ascii=False))
+if voice_commands_path:
+    # The command instructions only (the module imports the server; its two small
+    # builders are ported by hand and tested on the Kotlin side).
+    for node in ast.parse(Path(voice_commands_path).read_text()).body:
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "_COMMAND_INSTRUCTIONS":
+            (fixture_dir / "command_instructions.txt").write_text(ast.literal_eval(node.value))
+if voice_commands_path:
+    # The command instructions only (the module imports the server; its two small
+    # builders are ported by hand and tested on the Kotlin side).
+    for node in ast.parse(Path(voice_commands_path).read_text()).body:
+        if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "_COMMAND_INSTRUCTIONS":
+            (fixture_dir / "command_instructions.txt").write_text(ast.literal_eval(node.value))
 print("ok", len(no_vocab), len(with_vocab), len(combos))

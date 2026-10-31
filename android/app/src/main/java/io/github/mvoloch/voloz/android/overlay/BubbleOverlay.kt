@@ -160,7 +160,7 @@ class BubbleOverlay(
 
     /** What the tooltip says for [s], or null when it is hidden; level ticks don't change it. */
     private fun tooltipKey(s: BubbleState): String? = when (s) {
-        is BubbleState.Recording -> "rec-${s.handsFree}"
+        is BubbleState.Recording -> "rec-${s.handsFree}-${s.command}"
         BubbleState.Processing -> "proc"
         else -> null
     }
@@ -388,7 +388,11 @@ class BubbleOverlay(
         if (s is BubbleState.Recording) {
             val secs = (android.os.SystemClock.elapsedRealtime() - recordingSince) / 1000
             val clock = "%d:%02d".format(secs / 60, secs % 60)
-            tooltipLabel.text = if (s.handsFree) "${context.getString(R.string.tooltip_hands_free)} $clock" else clock
+            tooltipLabel.text = when {
+                s.command -> "${context.getString(R.string.tooltip_command)} $clock"
+                s.handsFree -> "${context.getString(R.string.tooltip_hands_free)} $clock"
+                else -> clock
+            }
             tooltipHint.setText(if (s.handsFree) R.string.tooltip_tap_again else R.string.tooltip_release)
         } else {
             tooltipLabel.setText(step ?: R.string.step_transcribing)

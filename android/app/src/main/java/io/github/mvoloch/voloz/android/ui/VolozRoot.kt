@@ -378,6 +378,8 @@ private fun versionName(context: Context): String =
 private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
     val where = when {
         e.imported -> context.getString(R.string.home_imported)
+        e.command && e.targetPackage != null -> context.getString(R.string.home_command_in, appLabel(context, e.targetPackage))
+        e.command -> context.getString(R.string.home_command)
         else -> e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
     }
     val refined = if (e.shortcut) {

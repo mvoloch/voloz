@@ -115,6 +115,43 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         )
     }
 
+    /**
+     * A voice command: the instruction is transcribed (backups as for a dictation), then
+     * applied to [selection] by the refinement providers (backups too). The result's
+     * [Output.refineModel] is the model that ran the command; its text is pasted over the
+     * selection. An empty instruction gives an empty text ("nothing heard").
+     */
+    fun runCommand(
+        route: Route,
+        audio: UploadAudio,
+        vocabulary: List<String>,
+        selection: String,
+        appStyle: AppStyle?,
+        language: String? = null,
+        cancel: Cancel = Cancel {},
+        onTranscribed: () -> Unit = {},
+    ): Output {
+        val t0 = System.nanoTime()
+        val stop = { cancel.cancelled }
+        val stt = fallback.run("stt", route.stt, stop) { p ->
+            client.transcribe(p, keyOrThrow(route, p), audio, RefinementPrompt.buildSttPrompt(vocabulary), language)
+        }
+        val instruction = stt.value.trim()
+        val sttMs = (System.nanoTime() - t0) / 1_000_000
+        fun output(text: String, answer: Answer?, ms: Long) = Output(
+            raw = instruction, text = text, refined = answer != null, refineError = null, sttMs = sttMs, refineMs = ms,
+            sttModel = stt.provider.model, refineModel = answer?.provider?.model,
+            sttBackup = stt.backup, refineBackup = answer?.backup ?: false,
+        )
+        if (instruction.isEmpty() || route.refine.isEmpty()) return output("", null, 0)
+        onTranscribed()
+        val t1 = System.nanoTime()
+        val answer = fallback.run("llm", route.refine, stop) { p ->
+            client.command(p, keyOrThrow(route, p), instruction, selection, appStyle)
+        }
+        return output(AppStyle.finish(answer.value.trim(), appStyle), answer, (System.nanoTime() - t1) / 1_000_000)
+    }
+
     /** What the text became after the transcript: shortcuts and refinement (or why it wasn't refined). */
     class Finished(val text: String, val answer: Answer?, val error: String?, val ms: Long, val shortcut: Boolean)
 

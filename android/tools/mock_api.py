@@ -78,6 +78,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.endswith("/chat/completions"):
             # Echo the transcript back capitalised with a full stop, keeping placeholders.
             sent = json.loads(body)["messages"][-1]["content"]
+            if sent.startswith("<instruction>"):
+                selected = "<selection>" in sent
+                refined = "Texto reescrito pelo comando." if selected else "Rascunho escrito pelo comando."
+                return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})
             refined = (sent[:1].upper() + sent[1:]).rstrip(".") + "." if sent else REFINED
             return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})
         self.reply(404, {"error": {"message": "mock: unknown path"}})

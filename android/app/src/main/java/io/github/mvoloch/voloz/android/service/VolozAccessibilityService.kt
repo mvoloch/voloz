@@ -299,6 +299,15 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         return ok
     }
 
+    override fun selectedText(): String = runCatching {
+        val node = currentTarget() ?: return ""
+        val raw = node.text?.toString().orEmpty()
+        if (node.isShowingHintText) return ""
+        val a = minOf(node.textSelectionStart, node.textSelectionEnd)
+        val b = maxOf(node.textSelectionStart, node.textSelectionEnd)
+        if (a < 0 || b > raw.length || a == b) "" else raw.substring(a, b)
+    }.getOrDefault("")
+
     override fun targetPackage(): String? = runCatching { currentTarget()?.packageName?.toString() }.getOrNull()
 
     override fun pasteClipboard(): Boolean {

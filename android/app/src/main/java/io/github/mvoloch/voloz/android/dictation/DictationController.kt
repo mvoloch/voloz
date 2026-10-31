@@ -34,7 +34,8 @@ import java.io.IOException
 /** What the bubble shows. Everything else in the app reads this too. */
 sealed interface BubbleState {
     data object Idle : BubbleState
-    data class Recording(val level: Float, val handsFree: Boolean) : BubbleState
+    /** [command]: a voice command (double tap), not a dictation. */
+    data class Recording(val level: Float, val handsFree: Boolean, val command: Boolean = false) : BubbleState
     data object Processing : BubbleState
     data object Done : BubbleState
     data class Error(val message: String) : BubbleState
@@ -51,6 +52,8 @@ data class InsertResult(val outcome: InsertOutcome, val packageName: String?)
 /** Implemented by the accessibility service, the only component that can reach other apps' fields. */
 interface TextInserter {
     fun insert(text: String): InsertResult
+    /** The text selected in the focused field, or "" (none, or the app doesn't say). */
+    fun selectedText(): String
     /** Package of the app whose field would receive the text now, if known. */
     fun targetPackage(): String?
     fun pasteClipboard(): Boolean
@@ -88,6 +91,8 @@ class DictationController(
          * plus the take's own length, so a long dictation on a slow link isn't cut off.
          */
         private const val PROCESS_DEADLINE_MS = 150_000L
+        /** A second tap this soon after the one that started recording makes it a voice command. */
+        private const val DOUBLE_TAP_MS = 400L
     }
 
     private val _state = MutableStateFlow<BubbleState>(BubbleState.Idle)
@@ -122,6 +127,9 @@ class DictationController(
     private var failedTake: Take? = null
     /** The app the take was meant for (its writing style), captured when recording stopped. */
     private var takePackage: String? = null
+    private var recordingStartedAt = 0L
+    /** For a voice command: the field's selection when recording stopped; null for a dictation. */
+    private var takeSelection: String? = null
     private val toRetryReady = Runnable {
         _state.value = BubbleState.RetryReady
         main.postDelayed(dropRetry, RETRY_READY_MS)
@@ -135,8 +143,16 @@ class DictationController(
     // ---- gestures -------------------------------------------------------
 
     fun onTap() {
-        when (_state.value) {
-            is BubbleState.Recording -> stop()
+        when (val s = _state.value) {
+            is BubbleState.Recording -> {
+                // Double tap: the recording that the first tap started becomes a voice command.
+                if (s.handsFree && !s.command && android.os.SystemClock.elapsedRealtime() - recordingStartedAt < DOUBLE_TAP_MS) {
+                    _state.value = s.copy(command = true)
+                    log?.add("voice command started")
+                } else {
+                    stop()
+                }
+            }
             BubbleState.Processing -> cancelProcessing(context.getString(R.string.msg_cancelled))
             BubbleState.PasteReady -> pasteFromClipboard()
             BubbleState.RetryReady -> retry()
@@ -186,6 +202,7 @@ class DictationController(
             stopForegroundService()
             return flashError(context.getString(R.string.msg_mic_unavailable))
         }
+        recordingStartedAt = android.os.SystemClock.elapsedRealtime()
         _state.value = BubbleState.Recording(0f, handsFree)
         main.postDelayed(silenceProbe, SILENCE_PROBE_MS)
         // The TLS handshake happens while the user speaks, not after they stop.
@@ -235,8 +252,10 @@ class DictationController(
         main.removeCallbacks(silenceProbe)
         val rec = recorder ?: return
         recorder = null
+        val command = (_state.value as? BubbleState.Recording)?.command == true
         val take = rec.stop()
         takePackage = inserter?.targetPackage()
+        takeSelection = if (command) inserter?.selectedText().orEmpty() else null
         stopForegroundService()
         when {
             take.durationMs < MIN_DURATION_MS -> flashError(context.getString(R.string.msg_too_short))
@@ -257,6 +276,14 @@ class DictationController(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
+                    val selection = takeSelection
+                    if (selection != null) {
+                        return@runCatching pipeline.runCommand(
+                            route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, selection,
+                            AppStyle.forPackage(pkg), language = s.language.takeIf { it != "auto" }, cancel = cancel,
+                            onTranscribed = { main.post { if (processing?.second === cancel) _step.value = R.string.step_command } },
+                        )
+                    }
                     pipeline.run(
                         route(s), DictationPipeline.uploadAudio(take.pcm, take.sampleRate), s.vocabulary, s.refine, cancel,
                         DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags,
@@ -330,6 +357,7 @@ class DictationController(
                 refineModel = out.refineModel,
                 refineBackup = out.refineBackup,
                 shortcut = out.shortcut,
+                command = takeSelection != null,
             ),
         )
         if (out.refineError != null) Log.w(TAG, "refinement failed, inserted the unrefined text: ${out.refineError}")
