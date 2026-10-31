@@ -2,6 +2,7 @@ package io.github.mvoloch.voloz.android.net
 
 import io.github.mvoloch.voloz.android.audio.FlacEncoder
 import io.github.mvoloch.voloz.android.audio.WavWriter
+import io.github.mvoloch.voloz.android.refine.AppStyle
 import io.github.mvoloch.voloz.android.refine.PromptOptions
 import io.github.mvoloch.voloz.android.refine.RefineFlags
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
@@ -95,6 +96,8 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         language: String? = null,
         /** Called (on the calling thread) once the transcript is in, before refinement. */
         onTranscribed: () -> Unit = {},
+        /** The receiving app's style, when "Adaptar o estilo ao app" is on and the app is known. */
+        appStyle: AppStyle? = null,
     ): Output {
         val t0 = System.nanoTime()
         val stop = { cancel.cancelled }
@@ -104,7 +107,7 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         val raw = Replacements.apply(stt.value.trim(), rules.replacements)
         val sttMs = (System.nanoTime() - t0) / 1_000_000
         onTranscribed()
-        val r = finish(route, raw, vocabulary, refine, cancel, rules, flags)
+        val r = finish(route, raw, vocabulary, refine, cancel, rules, flags, appStyle)
         return Output(
             raw = raw, text = r.text, refined = r.answer != null, refineError = r.error, sttMs = sttMs, refineMs = r.ms,
             sttModel = stt.provider.model, refineModel = r.answer?.provider?.model,
@@ -120,8 +123,14 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
      * dictation (shortcuts, placeholders, providers with backups). [Finished.error] says why
      * the text came back unrefined.
      */
-    fun refineAgain(route: Route, raw: String, vocabulary: List<String>, rules: TextRules, flags: RefineFlags = RefineFlags()): Finished =
-        finish(route, raw.trim(), vocabulary, refine = true, cancel = Cancel {}, rules = rules, flags = flags)
+    fun refineAgain(
+        route: Route,
+        raw: String,
+        vocabulary: List<String>,
+        rules: TextRules,
+        flags: RefineFlags = RefineFlags(),
+        appStyle: AppStyle? = null,
+    ): Finished = finish(route, raw.trim(), vocabulary, refine = true, cancel = Cancel {}, rules = rules, flags = flags, appStyle = appStyle)
 
     private fun finish(
         route: Route,
@@ -131,6 +140,7 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         cancel: Cancel,
         rules: TextRules,
         flags: RefineFlags,
+        appStyle: AppStyle?,
     ): Finished {
         if (raw.isEmpty()) return Finished(raw, null, null, 0, false)
         Snippets.matchWhole(raw, rules.snippets)?.let { return Finished(it, null, null, 0, shortcut = true) }
@@ -146,9 +156,9 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         fun ms() = (System.nanoTime() - t1) / 1_000_000
         return try {
             val answer = fallback.run("llm", route.refine, { cancel.cancelled }) { p ->
-                client.refine(p, keyOrThrow(route, p), cleaned, PromptOptions(vocabulary, flags, tokens.keys.toList()))
+                client.refine(p, keyOrThrow(route, p), cleaned, PromptOptions(vocabulary, flags, tokens.keys.toList(), appStyle))
             }
-            val restored = Snippets.restore(answer.value, tokens)
+            val restored = Snippets.restore(AppStyle.finish(answer.value.trim(), appStyle), tokens)
             // A lost or repeated placeholder: guessing where a shortcut belonged could put it
             // in the wrong place; the unrefined text has each one where it was said.
             if (restored == null) Finished(unrefined, null, "refinement lost a text-shortcut placeholder", ms(), shortcut = true)

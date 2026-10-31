@@ -24,6 +24,8 @@ data class PromptOptions(
     val flags: RefineFlags = RefineFlags(),
     /** Text-shortcut placeholders in the transcript (see text/Snippets.kt). */
     val placeholders: List<String> = emptyList(),
+    /** The receiving app's writing style (desktop "Adaptar o estilo ao app"), or null. */
+    val appStyle: AppStyle? = null,
 )
 
 object RefinementPrompt {
@@ -79,6 +81,7 @@ object RefinementPrompt {
             if (terms.isNotEmpty()) {
                 sections += RefinementPromptText.VOCABULARY_TEMPLATE.replace("{terms}", terms.joinToString(", "))
             }
+            opts.appStyle?.let { sections += it.instruction }
         }
         if (opts.placeholders.isNotEmpty()) {
             sections += PLACEHOLDER_INSTRUCTION.replace("{tokens}", opts.placeholders.joinToString(", "))

@@ -61,7 +61,9 @@ class Handler(BaseHTTPRequestHandler):
         lang = "-"
         if b'name="language"' in body:
             lang = body.split(b'name="language"', 1)[1].split(b"\r\n")[2].decode(errors="replace")
-        log(f"POST {self.path} bytes={size} upload={kind} language={lang} mode={m}")
+        style = next((n for n, k in (("email", b"goes into an email"), ("chat", b"goes into a chat message"),
+                                     ("code", b"goes into a code editor"), ("assistant", b"prompt for an AI assistant")) if k in body), "-")
+        log(f"POST {self.path} bytes={size} upload={kind} language={lang} style={style} mode={m}")
         if m == "hang" or (m == "hangrefine" and self.path.endswith("/chat/completions")):
             time.sleep(300)
             return

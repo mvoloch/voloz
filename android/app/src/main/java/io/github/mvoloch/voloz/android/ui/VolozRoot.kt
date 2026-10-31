@@ -237,7 +237,12 @@ fun VolozRoot(app: VolozApp) {
                 val s = app.settings.current
                 val route = DictationPipeline.Route(s.sttProviders, s.refineProviders) { s.keyFor(it) }
                 val result = withContext(Dispatchers.IO) {
-                    runCatching { app.pipeline.refineAgain(route, row.raw, s.vocabulary, DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags) }
+                    runCatching {
+                        app.pipeline.refineAgain(
+                            route, row.raw, s.vocabulary, DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags,
+                            if (s.adaptToApp) io.github.mvoloch.voloz.android.refine.AppStyle.forPackage(row.pkg) else null,
+                        )
+                    }
                 }.getOrElse { return describeKeyError(context, it) }
                 if (result.answer == null && !result.shortcut) return context.getString(R.string.history_refine_failed)
                 app.history.update(row.timestamp) {
@@ -331,6 +336,7 @@ fun VolozRoot(app: VolozApp) {
                 providers = providerActions,
                 onRefineFlagsChange = { scope.launch { app.settings.setRefineFlags(it) } },
                 onLanguageChange = { scope.launch { app.settings.setLanguage(it) } },
+                onAdaptToAppChange = { scope.launch { app.settings.setAdaptToApp(it) } },
                 readLog = { app.log.read() },
                 clearLog = { app.log.clear() },
                 copy = { historyActions.copy(it) },
@@ -362,6 +368,7 @@ private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
         id = id,
         timestamp = e.timestamp,
         raw = e.raw,
+        pkg = e.targetPackage,
         day = dayLabel(context, e.timestamp),
         time = DateFormat.getTimeFormat(context).format(Date(e.timestamp)),
         durationMs = e.durationMs,

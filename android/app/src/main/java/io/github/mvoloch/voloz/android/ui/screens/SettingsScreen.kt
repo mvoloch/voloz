@@ -97,6 +97,7 @@ class SettingsCallbacks(
     val textRules: TextRuleActions,
     val onRefineFlagsChange: (io.github.mvoloch.voloz.android.refine.RefineFlags) -> Unit,
     val onLanguageChange: (String) -> Unit,
+    val onAdaptToAppChange: (Boolean) -> Unit,
     val readLog: () -> String,
     val clearLog: () -> Unit,
     val copy: (String) -> Unit,
@@ -153,6 +154,10 @@ fun SettingsScreen(
                         GroupDivider()
                         ToggleRow(stringResource(R.string.refine_self_correction), stringResource(R.string.refine_self_correction_sub), f.selfCorrection, enabled = settings.refine) {
                             callbacks.onRefineFlagsChange(f.copy(selfCorrection = it))
+                        }
+                        GroupDivider()
+                        ToggleRow(stringResource(R.string.refine_adapt), stringResource(R.string.refine_adapt_sub), settings.adaptToApp, enabled = settings.refine) {
+                            callbacks.onAdaptToAppChange(it)
                         }
                         GroupDivider()
                         ToggleRow(stringResource(R.string.refine_technical), stringResource(R.string.refine_technical_sub), f.preserveTechnical, enabled = settings.refine) {

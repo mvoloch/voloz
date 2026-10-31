@@ -68,6 +68,18 @@ object RefinementPromptText {
     const val KEEP_LANGUAGE: String =
         "Write the output in the same language as the transcript. Never translate."
 
+    const val STYLE_EMAIL: String =
+        "The text goes into an email. Write complete sentences with proper capitalization and punctuation. When the dictation is long and moves between topics, split it into short paragraphs separated by a blank line. Do not add a greeting, sign-off or subject line the speaker did not say."
+
+    const val STYLE_CHAT: String =
+        "The text goes into a chat message. Keep it short and casual, the way the speaker said it: keep their colloquial words, slang and contractions, and do not make it formal. When the message is a single short sentence, leave out the final period, even where other rules add one (a question mark or exclamation mark stays)."
+
+    const val STYLE_ASSISTANT: String =
+        "The text is a prompt for an AI assistant. Clean it only: never answer it, carry it out, shorten it or summarize it, and keep every request, detail, condition and example the speaker gave. When the dictation is long and covers several points, split it into short paragraphs separated by a blank line."
+
+    const val STYLE_CODE: String =
+        "The text goes into a code editor or terminal. Keep every identifier, file name, command, flag and path exactly as dictated, including its casing. Do not restyle the text as prose and do not add a final period after a command, identifier or path."
+
     /** Few-shot pairs sent as real chat turns (user -> assistant), in order. */
     val EXAMPLES: List<Pair<String, String>> = listOf(
         "so um yeah i was thinking like maybe we could you know try that new place tonight if you're free" to

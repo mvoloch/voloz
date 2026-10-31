@@ -61,6 +61,8 @@ data class VolozSettings(
     val refine: Boolean = true,
     /** What refinement does (desktop "O que limpar"). */
     val refineFlags: RefineFlags = RefineFlags(),
+    /** Desktop "Adaptar o estilo ao app": email, chat, code and assistant apps get their own style. */
+    val adaptToApp: Boolean = true,
     /** Transcription language, ISO-639-1, or "auto" (desktop's list). */
     val language: String = "auto",
     val vocabulary: List<String> = emptyList(),
@@ -111,6 +113,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         val SELF_CORRECTION = booleanPreferencesKey("self_correction")
         val PRESERVE_TECHNICAL = booleanPreferencesKey("preserve_technical")
         val LANGUAGE = stringPreferencesKey("language")
+        val ADAPT_TO_APP = booleanPreferencesKey("adapt_to_app")
         val VOCABULARY = stringPreferencesKey("vocabulary")
         val REPLACEMENTS = stringPreferencesKey("replacements")
         val SNIPPETS = stringPreferencesKey("snippets")
@@ -197,6 +200,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         refine = p[REFINE] ?: true,
         refineFlags = RefineFlags(p[SMART_CLEANUP] ?: true, p[SELF_CORRECTION] ?: true, p[PRESERVE_TECHNICAL] ?: true),
         language = p[LANGUAGE] ?: "auto",
+        adaptToApp = p[ADAPT_TO_APP] ?: true,
         vocabulary = p[VOCABULARY]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
         replacements = pairs(p[REPLACEMENTS], "from", "to").map { (a, b) -> Replacement(a, b) },
         snippets = pairs(p[SNIPPETS], "trigger", "text").map { (a, b) -> Snippet(a, b) },
@@ -257,6 +261,7 @@ class SettingsRepository(context: Context, scope: CoroutineScope) {
         it[PRESERVE_TECHNICAL] = flags.preserveTechnical
     }
     suspend fun setLanguage(code: String) = store.edit { it[LANGUAGE] = code }
+    suspend fun setAdaptToApp(on: Boolean) = store.edit { it[ADAPT_TO_APP] = on }
     suspend fun setOnlyInTextFields(on: Boolean) = store.edit { it[ONLY_TEXT_FIELDS] = on }
     suspend fun setBubbleSize(size: BubbleSize) = store.edit { it[BUBBLE_SIZE] = size.name }
     suspend fun setTheme(mode: ThemeMode) = store.edit { it[THEME] = mode.name }

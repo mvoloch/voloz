@@ -86,6 +86,8 @@ data class HistoryRow(
     val text: String,
     /** The transcript before refinement (replacement rules applied). */
     val raw: String,
+    /** The app the text went into (its writing style when refining again). */
+    val pkg: String? = null,
     /** "WhatsApp · refinado por qwen3.8-27b" */
     val meta: String,
 )

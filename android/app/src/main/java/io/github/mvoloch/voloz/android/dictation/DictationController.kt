@@ -24,6 +24,7 @@ import io.github.mvoloch.voloz.android.service.RecordingService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import io.github.mvoloch.voloz.android.net.DictationCancelled
+import io.github.mvoloch.voloz.android.refine.AppStyle
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -50,6 +51,8 @@ data class InsertResult(val outcome: InsertOutcome, val packageName: String?)
 /** Implemented by the accessibility service, the only component that can reach other apps' fields. */
 interface TextInserter {
     fun insert(text: String): InsertResult
+    /** Package of the app whose field would receive the text now, if known. */
+    fun targetPackage(): String?
     fun pasteClipboard(): Boolean
 }
 
@@ -117,6 +120,8 @@ class DictationController(
     private var processing: Pair<Take, DictationPipeline.Cancel>? = null
     /** A take whose processing failed, kept so a tap can send it again. */
     private var failedTake: Take? = null
+    /** The app the take was meant for (its writing style), captured when recording stopped. */
+    private var takePackage: String? = null
     private val toRetryReady = Runnable {
         _state.value = BubbleState.RetryReady
         main.postDelayed(dropRetry, RETRY_READY_MS)
@@ -231,6 +236,7 @@ class DictationController(
         val rec = recorder ?: return
         recorder = null
         val take = rec.stop()
+        takePackage = inserter?.targetPackage()
         stopForegroundService()
         when {
             take.durationMs < MIN_DURATION_MS -> flashError(context.getString(R.string.msg_too_short))
@@ -244,6 +250,7 @@ class DictationController(
         _step.value = R.string.step_transcribing
         _state.value = BubbleState.Processing
         val s = settings.current
+        val pkg = takePackage
         val cancel = pipeline.newCancel()
         processing = take to cancel
         main.postDelayed(deadline, PROCESS_DEADLINE_MS + take.durationMs)
@@ -255,6 +262,7 @@ class DictationController(
                         DictationPipeline.TextRules(s.replacements, s.snippets), s.refineFlags,
                         language = s.language.takeIf { it != "auto" },
                         onTranscribed = { if (s.refine) main.post { if (processing?.second === cancel) _step.value = R.string.step_refining } },
+                        appStyle = if (s.adaptToApp) AppStyle.forPackage(pkg) else null,
                     )
                 }
             }

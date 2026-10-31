@@ -1,7 +1,9 @@
 """Port the desktop refinement prompt text to Kotlin verbatim, and write a
 test fixture produced by the real Python build_refinement_prompt.
 
-Usage: python3 -I gen_prompt.py <refinement.py> <kotlin_out> <fixture_dir>
+Usage: python3 -I gen_prompt.py <refinement.py> <kotlin_out> <fixture_dir> [<app_context.py>]
+With app_context.py, the per-app style texts are ported too and the prompt is
+built with the desktop's real style_instruction.
 """
 import ast
 import json
@@ -9,6 +11,7 @@ import sys
 from pathlib import Path
 
 src_path, kt_out, fixture_dir = sys.argv[1], Path(sys.argv[2]), Path(sys.argv[3])
+app_context_path = sys.argv[4] if len(sys.argv) > 4 else None
 src = Path(src_path).read_text()
 tree = ast.parse(src)
 
@@ -33,6 +36,10 @@ prelude = ("import re\nfrom dataclasses import dataclass\nfrom typing import Ite
            "def style_instruction(_s):\n    return None\n")
 exec(prelude, ns)
 exec(compile(mod, src_path, "exec"), ns)
+ctx = {}
+if app_context_path:
+    exec(compile(Path(app_context_path).read_text(), app_context_path, "exec"), ctx)
+    ns["style_instruction"] = ctx["style_instruction"]
 missing = [w for w in WANTED if w not in ns]
 assert not missing, missing
 
@@ -75,6 +82,9 @@ names = {
 body = []
 for py, k in names.items():
     body.append(f"    const val {k}: String =\n        {kt_multiline(ns[py])}\n")
+if ctx:
+    for style, text in ctx["_STYLE_INSTRUCTIONS"].items():
+        body.append(f"    const val STYLE_{style.upper()}: String =\n        {kt_multiline(text)}\n")
 ex = ",\n".join(f"        {kt(u)} to\n            {kt(a)}" for u, a in ns["REFINEMENT_EXAMPLES"])
 body.append(f"    /** Few-shot pairs sent as real chat turns (user -> assistant), in order. */\n"
             f"    val EXAMPLES: List<Pair<String, String>> = listOf(\n{ex},\n    )\n")
@@ -125,4 +135,12 @@ for c in (True, False):
                 "vocab": ns["build_refinement_prompt"](f, ["Voloz", "Groq"]),
             })
 (fixture_dir / "prompt_flags.json").write_text(json.dumps(combos, ensure_ascii=False))
+if ctx:
+    styles = {}
+    for style in ctx["_STYLE_INSTRUCTIONS"]:
+        styles[style] = ns["build_refinement_prompt"](ns["RefinementFlags"](), ["Voloz"], style)
+    (fixture_dir / "prompt_styles.json").write_text(json.dumps(styles, ensure_ascii=False))
+    chat = ["Beleza, valeu.", "Beleza, valeu...", "Tudo certo. Até amanhã.", "Ok.\nTchau.", "Pergunta?", "x" * 130 + "."]
+    (fixture_dir / "finish_chat.json").write_text(json.dumps(
+        [[t, ctx["finish_for_style"](t, "chat")] for t in chat], ensure_ascii=False))
 print("ok", len(no_vocab), len(with_vocab), len(combos))

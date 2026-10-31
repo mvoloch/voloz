@@ -299,6 +299,8 @@ class VolozAccessibilityService : AccessibilityService(), TextInserter {
         return ok
     }
 
+    override fun targetPackage(): String? = runCatching { currentTarget()?.packageName?.toString() }.getOrNull()
+
     override fun pasteClipboard(): Boolean {
         val node = currentTarget() ?: return false
         if (!FieldPolicy.isDictationTarget(node.inputType, node.isPassword)) return false

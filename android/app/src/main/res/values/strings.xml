@@ -209,6 +209,8 @@
     <string name="refine_cleanup_sub">Remove palavras de preenchimento (hum, é, tipo), restaura a pontuação e corrige o uso de maiúsculas sem reformular.</string>
     <string name="refine_self_correction">Remover autocorreções</string>
     <string name="refine_self_correction_sub">Quando você muda de ideia no meio da frase (“na verdade, não…”, “espera, quis dizer…”), descarta a parte retratada e mantém a intenção final.</string>
+    <string name="refine_adapt">Adaptar o estilo ao app</string>
+    <string name="refine_adapt_sub">E-mails ganham frases completas e parágrafos, mensagens de chat ficam curtas e informais, editores de código e terminais mantêm os nomes exatamente como ditos. Nos outros apps nada muda.</string>
     <string name="refine_technical">Preservar termos técnicos</string>
     <string name="refine_technical_sub">Mantém identificadores de código, nomes de comandos e siglas exatamente como falados.</string>
     <string name="providers_hint">O primeiro é o principal. Se ele falhar ou atingir o limite, o próximo da lista recebe o mesmo pedido. Quem atingiu o limite fica de fora até passar a espera que pediu.</string>
