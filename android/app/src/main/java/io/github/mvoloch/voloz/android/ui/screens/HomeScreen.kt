@@ -129,6 +129,9 @@ fun HomeScreen(
     onFix: (FixTarget) -> Unit,
     onCopy: (HistoryRow) -> Unit,
     historyActions: HistoryActions,
+    onImport: () -> Unit,
+    update: io.github.mvoloch.voloz.android.net.UpdateCheck.Release?,
+    onUpdate: (io.github.mvoloch.voloz.android.net.UpdateCheck.Release) -> Unit,
     onTab: (Tab) -> Unit,
 ) {
     var tryText by rememberSaveable { mutableStateOf("") }
@@ -149,6 +152,15 @@ fun HomeScreen(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = VolozDimens.ScreenPadding, end = VolozDimens.ScreenPadding, top = 28.dp, bottom = 32.dp),
         ) {
+            if (update != null) {
+                item {
+                    SettingsGroup(modifier = Modifier.padding(bottom = 22.dp)) {
+                        SettingRow(stringResource(R.string.update_title, update.version), stringResource(R.string.update_sub), onClick = { onUpdate(update) }) {
+                            StatusPill(stringResource(R.string.update_download), PillTone.OK)
+                        }
+                    }
+                }
+            }
             item { Hero(onlyInTextFields) }
             item {
                 ModelStatus(modelStatus, ok = readiness.ready, modifier = Modifier.padding(top = 16.dp))
@@ -165,6 +177,11 @@ fun HomeScreen(
                     singleLine = false,
                     modifier = Modifier.fillMaxWidth().padding(top = 22.dp).onFocusChanged { tryFocused = it.isFocused },
                 )
+            }
+            item {
+                Row(Modifier.padding(top = 12.dp)) {
+                    io.github.mvoloch.voloz.android.ui.components.SecondaryButton(stringResource(R.string.import_button), onImport)
+                }
             }
             if (history.isNotEmpty()) {
                 item {

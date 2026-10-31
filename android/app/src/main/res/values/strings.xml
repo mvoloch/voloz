@@ -151,6 +151,18 @@
     <string name="home_refined_by_backup">refinado por %1$s (reserva)</string>
     <string name="home_shortcut">atalho de texto</string>
     <string name="home_edited">corrigido à mão</string>
+    <string name="home_imported">áudio importado</string>
+    <string name="import_button">Importar áudio</string>
+    <string name="import_share_label">Transcrever com o Voloz</string>
+    <string name="import_title">Importar áudio</string>
+    <string name="import_reading">Lendo o arquivo…</string>
+    <string name="import_done">Pronto. O texto foi copiado e está no histórico.</string>
+    <string name="import_close">Fechar</string>
+    <string name="import_unsupported">Formato de áudio não suportado. Use ogg/opus, m4a, mp3, wav, flac ou webm.</string>
+    <string name="import_unreadable">Não deu para ler o arquivo, ou ele passa de 25 MB.</string>
+    <string name="update_title">Nova versão do Voloz: %1$s</string>
+    <string name="update_sub">Toque para baixar. Instale por cima: a chave e os ajustes ficam.</string>
+    <string name="update_download">Baixar</string>
     <string name="history_text">Texto</string>
     <string name="history_original">Original</string>
     <string name="history_edit">Corrigir</string>
@@ -219,6 +231,7 @@
     <string name="providers_endpoint">Endereço (URL)</string>
     <string name="providers_model">Modelo</string>
     <string name="providers_up">Subir</string>
+    <string name="providers_down">Descer</string>
     <string name="providers_more">Mais opções</string>
     <string name="providers_key_menu">Chave…</string>
     <string name="providers_remove">Remover</string>

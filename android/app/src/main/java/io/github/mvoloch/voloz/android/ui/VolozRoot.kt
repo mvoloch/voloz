@@ -46,6 +46,7 @@ import io.github.mvoloch.voloz.android.net.KeyRules
 import io.github.mvoloch.voloz.android.net.Provider
 import io.github.mvoloch.voloz.android.net.ProviderException
 import io.github.mvoloch.voloz.android.net.ProviderPresets
+import io.github.mvoloch.voloz.android.net.UpdateCheck
 import io.github.mvoloch.voloz.android.net.hostOf
 import io.github.mvoloch.voloz.android.service.VolozAccessibilityService
 import io.github.mvoloch.voloz.android.text.Replacement
@@ -258,6 +259,22 @@ fun VolozRoot(app: VolozApp) {
         }
     }
 
+    // Desktop "Importar áudio": pick a file, transcribe it in ImportActivity.
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            context.startActivity(
+                Intent(context, ImportActivity::class.java).setData(uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
+
+    // Desktop update badge: the newest android-v* release, checked once per app start.
+    var update by remember { mutableStateOf<UpdateCheck.Release?>(null) }
+    LaunchedEffect(Unit) {
+        update = withContext(Dispatchers.IO) { UpdateCheck.find(versionName(context)) }
+    }
+
     // Rebuilt only when the history changes (each row asks PackageManager for the app's name),
     // or on resume, so "Hoje" turns into "Ontem" after midnight.
     val rows = remember(history, resumeTick) {
@@ -315,6 +332,9 @@ fun VolozRoot(app: VolozApp) {
                 Toast.makeText(context, R.string.msg_copied, Toast.LENGTH_SHORT).show()
             },
             historyActions = historyActions,
+            onImport = { importLauncher.launch(arrayOf("audio/*")) },
+            update = update,
+            onUpdate = { u -> startSafely(context, Intent(Intent.ACTION_VIEW, Uri.parse(u.url))) },
             onTab = onTab,
         )
         Screen.SETTINGS -> SettingsScreen(
@@ -356,7 +376,10 @@ private fun versionName(context: Context): String =
     runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull().orEmpty()
 
 private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
-    val where = e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
+    val where = when {
+        e.imported -> context.getString(R.string.home_imported)
+        else -> e.targetPackage?.let { appLabel(context, it) } ?: context.getString(R.string.home_app_clipboard)
+    }
     val refined = if (e.shortcut) {
         context.getString(R.string.home_shortcut)
     } else {

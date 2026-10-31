@@ -39,6 +39,8 @@ data class HistoryEntry(
     val shortcut: Boolean = false,
     /** Corrected by hand in the history. */
     val edited: Boolean = false,
+    /** An imported audio file, not a dictation. */
+    val imported: Boolean = false,
 )
 
 private val Context.historyStore by preferencesDataStore(name = "history")
@@ -93,6 +95,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                         if (e.refineBackup) put("rbackup", JsonPrimitive(true))
                         if (e.shortcut) put("shortcut", JsonPrimitive(true))
                         if (e.edited) put("edited", JsonPrimitive(true))
+                        if (e.imported) put("imported", JsonPrimitive(true))
                     },
                 ),
             )
@@ -116,6 +119,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                     refineBackup = o["rbackup"]?.jsonPrimitive?.booleanOrNull ?: false,
                     shortcut = o["shortcut"]?.jsonPrimitive?.booleanOrNull ?: false,
                     edited = o["edited"]?.jsonPrimitive?.booleanOrNull ?: false,
+                    imported = o["imported"]?.jsonPrimitive?.booleanOrNull ?: false,
                 )
             }
         }.getOrDefault(emptyList())

@@ -38,6 +38,20 @@
             </intent-filter>
         </activity>
 
+        <!-- Desktop "Importar áudio": an audio file shared to Voloz (e.g. a WhatsApp voice note). -->
+        <activity
+            android:name=".ui.ImportActivity"
+            android:exported="true"
+            android:label="@string/import_share_label"
+            android:taskAffinity=""
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".service.VolozAccessibilityService"
             android:exported="true"

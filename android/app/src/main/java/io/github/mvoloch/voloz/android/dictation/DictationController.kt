@@ -382,7 +382,8 @@ class DictationController(
         }
     }
 
-    private fun describe(e: Throwable): String = when (e) {
+    /** A short Portuguese message for a failed dictation or import. */
+    fun describe(e: Throwable): String = when (e) {
         is ProviderException -> when {
             e.missingKey -> context.getString(R.string.msg_need_key)
             e.status == 401 || e.status == 403 -> context.getString(R.string.msg_key_invalid)
@@ -412,6 +413,12 @@ class DictationController(
         main.removeCallbacks(toPasteReady)
         main.removeCallbacks(toRetryReady)
         main.removeCallbacks(dropRetry)
+    }
+
+    /** Copies [text] and says so (history, import screen). */
+    fun copyText(text: String) {
+        copyToClipboard(text)
+        android.widget.Toast.makeText(context, R.string.msg_copied, android.widget.Toast.LENGTH_SHORT).show()
     }
 
     private fun copyToClipboard(text: String) {

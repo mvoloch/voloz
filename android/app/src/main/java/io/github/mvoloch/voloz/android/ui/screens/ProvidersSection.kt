@@ -95,6 +95,7 @@ fun ProviderList(kind: ProviderKind, settings: VolozSettings, actions: ProviderA
                     key = settings.keyFor(p.host),
                     canRemove = list.size > 1,
                     onUp = if (i > 0) ({ actions.editProviders(kind) { l -> moveUp(l, p) } }) else null,
+                    onDown = if (i < list.size - 1) ({ actions.editProviders(kind) { l -> moveDown(l, p) } }) else null,
                     onKey = { keyFor = p },
                     onRemove = { actions.editProviders(kind) { l -> l.filterNot { it.sameAs(p) } } },
                 )
@@ -126,6 +127,12 @@ internal fun moveUp(list: List<Provider>, p: Provider): List<Provider> {
     return if (i > 0) list.toMutableList().apply { add(i - 1, removeAt(i)) } else list
 }
 
+/** [p] one place down; the list as is when [p] is already last or gone. */
+internal fun moveDown(list: List<Provider>, p: Provider): List<Provider> {
+    val i = list.indexOfFirst { it.sameAs(p) }
+    return if (i in 0 until list.size - 1) list.toMutableList().apply { add(i + 1, removeAt(i)) } else list
+}
+
 @Composable
 private fun ProviderRow(
     rank: Int,
@@ -133,6 +140,7 @@ private fun ProviderRow(
     key: SavedKey?,
     canRemove: Boolean,
     onUp: (() -> Unit)?,
+    onDown: (() -> Unit)?,
     onKey: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -157,6 +165,9 @@ private fun ProviderRow(
             SquareControl(VolozIcons.More, stringResource(R.string.providers_more)) { menu = true }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, containerColor = VolozColors.Sheet) {
                 DropdownMenuItem(text = { Text(stringResource(R.string.providers_key_menu)) }, onClick = { menu = false; onKey() })
+                if (onDown != null) {
+                    DropdownMenuItem(text = { Text(stringResource(R.string.providers_down)) }, onClick = { menu = false; onDown() })
+                }
                 if (canRemove) {
                     DropdownMenuItem(text = { Text(stringResource(R.string.providers_remove)) }, onClick = { menu = false; onRemove() })
                 }
