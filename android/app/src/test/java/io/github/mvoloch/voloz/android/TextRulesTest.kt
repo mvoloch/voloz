@@ -238,4 +238,17 @@ class TextRulesTest {
         assertEquals("Bom dia a todos.", out.text)
         assertFalse(server.bodies.last().contains("placeholders"))
     }
+
+    @Test
+    fun refiningAgainFromTheHistoryTakesTheSamePath() {
+        val server = Server("unused") { user -> "Manda pra [[S1]], por favor." }
+        val pipeline = DictationPipeline(server.client(), Fallback { 0L })
+        val again = pipeline.refineAgain(route, "manda pra meu endereço por favor", emptyList(), rules)
+        assertEquals("Manda pra $address, por favor.", again.text)
+        assertEquals("openai/gpt-oss-120b", again.answer?.provider?.model)
+        val whole = pipeline.refineAgain(route, "meu endereço", emptyList(), rules)
+        assertEquals(address, whole.text)
+        assertTrue(whole.shortcut)
+        assertEquals(1, server.bodies.size) // the whole shortcut didn't call the model
+    }
 }

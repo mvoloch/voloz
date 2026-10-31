@@ -37,6 +37,8 @@ data class HistoryEntry(
     val refineBackup: Boolean = false,
     /** The text came from a text shortcut. */
     val shortcut: Boolean = false,
+    /** Corrected by hand in the history. */
+    val edited: Boolean = false,
 )
 
 private val Context.historyStore by preferencesDataStore(name = "history")
@@ -47,7 +49,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
     private val key = stringPreferencesKey("entries")
 
     companion object {
-        const val MAX = 30
+        const val MAX = 200
     }
 
     val entries: StateFlow<List<HistoryEntry>> = store.data
@@ -59,6 +61,17 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             store.edit { prefs -> prefs[key] = encode((listOf(entry) + decode(prefs[key])).take(MAX)) }
         }
+    }
+
+    /** Changes the entry with this [timestamp] (the history's key), read from the store. */
+    fun update(timestamp: Long, change: (HistoryEntry) -> HistoryEntry) {
+        scope.launch {
+            store.edit { prefs -> prefs[key] = encode(decode(prefs[key]).map { if (it.timestamp == timestamp) change(it) else it }) }
+        }
+    }
+
+    fun remove(timestamp: Long) {
+        scope.launch { store.edit { prefs -> prefs[key] = encode(decode(prefs[key]).filterNot { it.timestamp == timestamp }) } }
     }
 
     fun clear() {
@@ -79,6 +92,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                         e.refineModel?.let { put("rmodel", JsonPrimitive(it)) }
                         if (e.refineBackup) put("rbackup", JsonPrimitive(true))
                         if (e.shortcut) put("shortcut", JsonPrimitive(true))
+                        if (e.edited) put("edited", JsonPrimitive(true))
                     },
                 ),
             )
@@ -101,6 +115,7 @@ class HistoryRepository(context: Context, private val scope: CoroutineScope) {
                     refineModel = o["rmodel"]?.jsonPrimitive?.contentOrNull,
                     refineBackup = o["rbackup"]?.jsonPrimitive?.booleanOrNull ?: false,
                     shortcut = o["shortcut"]?.jsonPrimitive?.booleanOrNull ?: false,
+                    edited = o["edited"]?.jsonPrimitive?.booleanOrNull ?: false,
                 )
             }
         }.getOrDefault(emptyList())

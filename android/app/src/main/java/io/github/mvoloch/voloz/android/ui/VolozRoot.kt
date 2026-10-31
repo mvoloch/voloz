@@ -41,15 +41,19 @@ import io.github.mvoloch.voloz.android.VolozApp
 import io.github.mvoloch.voloz.android.data.HistoryEntry
 import io.github.mvoloch.voloz.android.data.KeyMismatchException
 import io.github.mvoloch.voloz.android.data.ProviderKind
+import io.github.mvoloch.voloz.android.net.DictationPipeline
 import io.github.mvoloch.voloz.android.net.KeyRules
 import io.github.mvoloch.voloz.android.net.Provider
 import io.github.mvoloch.voloz.android.net.ProviderException
 import io.github.mvoloch.voloz.android.net.ProviderPresets
 import io.github.mvoloch.voloz.android.net.hostOf
 import io.github.mvoloch.voloz.android.service.VolozAccessibilityService
+import io.github.mvoloch.voloz.android.text.Replacement
+import io.github.mvoloch.voloz.android.text.Replacements
 import io.github.mvoloch.voloz.android.ui.components.Tab
 import io.github.mvoloch.voloz.android.ui.screens.AccessibilityScreen
 import io.github.mvoloch.voloz.android.ui.screens.FixTarget
+import io.github.mvoloch.voloz.android.ui.screens.HistoryActions
 import io.github.mvoloch.voloz.android.ui.screens.HistoryRow
 import io.github.mvoloch.voloz.android.ui.screens.HomeScreen
 import io.github.mvoloch.voloz.android.ui.screens.KeySaveResult
@@ -210,6 +214,45 @@ fun VolozRoot(app: VolozApp) {
         }
     }
 
+    val historyActions = remember(app) {
+        object : HistoryActions {
+            override fun copy(text: String) {
+                clipboard.setText(AnnotatedString(text))
+                Toast.makeText(context, R.string.msg_copied, Toast.LENGTH_SHORT).show()
+            }
+
+            override fun saveEdit(row: HistoryRow, text: String, editedRaw: Boolean): List<Replacement> {
+                app.history.update(row.timestamp) { it.copy(text = text.trim(), edited = true) }
+                // Rules already saved (same "from", any case, same "to") are not suggested again.
+                val saved = app.settings.current.replacements.map { it.from.lowercase() to it.to }.toSet()
+                return Replacements.suggest(if (editedRaw) row.raw else row.text, text)
+                    .filterNot { (it.from.lowercase() to it.to) in saved }
+            }
+
+            override fun learn(rule: Replacement) {
+                scope.launch { app.settings.addReplacement(rule.from, rule.to) }
+            }
+
+            override suspend fun refineAgain(row: HistoryRow): String? {
+                val s = app.settings.current
+                val route = DictationPipeline.Route(s.sttProviders, s.refineProviders) { s.keyFor(it) }
+                val result = withContext(Dispatchers.IO) {
+                    runCatching { app.pipeline.refineAgain(route, row.raw, s.vocabulary, DictationPipeline.TextRules(s.replacements, s.snippets)) }
+                }.getOrElse { return describeKeyError(context, it) }
+                if (result.answer == null && !result.shortcut) return context.getString(R.string.history_refine_failed)
+                app.history.update(row.timestamp) {
+                    it.copy(
+                        text = result.text, refined = result.answer != null, refineModel = result.answer?.provider?.model,
+                        refineBackup = result.answer?.backup ?: false, shortcut = result.shortcut, edited = false,
+                    )
+                }
+                return null
+            }
+
+            override fun delete(row: HistoryRow) = app.history.remove(row.timestamp)
+        }
+    }
+
     // Rebuilt only when the history changes (each row asks PackageManager for the app's name),
     // or on resume, so "Hoje" turns into "Ontem" after midnight.
     val rows = remember(history, resumeTick) {
@@ -266,6 +309,7 @@ fun VolozRoot(app: VolozApp) {
                 clipboard.setText(AnnotatedString(row.text))
                 Toast.makeText(context, R.string.msg_copied, Toast.LENGTH_SHORT).show()
             },
+            historyActions = historyActions,
             onTab = onTab,
         )
         Screen.SETTINGS -> SettingsScreen(
@@ -311,11 +355,13 @@ private fun toRow(context: Context, id: Long, e: HistoryEntry): HistoryRow {
     }
     return HistoryRow(
         id = id,
+        timestamp = e.timestamp,
+        raw = e.raw,
         day = dayLabel(context, e.timestamp),
         time = DateFormat.getTimeFormat(context).format(Date(e.timestamp)),
         durationMs = e.durationMs,
         text = e.text,
-        meta = listOfNotNull(where, refined).joinToString(" · "),
+        meta = listOfNotNull(where, refined, if (e.edited) context.getString(R.string.home_edited) else null).joinToString(" · "),
     )
 }
 

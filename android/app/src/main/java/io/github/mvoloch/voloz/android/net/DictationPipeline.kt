@@ -96,37 +96,52 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
         }
         val raw = Replacements.apply(stt.value.trim(), rules.replacements)
         val sttMs = (System.nanoTime() - t0) / 1_000_000
-        fun output(text: String, refined: Answer?, error: String?, refineMs: Long, shortcut: Boolean = false) = Output(
-            raw = raw, text = text, refined = refined != null, refineError = error, sttMs = sttMs, refineMs = refineMs,
-            sttModel = stt.provider.model, refineModel = refined?.provider?.model,
-            sttBackup = stt.backup, refineBackup = refined?.backup ?: false, shortcut = shortcut,
+        val r = finish(route, raw, vocabulary, refine, cancel, rules)
+        return Output(
+            raw = raw, text = r.text, refined = r.answer != null, refineError = r.error, sttMs = sttMs, refineMs = r.ms,
+            sttModel = stt.provider.model, refineModel = r.answer?.provider?.model,
+            sttBackup = stt.backup, refineBackup = r.answer?.backup ?: false, shortcut = r.shortcut,
         )
-        if (raw.isEmpty()) return output(raw, null, null, 0)
-        Snippets.matchWhole(raw, rules.snippets)?.let { return output(it, null, null, 0, shortcut = true) }
+    }
+
+    /** What the text became after the transcript: shortcuts and refinement (or why it wasn't refined). */
+    class Finished(val text: String, val answer: Answer?, val error: String?, val ms: Long, val shortcut: Boolean)
+
+    /**
+     * History "Refinar de novo": the stored raw transcript through the same path as a new
+     * dictation (shortcuts, placeholders, providers with backups). [Finished.error] says why
+     * the text came back unrefined.
+     */
+    fun refineAgain(route: Route, raw: String, vocabulary: List<String>, rules: TextRules): Finished =
+        finish(route, raw.trim(), vocabulary, refine = true, cancel = Cancel {}, rules = rules)
+
+    private fun finish(route: Route, raw: String, vocabulary: List<String>, refine: Boolean, cancel: Cancel, rules: TextRules): Finished {
+        if (raw.isEmpty()) return Finished(raw, null, null, 0, false)
+        Snippets.matchWhole(raw, rules.snippets)?.let { return Finished(it, null, null, 0, shortcut = true) }
         val unrefined = Snippets.expand(raw, rules.snippets)
-        if (!refine || route.refine.isEmpty()) return output(unrefined, null, null, 0)
+        if (!refine || route.refine.isEmpty()) return Finished(unrefined, null, null, 0, false)
 
         val (protected, tokens) = Snippets.protect(raw, rules.snippets)
         // Same pre-pass as the desktop: the LLM never sees Whisper loops.
         val cleaned = RefinementPrompt.collapseRepetitiveArtifacts(protected)
-        if (cleaned.isBlank()) return output("", null, null, 0)
+        if (cleaned.isBlank()) return Finished("", null, null, 0, false)
 
         val t1 = System.nanoTime()
+        fun ms() = (System.nanoTime() - t1) / 1_000_000
         return try {
-            val answer = fallback.run("llm", route.refine, stop) { p ->
+            val answer = fallback.run("llm", route.refine, { cancel.cancelled }) { p ->
                 client.refine(p, keyOrThrow(route, p), cleaned, vocabulary, tokens.keys.toList())
             }
-            val ms = (System.nanoTime() - t1) / 1_000_000
             val restored = Snippets.restore(answer.value, tokens)
             // A lost or repeated placeholder: guessing where a shortcut belonged could put it
             // in the wrong place; the unrefined text has each one where it was said.
-            if (restored == null) output(unrefined, null, "refinement lost a text-shortcut placeholder", ms, shortcut = true)
-            else output(restored, answer, null, ms)
+            if (restored == null) Finished(unrefined, null, "refinement lost a text-shortcut placeholder", ms(), shortcut = true)
+            else Finished(restored, answer, null, ms(), false)
         } catch (e: DictationCancelled) {
             throw e
         } catch (e: Exception) {
             if (cancel.cancelled) throw DictationCancelled()
-            output(unrefined, null, e.message ?: e.javaClass.simpleName, (System.nanoTime() - t1) / 1_000_000)
+            Finished(unrefined, null, e.message ?: e.javaClass.simpleName, ms(), false)
         }
     }
 
@@ -137,4 +152,4 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
     fun resetCooldowns() = fallback.reset()
 }
 
-private typealias Answer = Fallback.Answer<String>
+typealias Answer = Fallback.Answer<String>

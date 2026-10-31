@@ -78,10 +78,14 @@ enum class FixTarget { KEY, MIC, ACCESSIBILITY, BATTERY }
 /** One history row, already formatted for display. */
 data class HistoryRow(
     val id: Long,
+    /** The entry's key in the history store. */
+    val timestamp: Long,
     val day: String,
     val time: String,
     val durationMs: Long,
     val text: String,
+    /** The transcript before refinement (replacement rules applied). */
+    val raw: String,
     /** "WhatsApp · refinado por qwen3.8-27b" */
     val meta: String,
 )
@@ -122,6 +126,7 @@ fun HomeScreen(
     history: List<HistoryRow>,
     onFix: (FixTarget) -> Unit,
     onCopy: (HistoryRow) -> Unit,
+    historyActions: HistoryActions,
     onTab: (Tab) -> Unit,
 ) {
     var tryText by rememberSaveable { mutableStateOf("") }
@@ -129,7 +134,12 @@ fun HomeScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var searchFocused by rememberSaveable { mutableStateOf(false) }
     var openId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val shown = if (query.isBlank()) history else history.filter { it.text.contains(query.trim(), ignoreCase = true) }
+    val open = history.firstOrNull { it.id == openId }
+    if (open != null) HistoryDetail(open, historyActions, onDismiss = { openId = null })
+    // Searches the text and the original transcript, as the desktop does.
+    val shown = if (query.isBlank()) history else history.filter {
+        it.text.contains(query.trim(), ignoreCase = true) || it.raw.contains(query.trim(), ignoreCase = true)
+    }
 
     Column(Modifier.fillMaxSize().background(VolozColors.Mist).safeDrawingPadding()) {
         TopBar(Tab.HOME, onTab)
@@ -203,7 +213,7 @@ fun HomeScreen(
                     lastDay = day
                 }
                 item(key = row.id) {
-                    HistoryItem(row, open = openId == row.id, onToggle = { openId = if (openId == row.id) null else row.id }, onCopy = onCopy)
+                    HistoryItem(row, open = false, onToggle = { openId = row.id }, onCopy = onCopy)
                 }
             }
         }

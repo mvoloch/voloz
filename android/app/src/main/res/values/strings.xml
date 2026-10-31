@@ -146,6 +146,19 @@
     <string name="home_refined_by">refinado por %1$s</string>
     <string name="home_refined_by_backup">refinado por %1$s (reserva)</string>
     <string name="home_shortcut">atalho de texto</string>
+    <string name="home_edited">corrigido à mão</string>
+    <string name="history_text">Texto</string>
+    <string name="history_original">Original</string>
+    <string name="history_edit">Corrigir</string>
+    <string name="history_saved">Correção salva.</string>
+    <string name="history_learn">Aprender com a correção</string>
+    <string name="history_refine_again">Refinar de novo</string>
+    <string name="history_refining">Refinando…</string>
+    <string name="history_refined_again">Refinado de novo.</string>
+    <string name="history_refine_failed">O refinamento falhou; o texto ficou como estava.</string>
+    <string name="history_delete">Apagar</string>
+    <string name="history_delete_title">Apagar este ditado?</string>
+    <string name="history_delete_body">Ele sai do histórico. O texto já inserido no app fica onde está.</string>
 
     <!-- 6. Ajustes (the desktop Lite sections) -->
     <string name="section_bubble">Bolha</string>
@@ -223,7 +236,7 @@
     <string name="settings_keys_hint">Toda chave que você cola fica guardada, criptografada, só neste celular. Para escolher ou esquecer uma, toque na chave do provedor em Transcrição ou Refinamento.</string>
     <string name="settings_dictations_group">Seus ditados</string>
     <string name="settings_history">Histórico</string>
-    <string name="settings_history_sub">Os últimos 30, só neste celular.</string>
+    <string name="settings_history_sub">Os últimos 200, só neste celular.</string>
     <string name="settings_history_clear">Apagar</string>
     <string name="settings_history_clear_title">Apagar o histórico?</string>
     <string name="settings_history_clear_body">Os ditados somem da tela inicial. O texto já inserido nos apps fica onde está.</string>
