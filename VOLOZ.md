@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: the release workflow drops the bundled libwayland from the AppImage; released in Lite 0.8.18). Update this file whenever state or decisions change._
+_Last updated: 2026-11-02 (`voloz` branch: Lite 0.8.18 from `light` merged with the Android 0.3.0 prototype from `feat/android`). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -59,9 +59,12 @@ Remotes on GB4: `origin` = mvoloch/voloz, `upstream` = jamiepine/voicebox.
   models come as an optional on-demand download (reuse the CUDA-libs
   download mechanism Voicebox already has).
 - **Transcription:** Groq direct, `https://api.groq.com/openai/v1` with
-  `whisper-large-v3-turbo` (since 2026-10-28; was OpenRouter). Same model,
-  about 4x faster here and steady; it also honours Whisper's `prompt`.
-  Rollback: set the STT endpoint back to `https://openrouter.ai/api/v1`,
+  `whisper-large-v3` (since 2026-10-30, in the owner's settings, after a
+  side-by-side on two dictations: better words and punctuation at the same
+  speed). `whisper-large-v3-turbo` stays the rollback; it was the model from
+  2026-10-28, when Groq replaced OpenRouter (same model, about 4x faster
+  here and steady; Groq also honours Whisper's `prompt`). Rollback to
+  OpenRouter: set the STT endpoint back to `https://openrouter.ai/api/v1`,
   model `openai/whisper-large-v3-turbo`, with the OpenRouter key.
 - **Refinement model:** `claude-haiku-5-5` (best quality of 5 measured; see
   below). Native SDK, `effort: "low"`, no sampling parameters.
@@ -1066,6 +1069,364 @@ the owner's son extracts `Voloz.png` and writes `Voloz.desktop` with
 
 Not tested on Linux yet: a full dictation with a real key and voice, GNOME,
 CachyOS.
+
+## Android prototype (`feat/android`, 2026-10-29/30)
+
+Code in `android/` on `feat/android`, in the GB4 worktree
+`/mnt/data/dev/voloz-android` — **not pushed**. Kotlin + Compose, minSdk 29,
+target 35; build steps, file map and the full decision notes are in
+`android/README.md`. The platform research (Wispr Flow's Android behaviour,
+overlay/recording/insertion options, Play and sideload policy) is
+`docs/android/RESEARCH.md`. The emulator screenshots are in the owner's
+Windows folder (`wisprclone\voicebox\docs\android\screens\`, not in git).
+
+- **Toolchain (GB4):** `. /mnt/data/dev/android/env.sh` (JDK 17, SDK,
+  Gradle home on `/mnt/data`), then `cd android && ./gradlew assembleDebug
+  testDebugUnitTest`. Emulator: API 34 Google APIs x86_64, AVD `voloz34` in
+  `/mnt/data/dev/android/avd` (`ANDROID_AVD_HOME`/`ANDROID_EMULATOR_HOME`
+  point there); `/mnt/data/dev/android/emu.sh boot|wait|kill` runs it
+  headless on KVM (boots in ~30 s).
+- **Signing:** builds are signed with GB4's `~/.android/debug.keystore`.
+  Every later build must be signed with that same keystore, or Android
+  won't install it over the prototype (uninstalling wipes the stored key
+  and settings). Keep a copy with the other secrets.
+- **Bubble:** a `TYPE_ACCESSIBILITY_OVERLAY` window owned by the
+  accessibility service (no "display over other apps"), not focusable, so
+  it never takes focus from the field. Until the user drags it, it sits at
+  the right edge just above the focused field (below it when there is no
+  room above), so it never covers the field's own send/mic/emoji buttons;
+  a dragged spot is remembered and wins.
+- **Recording:** `AudioRecord` (16 kHz mono) in the service process, started
+  on tap, with a `microphone` foreground service started alongside (the
+  "gravando" notification). If the first 700 ms are exact zeros (a muted
+  mic), capture restarts under the foreground service.
+- **Insertion:** `ACTION_SET_TEXT` merged at the cursor, only when the
+  field reports its text and a cursor inside it; otherwise clipboard +
+  `ACTION_PASTE` (an app that hides its text would be wiped by SET_TEXT).
+  If both fail the text stays on the clipboard and the bubble offers to
+  paste it.
+- **Keys:** the user's own keys, every one kept per host and encrypted
+  with an Android Keystore AES-GCM key (DataStore); audio goes straight to
+  the provider. See "Lite look and desktop fixes" below.
+- **Prompt:** STT `whisper-large-v3`, refinement `openai/gpt-oss-120b`, both
+  on Groq by default, with backups. The refinement prompt is generated from the desktop's
+  `backend/services/refinement.py` by `android/tools/gen_prompt.py`, and the
+  unit tests compare it with fixtures made by the desktop's own functions.
+  Regenerate after any desktop prompt change.
+
+Verified on the GB4 emulator (2026-10-30, fake key only): every screen
+against the mockups (fixed: buttons pinned to the bottom, back-button
+offset, Ajustes checkboxes and line heights, link weights); the bubble in
+Messages and in Compose fields; idle, recording, processing and error
+states and the hands-free tooltip; the bubble's placement and that a
+dragged spot wins; the recording path (in-process capture with the
+foreground service, no silence restart — on the emulator's mic). Found
+and fixed there: every dictation died on a `(?U)` regex (Android's ICU
+rejects it; the JVM unit tests could not see it), and Compose fields
+never got the bubble. Unit tests: 36, 35 passed, 1 skipped (Groq e2e).
+
+Needs a real phone: a real dictation with the owner's key through to
+"Inserido" (the emulator only reached Groq's 401 for the fake key); real
+mic levels and whether the fallback is needed on Android 14/15; insertion
+in WhatsApp, Gmail and Chrome; the "Configuração restrita" flow for a
+sideloaded APK; battery restrictions; gestures and rotation.
+
+Pre-install review (2026-10-30, `dd8ec67`): an independent read of the
+whole app found 10 issues; 8 fixed: SET_TEXT could wipe a field whose app
+hides its text; a refinement cut at `max_tokens` (`finish_reason:
+length`) was inserted truncated, now it falls back to the raw transcript;
+disabling the service mid-take left the mic on and still uploaded; the
+Keystore save ran on the main thread and could crash; the paste tap
+skipped the password check; text could go into a field no longer on
+screen; the Compose focus walk (up to 600 nodes) ran on every event, now
+only with the keyboard up; a hold/drag stayed stuck when the bubble
+window was removed. Left open: processing can't be cancelled (up to two
+180 s calls on a bad network) and the bubble may anchor before an
+`adjustResize` relayout finishes. Unit tests 36 -> 40, then 42.
+
+First phone test (2026-10-30, the owner's phone, his real key): setup
+through Accessibility (all four Home checks green) and dictation into
+Voloz's own "Teste aqui" field, several times. Once, a second take a few
+minutes after the first gave "Nada foi ouvido" (the mic had sound, since
+the silent-mic message did not show, but Groq returned no words); not
+reproduced since, cause unknown. Each "Nada foi ouvido" now writes a
+history line with the take's length, its loudest 100 ms level and what
+Groq returned, so the next one can be told apart (quiet mic vs.
+transcription).
+
+Desktop notes from the same days: the owner's desktop STT model is now
+`whisper-large-v3` (switched 2026-10-30 in his settings; see Decisions).
+Lite 0.8.8 (`63f3fa5`) added the
+refinement spelling rule (`4684ca2`): spelling and grammar are always
+corrected (há/a, por que/porque, crase, accents, words that don't exist)
+while word choice, order and register stay — on Haiku, 22 of 24 known
+mistakes fixed, up from 7. The Android prompt was generated after it and
+includes the rule.
+
+### Lite look and desktop fixes (`feat/android`, 2026-10-30, not committed)
+
+The Android prototype brought up to desktop Lite 0.8.13 (`light`,
+`lite-v0.8.13`): its look and the dictation fixes of 0.8.10–0.8.13.
+
+**Look.** `ui/theme/Theme.kt` holds the Lite tokens of
+`app/src/index.css` / `design/lite-v2/mockup.html` as a light and a dark
+`VolozPalette` (mist `#F3F4F6` / sheet / ink `#121417`; dark `#0E0F11` /
+`#16181B` / `#ECEDEF`; graphite, faint, hair, ok; `signal` red only for the
+recording dot, the logo caret and a missing key). Light by default; Ajustes ›
+Geral › Tema offers Claro / Escuro / Seguir o sistema. Fonts: Bricolage Grotesque (titles), Onest
+(text), JetBrains Mono (keys, times, models); Bricolage and Onest are the
+desktop's own Latin WOFF2 files converted to TTF with fontTools (variable
+`wght`; Portuguese accents included), OFL texts in `android/fonts-licenses`;
+Familjen Grotesk is gone. Screens:
+- Top bar as the desktop's `LiteTopBar`: logo (four bars, red caret),
+  Início | Ajustes.
+- Início: "Toque na [bolha] e fale." with the bubble drawn inline like the
+  desktop's keycaps, the models in use with a dot (`Groq · whisper-large-v3
+  → gpt-oss-120b`), a "Falta configurar" card only while something is
+  missing, the test field, totals as one sentence, search, day headers, and
+  rows with the time, a bar as long as the speech (desktop
+  `speechBarWidth`: square root of seconds over 120 s), the text (tap to
+  open) and "app · refinado por modelo (reserva)". History entries now keep
+  the take's length and the model that refined it.
+- Ajustes: the desktop's six sections as a row of tabs (Bolha in place of
+  Atalhos, Transcrição, Refinamento, Vocabulário, Geral, Sobre) with
+  grouped cards; providers as one ordered list (rank, provider, model, key
+  status, move up, menu); Geral has the theme, Accessibility and battery
+  status, the saved keys and clearing the history; Sobre keeps the credit
+  to Voicebox / Jamie Pine.
+- Onboarding: same screens on the new tokens (olive and lime are gone).
+- Bubble (`overlay/BubbleStyle.kt`): the desktop notch's colours: black
+  `#0B0B0C`, white bars (dimmed while idle), red dot only while recording,
+  emerald check, amber warning; a faint white rim so it keeps its outline
+  over dark apps; the hands-free tooltip is a black capsule in JetBrains
+  Mono / Onest. Shape, size and placement unchanged: on a phone it floats by
+  the field, it can't hang from the top edge as on the desktop.
+- Launcher icon: the Lite logo (white bars, red caret) on black.
+
+**Fixes ported** (each checked against the Kotlin code first):
+- *Keys per host* (desktop "Saved keys"): every key pasted is kept
+  (`saved_keys`, encrypted, `{id, host, enc, added}`) and the one in use is
+  picked per host (`active_keys`); without a pick the newest is used. The
+  prototype's single `groq_key_enc` is read as a saved Groq key and dropped
+  at the first key change, so an installed prototype keeps its key. A key
+  whose prefix names another provider (`sk-ant-`, `gsk_`, `sk-or-`) is
+  refused naming both (`KeyRules.mismatch`, also in onboarding). Masking is
+  the desktop's (`gsk_ab…wxyz`). Forgetting a key asks first.
+- *Backup providers* (`net/Fallback.kt`, port of `services/providers.py`):
+  STT and refinement each have up to five providers in order; the next one
+  gets the same request after a `ProviderException` (HTTP error, timeout,
+  unreachable, or no key saved for its host); a 429 parks that provider for
+  its `Retry-After` (default 60 s, max 10 min) and when all are parked all
+  are tried; an empty or malformed reply is not retried elsewhere. A
+  refinement that fails everywhere still inserts the raw transcript.
+  Presets as the desktop's: STT Groq `whisper-large-v3`, OpenAI
+  `gpt-transcribe`; refinement Groq `openai/gpt-oss-120b` (default, as the
+  desktop's Groq-only setup), Groq `qwen/qwen3.8-27b`, OpenAI `gpt-6-luna`,
+  Anthropic `claude-haiku-5-5`; any other OpenAI-compatible URL + model.
+  Changing providers or keys clears the cooldowns.
+- *OpenAI GPT-5/6*: for `api.openai.com` the request sends
+  `max_completion_tokens` and `reasoning_effort: "none"`, dropping the latter
+  for that model after a 400 that names it. Groq's gpt-oss models keep the
+  prototype's `reasoning_effort: "low"`; other models get the plain request.
+- *Claude refinement*: Messages API (`x-api-key`, `anthropic-version
+  2023-06-01`, `max_tokens` 2048 + 1024, `output_config.effort: "low"`, no
+  temperature), the tagged-output prompt and tagged examples, only the text
+  inside `<transcript>` kept; refusal or `max_tokens` falls back to the raw
+  text. `TAGGED_OUTPUT_INSTRUCTION` is hand-copied (gen_prompt.py skips
+  f-strings).
+- *Pooled connection, warmed*: one `OkHttpClient` for the app already kept a
+  pooled connection per host; now `HEAD {endpoint}/models` runs when
+  recording starts, once per distinct main endpoint, so the TLS handshake
+  happens while the user speaks.
+- *FLAC upload* (`audio/FlacEncoder.kt`): 16 kHz mono 16-bit FLAC from a
+  small pure-Kotlin encoder (fixed predictors 0–4, partitioned Rice,
+  CONSTANT for silence, VERBATIM when smaller; MD5 in STREAMINFO). WAV is
+  sent if encoding fails or doesn't shrink the audio. Android has no FLAC
+  muxer, and a JVM encoder runs in the unit tests.
+
+Skipped, and why: the paste settle (desktop Windows Ctrl+V timing; Android
+inserts with `ACTION_SET_TEXT`/`ACTION_PASTE`, no settle exists); the pill
+taking the foreground (Windows window activation; the Android overlay is
+already `FLAG_NOT_FOCUSABLE`); the desktop's per-endpoint key pick (Android
+picks per host, which is what the desktop falls back to for backups).
+UPSTREAM.md: no new rows: Voicebox has no Android app; the desktop
+counterparts are already listed on `light`.
+
+Gate on GB4: baseline (`648d26b`) `assembleDebug` OK, unit tests 42: 41
+passed, 1 skipped (Groq e2e). After: `assembleDebug` OK, 69: 68 passed, 1
+skipped (+19 `ProvidersTest`, +8 `FlacEncoderTest`; `TextMergeTest`'s mask
+test follows the new masking). The encoder's output decodes bit for bit in
+ffmpeg (with CRC checks) and libsndfile, and through the test's own reader.
+Groq e2e with the owner's key (24 s Portuguese sample): FLAC accepted,
+374 KB vs 774 KB of PCM, STT 0.51 s, refinement 0.86 s. Emulator (fake
+key): every screen in light and dark, the providers list, add-provider and
+key dialogs, theme switch, the bubble idle / recording with the tooltip /
+warning in both themes (screenshots in the owner's Windows folder
+`wisprclone\voicebox\docs\android\screens\lite-0.8.13\`, not in git).
+
+Needs a phone: the new look on the owner's screen (font rendering, the
+tabs row width); a dictation through a backup (e.g. Groq out of quota);
+OpenAI and Claude keys entered on the phone; the FLAC upload on mobile
+data; that the warm-up doesn't hold the radio awake noticeably.
+
+**After the owner's first look on his phone (0.2.0, 2026-10-30).**
+- Light theme is the default (it followed the phone's dark mode); the
+  `values-night` window colours are gone, so a dark-mode phone no longer
+  flashes dark on launch. Dark stays one tap away in Geral › Tema.
+- Sobre now matches the desktop's `LiteAboutPage`: "Voloz por Marcus
+  Voloch", one credit line "Baseado no Voicebox de Jamie Pine", and only
+  the Voloz repository listed (the separate Voicebox row is gone). The
+  owner asked why Voicebox still shows there; the credit line stays by the
+  repo rule (CLAUDE.md: keep the credit to Voicebox and Jamie Pine, the
+  branding may go) until he decides otherwise.
+- Bolha: the bubble is drawn at its real size under Pequena / Média /
+  Grande (same dp as the overlay), so the size can be judged without
+  leaving the app.
+- Version 0.2.0 (versionCode 2), so Sobre tells the builds apart.
+- Found while committing: the root `.gitignore` rule `data/` also matched
+  the Android `data` package, so `SettingsRepository.kt`,
+  `HistoryRepository.kt` and `KeyCipher.kt` were never in git (the pushed
+  branch could not build from a clone). `.gitignore` now re-includes that
+  package.
+
+**Review round (0.2.1, 2026-10-30).** Two read-only reviews: the code
+against Karpathy's guidelines (simplicity, dead code, phone costs, hidden
+assumptions) and a feature-parity audit against desktop Lite 0.8.15. Each
+finding was checked in the code before fixing. Fixed:
+- *No dictation lost on failure:* when processing fails (every provider,
+  stalled network) the take is kept; after the error the bubble shows a
+  circular arrow for 30 s and a tap sends the same audio again
+  (`BubbleState.RetryReady`). A new take replaces it.
+- *Cancel and time limit:* a tap while processing cancels (OkHttp
+  `dispatcher.cancelAll()` aborts the blocking call; `Fallback.run` stops
+  trying providers via a stop signal; a cancel during refinement doesn't
+  insert the raw text); the whole run has a 150 s limit; both keep the take
+  for the retry.
+- *Insertion:* `ACTION_SET_TEXT` only into an empty field; a field with text
+  gets a paste (with the same spacing fix), so its formatting, mentions and
+  undo survive. Cost: in those fields the clipboard is used, and Android 10+
+  often can't restore the previous clip.
+- *Focus tracking:* a cursor-move event takes its field from `event.source`;
+  the window queries and the Compose tree walk run only on focus/window
+  events (they ran after every keystroke in any app).
+- *Bubble placement:* back by the field after a dictation if the field moved.
+- *Memory:* the FLAC encoder reads one 4096-sample block at a time and the
+  MD5 no longer copies the take (a 10-minute take peaked ~100 MB); the bit
+  writer works on whole values instead of one bit per call.
+- *Keys:* decrypted plaintext cached per stored blob and the Keystore key
+  cached, instead of every key decrypted on every settings change.
+- *Errors:* a 2xx that isn't JSON (captive portal) is a provider failure,
+  so the backup gets the request.
+- *Settings races:* vocabulary and provider-list edits are read-modify-write
+  inside DataStore (two quick taps both count).
+- *History:* row keys are the timestamps (unique), day headers keyed by
+  their first row (no duplicate-key crash), rows rebuilt only when the
+  history changes.
+- *Clean-up:* the pasted key no longer goes into saved instance state; dead
+  code removed (Keycap and its tokens, VSpace/HSpace, two icons,
+  `Recorder.capturedMs`, `BubbleOverlay.isShown`, `KeyScreen(standalone)`,
+  the unused material-icons dependency); one row layout for SettingRow and
+  ToggleRow; one endpoint normalisation (`Provider.baseUrl`); Recorder
+  doesn't release the AudioRecord while its thread is still reading; lint
+  fixes (`mipmap-anydpi`, "OK", data-extraction rules, Modifier order).
+Gate: unit tests 69 -> 74 (73 passed, 1 skipped; +5 `ReviewFixesTest`),
+build with no Kotlin warnings, lint 0 errors and 5 warnings (4 newer
+dependency versions, the battery-exemption Play notice kept on purpose for
+sideloading). Emulator: screens unchanged. The retry and
+cancel paths could not be reached on the emulator (its mic gives silence,
+which stops before processing); they need a phone.
+
+**Parity with desktop Lite 0.8.15** (audit, 2026-10-30). Same on both:
+hold / tap to talk, level bars, cancel by tap, providers with backups and
+429 cooldown, saved keys and the prefix check, presets, refinement on/off
+and the prompt (regenerated: byte-identical), vocabulary, totals, copy,
+theme (light default), About. Not applicable on a phone: key chords,
+start at login, dictations folder, audio retention (Android never stores
+audio). Missing on Android, by how much a phone user would notice:
+replacement rules and learning them from corrections; text shortcuts;
+per-dictation history actions (raw text, re-refine, edit, delete one);
+transcription language lock; adapt style to the app (needs an Android
+package table); errors that stay readable/copyable; recording timer and
+transcribing/refining states in the bubble; import audio from the share
+sheet; update notice; voice commands. Smaller: search covers only the final
+text, history keeps 30, onboarding has no optional Claude key, no "down"
+for providers, no UI language choice, no dictation log page.
+
+**Dictation tested on the emulator; 0.2.2 published (2026-10-30).** The
+owner asked for the phone tests to be run on the emulator. Its microphone
+gives silence on GB4 (the emulator's PulseAudio driver would not start), so
+an `emutest` build type was added, never sent to a phone: the Groq preset
+points at `android/tools/mock_api.py` on the host (10.0.2.2:8765, plain HTTP
+allowed only there by `src/emutest`), and `Recorder` reads a raw PCM file
+(`BuildConfig.FAKE_MIC_FILE`, the owner's 24 s sample) instead of the mic;
+both BuildConfig fields are the real values / empty in debug and release.
+The mock answers "ok", "fail" (503) or "hang" from a mode file. Scripts on
+GB4 in `/mnt/data/dev/android/` (`emutest_env.sh`, `et_setup.sh`,
+`et_run.sh`, `et_e.sh`). Results, each into Voloz's own test field:
+- A, normal take into the empty field: FLAC upload, refine, text set.
+- B, provider 503: warning, then the retry arrow; provider back, one tap:
+  same take sent, text pasted after the existing text.
+- C, airplane mode: "Sem conexão…", retry arrow; network back, tap: text.
+- D, provider hangs, tap while processing: "Cancelado.", retry arrow;
+  tap: text.
+- E, provider hangs, nobody taps: the 120 s read timeout fired first and
+  said "Sem conexão…" (wrong), and the 30 s retry window was easy to miss;
+  fixed: "O provedor não respondeu a tempo." for timeouts, 60 s window,
+  and the overall limit is 150 s plus the take's length (a fixed 150 s
+  could cut a long take's upload on a slow link). Rerun: passes.
+- F, a new take while a retry waits: the new one wins.
+- Every insertion after the first pasted after the existing text, which
+  stayed intact (the 0.2.1 SET_TEXT-only-when-empty rule).
+Not covered: capture from a real microphone (worked on the owner's phone
+in 0.1), WhatsApp / Gmail / Chrome (not on the emulator).
+
+0.2.2 is the first published APK: a release build (not debuggable), signed
+with GB4's debug keystore like every build installed so far, so it installs
+over them and keeps the saved keys. On OneDrive (`Voloz\Voloz-android-0.2.2.apk`)
+and as the public prerelease `android-v0.2.2` on mvoloch/voloz. A dedicated
+release key would need an uninstall first (the saved keys go with it).
+
+**Desktop features on Android (0.3.0, 2026-10-30).** The owner asked for
+every feature of the Windows Lite on the phone. Ported, each with unit tests
+(106 -> see the release commit) and checked on the emulator with the
+`emutest` build and the mock API:
+- *Replacement rules* ("Substituições") and *text shortcuts* ("Atalhos de
+  texto"): ports of vocabulary.py and snippets.py with the desktop's own
+  test cases; same order as the desktop's capture flow (rules after
+  transcription; a dictation that is only a trigger skips refinement;
+  triggers inside a dictation go through refinement as [[S1]] placeholders).
+- *Dictation details*: text and original, copy, correct by hand (and learn
+  the replacement rules the correction implies, via a port of difflib),
+  refine again, delete; search covers the original; 200 entries kept.
+- *Transcription language* (auto + the desktop's 8), *refinement toggles*
+  (cleanup, self-correction, technical terms; prompt checked for all 8
+  combinations against fixtures from the desktop's function), *adapt to the
+  app* (app_context.py with an Android package table; browsers not
+  classified, no tab title on Android).
+- *Dictation log* (Geral › Registro de ditados), *recording timer and
+  steps* in the bubble's tooltip, cancel by tap.
+- *Import audio* (share menu or "Importar áudio"; the file goes as it is),
+  *update notice* (newest android-v* release), providers *up and down*.
+- *Voice commands*: double tap on the bubble; applies the spoken instruction
+  to the selection, or drafts when nothing is selected (voice_commands.py).
+- *App language*: English strings (values-en) and Android 13+ per-app
+  language in Geral; *Novidades* links to the releases.
+Not ported, and why: start at login and the dictations folder (no meaning
+on a phone), audio retention (Android never stores audio), browser-tab
+styles (no tab title), the optional Claude key in the first-run setup (any
+provider's key is added in Ajustes).
+
+**Next release: vocabulary shared across devices.** The owner wants the
+phone to pick up the vocabulary he keeps on Windows, and the same list on
+every PC and the phone, which needs one identity across devices. Not
+decided. Options: (a) a Voloz account with a small sync service: simplest
+for users, but it is a server, against the "own keys, no relay" choice so
+far, and would come with the hosted plan; (b) a file in the user's own
+cloud drive (OneDrive / Google Drive) that each device reads and merges:
+no Voloz server, needs each platform's sign-in; (c) export / import (QR or
+file) as a first step. The desktop vocabulary is in its local database
+(`capture_settings`), the Android one in DataStore; either way a merge
+rule is needed (union, deletions as tombstones).
 
 ## Developing on GB4
 

@@ -1,0 +1,304 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Default locale is pt-BR for now (design copy). Strings with markup use CDATA and are rendered with AnnotatedString.fromHtml. -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:locale="pt-BR">
+    <string name="app_name" translatable="false">Voloz</string>
+    <string name="a11y_description">Mostra a bolha de ditado quando um campo de texto está ativo e coloca o texto ditado onde está o cursor. O Voloz só olha qual campo está ativo. Não lê nem guarda o que aparece na tela.</string>
+
+    <!-- Common -->
+    <string name="common_continue">Continuar</string>
+    <string name="common_add">Adicionar</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_done">Pronto</string>
+    <string name="cd_back">Voltar</string>
+    <string name="cd_copy">Copiar</string>
+    <string name="nav_home">Início</string>
+    <string name="nav_settings">Ajustes</string>
+    <string name="status_ok">OK</string>
+    <string name="status_missing">Falta</string>
+    <string name="status_recommended">Recomendado</string>
+    <string name="status_on">Ativada</string>
+    <string name="status_off">Desativada</string>
+
+    <!-- Recording notification -->
+    <string name="notif_channel_name">Ditado</string>
+    <string name="notif_recording_title">Voloz está gravando</string>
+    <string name="notif_recording_text">Toque na bolha para terminar</string>
+    <string name="notif_action_finish">Terminar</string>
+
+    <!-- Bubble (symbols only on screen; these are for TalkBack) -->
+    <string name="bubble_cd_idle">Ditado do Voloz. Toque para falar, ou segure enquanto fala.</string>
+    <string name="bubble_cd_recording">Gravando. Toque para terminar.</string>
+    <string name="bubble_cd_processing">Transcrevendo</string>
+    <string name="bubble_cd_done">Texto inserido</string>
+    <string name="bubble_cd_error">Não deu</string>
+    <string name="bubble_cd_paste">Toque para colar o texto ditado</string>
+    <string name="bubble_cd_retry">Toque para enviar o ditado de novo</string>
+    <string name="tooltip_hands_free" translatable="false">Hands Free</string>
+    <string name="tooltip_tap_again">toque de novo para terminar</string>
+    <string name="tooltip_release">solte para terminar</string>
+    <string name="tooltip_tap_cancel">toque para cancelar</string>
+    <string name="step_transcribing">Transcrevendo…</string>
+    <string name="step_refining">Refinando…</string>
+    <string name="step_command">Executando o comando…</string>
+    <string name="tooltip_command">Comando</string>
+
+    <!-- Dictation messages (toasts) -->
+    <string name="msg_need_key">Falta a chave do provedor de transcrição. Abra o Voloz › Ajustes › Transcrição.</string>
+    <string name="msg_need_mic">Permita o microfone no app Voloz.</string>
+    <string name="msg_too_short">Curto demais. Fale um pouco mais.</string>
+    <string name="msg_mic_unavailable">Não deu para abrir o microfone.</string>
+    <string name="msg_mic_silent">O microfone só entregou silêncio. O Android pode ter bloqueado a gravação.</string>
+    <string name="msg_nothing_heard">Nada foi ouvido.</string>
+    <!-- History line for a failed take: seconds, loudest volume %, what the transcription returned. -->
+    <string name="diag_nothing_heard">Nada foi ouvido · %1$s s de áudio · volume máximo %2$d%% · a transcrição devolveu: %3$s</string>
+    <string name="diag_empty">(nada)</string>
+    <string name="msg_insert_failed">Não deu para inserir aqui. O texto ficou copiado: toque na bolha para colar.</string>
+    <string name="msg_paste_failed">Não deu para colar. O texto continua copiado.</string>
+    <string name="msg_refine_failed">O refinamento falhou; entrou o texto sem correção.</string>
+    <string name="msg_key_invalid">Chave inválida. Confira em Ajustes › Transcrição.</string>
+    <string name="msg_rate_limit">Limite do provedor atingido. Tente de novo em instantes, ou adicione um provedor reserva.</string>
+    <string name="msg_too_large">Gravação grande demais para o provedor.</string>
+    <string name="msg_network">Sem conexão com o provedor.</string>
+    <string name="msg_provider_http">Erro do provedor %1$s (%2$d).</string>
+    <string name="msg_key_other_provider">Isto parece uma chave da %1$s, mas o provedor é %2$s.</string>
+    <string name="msg_unexpected">Erro inesperado (%1$s).</string>
+    <string name="msg_copied">Copiado</string>
+    <string name="msg_cancelled">Cancelado.</string>
+    <string name="msg_too_slow">Demorou demais.</string>
+    <string name="msg_timeout">O provedor não respondeu a tempo.</string>
+    <string name="msg_retry_hint">O áudio foi guardado: toque na bolha para enviar de novo.</string>
+
+    <!-- 1. Boas-vindas -->
+    <string name="welcome_headline">Fale. O texto aparece onde você está digitando.</string>
+    <string name="welcome_body">Uma bolha pequena fica na borda da tela. Toque nela, fale, e o texto entra pronto no WhatsApp, no Gmail ou em qualquer campo, com pontuação e ortografia corrigidas.</string>
+    <string name="welcome_cta">Começar</string>
+    <string name="welcome_footnote">Usa a sua própria chave da Groq. Seu áudio vai direto para a Groq, sem passar por servidores do Voloz.</string>
+
+    <!-- 2. Chave -->
+    <string name="key_title">Cole a sua chave da Groq</string>
+    <string name="key_body">É ela que transcreve o que você fala. Criar uma é grátis e leva um minuto.</string>
+    <string name="key_step1"><![CDATA[Entre em <a href="https://console.groq.com/keys">console.groq.com/keys</a> com o seu Google.]]></string>
+    <string name="key_step2"><![CDATA[Toque em <b>Create API Key</b>, dê um nome e copie a chave.]]></string>
+    <string name="key_step3">Volte aqui e cole abaixo.</string>
+    <string name="key_label">Chave da API</string>
+    <string name="key_placeholder">Cole a chave aqui</string>
+    <string name="key_test">Testar</string>
+    <string name="key_testing">Testando…</string>
+    <string name="key_ok">Chave funcionando</string>
+    <string name="key_save">Salvar</string>
+    <string name="key_footnote">A chave fica guardada criptografada, só neste celular.</string>
+    <string name="key_test_save">Testar e salvar</string>
+    <string name="key_dialog_title">Chave da %1$s</string>
+    <string name="key_dialog_saved">Guardadas</string>
+    <string name="key_dialog_paste">Cole a chave</string>
+    <string name="key_dialog_paste_other">Ou cole outra</string>
+    <string name="key_dialog_forget">Esquecer</string>
+    <string name="key_forget_title">Esquecer esta chave?</string>
+    <string name="key_forget_body">A chave %1$s sai deste celular. Para usar %2$s com ela de novo, será preciso colá-la outra vez.</string>
+
+    <!-- 3. Microfone -->
+    <string name="mic_title">Deixe o Voloz ouvir você</string>
+    <string name="mic_body">O microfone só liga quando você toca na bolha. Enquanto grava, o Android mostra o ponto verde de microfone em uso e uma notificação do Voloz.</string>
+    <string name="mic_preview_note">É essa notificação que aparece durante o ditado. Ela some quando o texto é inserido.</string>
+    <string name="mic_cta">Permitir microfone</string>
+    <string name="mic_skip">Já permiti, continuar</string>
+
+    <!-- 4. Acessibilidade -->
+    <string name="a11y_title">Ative o Voloz em Acessibilidade</string>
+    <string name="a11y_body">É o que deixa o Voloz mostrar a bolha quando você está num campo de texto e colocar o texto onde está o cursor, em qualquer app.</string>
+    <string name="a11y_step1"><![CDATA[Toque no botão abaixo. Em <b>Apps instalados</b>, abra <b>Voloz</b> e ligue a chave.]]></string>
+    <string name="a11y_step2"><![CDATA[Apareceu <b>Configuração restrita</b>? Vá em Configurações › Apps › Voloz, toque em <b>⋮</b> e em <b>Permitir configurações restritas</b>. Depois repita o passo 1.]]></string>
+    <string name="a11y_open_app_info">Abrir Configurações › Apps › Voloz</string>
+    <string name="a11y_privacy">O Voloz só olha qual campo está ativo. Não lê nem guarda o que aparece na tela.</string>
+    <string name="a11y_status_off">Ainda não ativado</string>
+    <string name="a11y_status_on">Ativado</string>
+    <string name="a11y_cta">Abrir Acessibilidade</string>
+    <string name="a11y_skip">Já ativei, testar o ditado</string>
+    <string name="a11y_done">Testar o ditado</string>
+
+    <!-- 5. Início -->
+    <string name="home_hero_before">Toque na</string>
+    <string name="home_hero_after">e fale.</string>
+    <string name="home_hero_sub">A bolha aparece quando você toca num campo de texto. Segure enquanto fala e solte: o texto entra onde estiver o cursor. Para falar sem segurar, um toque.</string>
+    <string name="home_hero_sub_always">A bolha fica sempre na borda da tela. Segure enquanto fala e solte: o texto entra onde estiver o cursor. Para falar sem segurar, um toque.</string>
+    <string name="home_setup_missing">Falta configurar</string>
+    <string name="home_setup_recommended">Recomendado</string>
+    <string name="chip_key">Chave do provedor</string>
+    <string name="chip_mic">Microfone</string>
+    <string name="chip_a11y">Acessibilidade</string>
+    <string name="chip_battery">Bateria sem restrição</string>
+    <string name="home_fix_key">A chave de quem transcreve a sua voz.</string>
+    <string name="home_fix_mic">Só liga quando você toca na bolha.</string>
+    <string name="home_fix_a11y">Mostra a bolha e põe o texto no campo.</string>
+    <string name="home_fix_battery">Para o Android não fechar o Voloz.</string>
+    <string name="home_try_placeholder">Teste aqui: toque e use a bolha</string>
+    <string name="home_search">Buscar no que você ditou</string>
+    <plurals name="home_words">
+        <item quantity="one">%1$s palavra</item>
+        <item quantity="other">%1$s palavras</item>
+    </plurals>
+    <string name="home_totals_in">em</string>
+    <string name="home_minutes">%1$s min</string>
+    <string name="home_totals_speech">de fala</string>
+    <plurals name="home_count">
+        <item quantity="one">%1$d ditado</item>
+        <item quantity="other">%1$d ditados</item>
+    </plurals>
+    <string name="home_today">Hoje</string>
+    <string name="home_yesterday">Ontem</string>
+    <string name="home_empty">Nenhum ditado ainda. Os seus ditados ficam aqui, só neste celular.</string>
+    <string name="home_no_matches">Nenhum ditado com “%1$s”.</string>
+    <string name="home_app_clipboard">Copiado</string>
+    <string name="home_refined_by">refinado por %1$s</string>
+    <string name="home_refined_by_backup">refinado por %1$s (reserva)</string>
+    <string name="home_shortcut">atalho de texto</string>
+    <string name="home_edited">corrigido à mão</string>
+    <string name="home_imported">áudio importado</string>
+    <string name="home_command">comando de voz</string>
+    <string name="home_command_in">%1$s · comando de voz</string>
+    <string name="import_button">Importar áudio</string>
+    <string name="import_share_label">Transcrever com o Voloz</string>
+    <string name="import_title">Importar áudio</string>
+    <string name="import_reading">Lendo o arquivo…</string>
+    <string name="import_done">Pronto. O texto foi copiado e está no histórico.</string>
+    <string name="import_close">Fechar</string>
+    <string name="import_unsupported">Formato de áudio não suportado. Use ogg/opus, m4a, mp3, wav, flac ou webm.</string>
+    <string name="import_unreadable">Não deu para ler o arquivo, ou ele passa de 25 MB.</string>
+    <string name="update_title">Nova versão do Voloz: %1$s</string>
+    <string name="update_sub">Toque para baixar. Instale por cima: a chave e os ajustes ficam.</string>
+    <string name="update_download">Baixar</string>
+    <string name="history_text">Texto</string>
+    <string name="history_original">Original</string>
+    <string name="history_edit">Corrigir</string>
+    <string name="history_saved">Correção salva.</string>
+    <string name="history_learn">Aprender com a correção</string>
+    <string name="history_refine_again">Refinar de novo</string>
+    <string name="history_refining">Refinando…</string>
+    <string name="history_refined_again">Refinado de novo.</string>
+    <string name="history_refine_failed">O refinamento falhou; o texto ficou como estava.</string>
+    <string name="history_delete">Apagar</string>
+    <string name="history_delete_title">Apagar este ditado?</string>
+    <string name="history_delete_body">Ele sai do histórico. O texto já inserido no app fica onde está.</string>
+
+    <!-- 6. Ajustes (the desktop Lite sections) -->
+    <string name="section_bubble">Bolha</string>
+    <string name="section_bubble_lede">Onde a bolha aparece e como você grava.</string>
+    <string name="section_transcription">Transcrição</string>
+    <string name="section_transcription_lede">Quem transforma sua voz em texto. Se o primeiro falhar, o Voloz passa para o próximo da lista sozinho.</string>
+    <string name="section_refinement">Refinamento</string>
+    <string name="section_refinement_lede">Quem limpa o texto antes de inserir: pontuação, hesitações, mudanças de ideia no meio da frase.</string>
+    <string name="section_vocabulary">Vocabulário</string>
+    <string name="section_vocabulary_lede">Nomes e termos que a transcrição erra, e frases curtas que viram textos prontos.</string>
+    <string name="section_general">Geral</string>
+    <string name="section_general_lede">Como o Voloz se comporta no seu celular.</string>
+    <string name="section_about">Sobre</string>
+    <string name="section_about_lede">Versão e créditos.</string>
+    <string name="settings_only_fields">Só em campos de texto</string>
+    <string name="settings_only_fields_sub">Desligado: a bolha fica sempre na tela</string>
+    <string name="settings_size">Tamanho</string>
+    <string name="size_small">Pequena</string>
+    <string name="size_medium">Média</string>
+    <string name="size_large">Grande</string>
+    <string name="settings_size_preview">No tamanho em que aparece sobre os outros apps.</string>
+    <string name="settings_how">Como gravar</string>
+    <string name="gesture_tap">Um toque</string>
+    <string name="gesture_tap_body">Fale à vontade e toque de novo para terminar.</string>
+    <string name="gesture_hold">Segure</string>
+    <string name="gesture_hold_body">Fale enquanto segura; ao soltar, o texto entra.</string>
+    <string name="gesture_double">Dois toques: comando de voz</string>
+    <string name="gesture_double_body">Com texto selecionado, diga o que fazer com ele (“deixa mais formal”, “traduz para o inglês”) e o resultado substitui a seleção. Sem seleção, o Voloz escreve o que você pedir (“responde dizendo que eu aceito”). Toque de novo para terminar.</string>
+    <string name="settings_refine">Refinar automaticamente</string>
+    <string name="settings_refine_sub">Roda depois de cada ditado. Desligado, o texto entra como foi transcrito.</string>
+    <string name="providers_group">Provedores, na ordem</string>
+    <string name="group_speech">Fala</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_sub">A detecção automática funciona para a maioria dos ditados. Trave o idioma se você sempre fala o mesmo.</string>
+    <string name="lang_auto">Detecção automática</string>
+    <string name="lang_pt">Português</string>
+    <string name="lang_en">Inglês</string>
+    <string name="lang_es">Espanhol</string>
+    <string name="lang_fr">Francês</string>
+    <string name="lang_de">Alemão</string>
+    <string name="lang_ja">Japonês</string>
+    <string name="lang_zh">Chinês</string>
+    <string name="lang_hi">Hindi</string>
+    <string name="group_cleanup">O que limpar</string>
+    <string name="refine_cleanup">Limpeza inteligente</string>
+    <string name="refine_cleanup_sub">Remove palavras de preenchimento (hum, é, tipo), restaura a pontuação e corrige o uso de maiúsculas sem reformular.</string>
+    <string name="refine_self_correction">Remover autocorreções</string>
+    <string name="refine_self_correction_sub">Quando você muda de ideia no meio da frase (“na verdade, não…”, “espera, quis dizer…”), descarta a parte retratada e mantém a intenção final.</string>
+    <string name="refine_adapt">Adaptar o estilo ao app</string>
+    <string name="refine_adapt_sub">E-mails ganham frases completas e parágrafos, mensagens de chat ficam curtas e informais, editores de código e terminais mantêm os nomes exatamente como ditos. Nos outros apps nada muda.</string>
+    <string name="refine_technical">Preservar termos técnicos</string>
+    <string name="refine_technical_sub">Mantém identificadores de código, nomes de comandos e siglas exatamente como falados.</string>
+    <string name="providers_hint">O primeiro é o principal. Se ele falhar ou atingir o limite, o próximo da lista recebe o mesmo pedido. Quem atingiu o limite fica de fora até passar a espera que pediu.</string>
+    <string name="providers_add">Adicionar provedor</string>
+    <string name="providers_other">Outro serviço…</string>
+    <string name="providers_endpoint">Endereço (URL)</string>
+    <string name="providers_model">Modelo</string>
+    <string name="providers_up">Subir</string>
+    <string name="providers_down">Descer</string>
+    <string name="providers_more">Mais opções</string>
+    <string name="providers_key_menu">Chave…</string>
+    <string name="providers_remove">Remover</string>
+    <string name="providers_key_ok">Chave %1$s</string>
+    <string name="providers_key_missing">Falta a chave</string>
+    <string name="settings_vocab_group">Termos</string>
+    <string name="settings_vocab_sub">O Voloz passa estes termos para a transcrição e para o refinamento, para escrever assim. Toque num termo para tirar.</string>
+    <string name="settings_vocab_add">+ Adicionar</string>
+    <string name="settings_vocab_dialog_title">Adicionar ao vocabulário</string>
+    <string name="settings_vocab_dialog_hint">Ex.: Voloz</string>
+    <string name="settings_vocab_remove_cd">Remover %1$s</string>
+    <string name="replacements_title">Substituições</string>
+    <string name="replacements_sub">Corrige uma palavra ou expressão que a transcrição sempre ouve errado, logo após a transcrição e mesmo com o refinamento desligado. Vale para palavras inteiras, em maiúsculas ou minúsculas.</string>
+    <string name="replacements_empty">Nenhuma substituição ainda.</string>
+    <string name="replacements_add">Adicionar substituição</string>
+    <string name="replacements_from">Ouvido como</string>
+    <string name="replacements_from_hint">Ex.: Valois</string>
+    <string name="replacements_to">Escrever como</string>
+    <string name="replacements_to_hint">Ex.: Voloz</string>
+    <string name="replacements_remove_cd">Remover %1$s → %2$s</string>
+    <string name="snippets_title">Atalhos de texto</string>
+    <string name="snippets_sub">Diga uma frase curta e receba um texto salvo: um endereço, uma assinatura, um link. Um ditado que é só a frase insere o texto como está; dentro de um ditado mais longo a frase é trocada depois do refinamento. Maiúsculas, acentos e pontuação não importam.</string>
+    <string name="snippets_empty">Nenhum atalho ainda.</string>
+    <string name="snippets_add">Adicionar atalho</string>
+    <string name="snippets_edit">Editar “%1$s”</string>
+    <string name="snippets_trigger">Quando eu disser</string>
+    <string name="snippets_trigger_hint">Ex.: meu endereço</string>
+    <string name="snippets_text">Inserir este texto</string>
+    <string name="snippets_text_hint">Pode ter várias linhas</string>
+    <string name="snippets_replaces">Substitui o atalho com a mesma frase.</string>
+    <string name="settings_theme">Tema</string>
+    <string name="theme_system">Seguir o sistema</string>
+    <string name="theme_light">Claro</string>
+    <string name="theme_dark">Escuro</string>
+    <string name="settings_app_language">Idioma do app</string>
+    <string name="app_lang_system">Seguir o sistema</string>
+    <string name="app_lang_pt">Português (Brasil)</string>
+    <string name="app_lang_en">English</string>
+    <string name="settings_keys_group">Suas chaves</string>
+    <string name="settings_keys_none">Nenhuma chave guardada</string>
+    <string name="settings_keys_none_sub">Cole uma em Transcrição.</string>
+    <string name="settings_key_in_use">Em uso</string>
+    <string name="settings_key_kept">Guardada</string>
+    <string name="settings_keys_hint">Toda chave que você cola fica guardada, criptografada, só neste celular. Para escolher ou esquecer uma, toque na chave do provedor em Transcrição ou Refinamento.</string>
+    <string name="settings_dictations_group">Seus ditados</string>
+    <string name="settings_history">Histórico</string>
+    <string name="settings_history_sub">Os últimos 200, só neste celular.</string>
+    <string name="settings_history_clear">Apagar</string>
+    <string name="settings_log">Registro de ditados</string>
+    <string name="settings_log_sub">Para investigar um ditado que não entrou ou demorou: modelos, tempos, erros.</string>
+    <string name="settings_log_view">Ver</string>
+    <string name="settings_log_empty">Nenhum ditado registrado ainda.</string>
+    <string name="settings_log_clear">Limpar</string>
+    <string name="settings_history_clear_title">Apagar o histórico?</string>
+    <string name="settings_history_clear_body">Os ditados somem da tela inicial. O texto já inserido nos apps fica onde está.</string>
+    <string name="about_tagline">Fale em qualquer lugar e receba o texto pronto em qualquer app.</string>
+    <string name="about_fork_by">Voloz por</string>
+    <string name="about_based_on">Baseado no</string>
+    <string name="about_by">de</string>
+    <string name="about_changelog">Novidades</string>
+    <string name="about_changelog_sub">O que mudou em cada versão.</string>
+    <string name="about_license">Licença MIT</string>
+    <string name="about_license_sub">Fontes Bricolage Grotesque, Onest e JetBrains Mono sob a SIL Open Font License.</string>
+</resources>
