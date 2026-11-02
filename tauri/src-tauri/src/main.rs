@@ -1292,8 +1292,8 @@ async fn wait_for_modifier_release(action: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Reports whether the process currently has macOS Accessibility trust.
-/// Used by the settings UI and the paste debug harness to decide whether
+/// Reports whether the process may send synthetic keys (macOS Accessibility
+/// trust; on Linux, write access to /dev/uinput). Used by the settings UI and the paste debug harness to decide whether
 /// synthetic key events will actually land.
 #[command]
 fn check_accessibility_permission() -> bool {
@@ -1580,10 +1580,7 @@ async fn paste_final_text(
         return Ok(PasteOutcome::Skipped);
     }
     if !accessibility::is_trusted() {
-        return Err(
-            "Accessibility permission required for auto-paste. Open System Settings → Privacy & Security → Accessibility and enable Voloz."
-                .into(),
-        );
+        return Err(accessibility::denied_message("paste into other apps"));
     }
 
     // A paste fired while the user still holds modifiers — typically the
@@ -1711,10 +1708,7 @@ async fn copy_selection(focus: focus_capture::FocusSnapshot) -> Result<String, S
         return Ok(String::new());
     }
     if !accessibility::is_trusted() {
-        return Err(
-            "Accessibility permission required to read the selection. Open System Settings → Privacy & Security → Accessibility and enable Voloz."
-                .into(),
-        );
+        return Err(accessibility::denied_message("read the selection"));
     }
 
     wait_for_modifier_release("copy").await?;

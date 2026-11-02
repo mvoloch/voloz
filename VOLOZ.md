@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-10-30 (`light`: the release workflow drops the bundled libwayland from the AppImage; released in Lite 0.8.18). Update this file whenever state or decisions change._
+_Last updated: 2026-11-01 (`light`: Linux paste gate, rate-limit reasons in providers.log, refinement reserves tokens by length; not released yet). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1066,6 +1066,48 @@ the owner's son extracts `Voloz.png` and writes `Voloz.desktop` with
 
 Not tested on Linux yet: a full dictation with a real key and voice, GNOME,
 CachyOS.
+
+## Linux auto-paste, rate-limit reasons, smaller refinement budget (`light`, 2026-11-01)
+
+Found after the owner moved from the Dell to the XPS (data copied with an
+SQLite backup snapshot) and used GB4 for real:
+
+- **Linux never auto-pasted.** `accessibility::is_trusted()` was the
+  upstream stub `false` on Linux, so `paste_final_text` and `copy_selection`
+  returned the macOS "Accessibility permission" error before the uinput
+  Ctrl+V/Ctrl+C. Every GB4 dictation logged `paste failed`; the 0.8.15 and
+  0.8.16 tests had driven the virtual keyboard directly, not this path. Now
+  Linux checks write access to `/dev/uinput` and says so in its own error
+  (`denied_message`). Checked on GB4 with a local build: dictations logged
+  `paste: keys sent (target brought back)` and `paste ok`.
+- **Why a provider failed is kept.** `ProviderError.reason` carries the
+  provider's own message (`provider_reason`: Groq's "on tokens per minute
+  (TPM): Limit 8000, Used …, Requested …", without the organization id or
+  upgrade link; never a raw body). `services/providers.py` writes failures
+  and backup answers to `logs/providers.log` (256 KB, one rotation): the
+  server's stderr is lost in a packaged Windows app. A 429 from the routes
+  adds the reason to `detail`, which the app writes to `dictation.log`.
+- **Refinement reserves less.** Groq counts the requested `max_tokens`
+  against its tokens per minute (8000 for qwen3.8-27b on the free tier). With
+  a ~1600-token prompt and a fixed 2048, two refinements a minute were the
+  ceiling; a burst of six test calls (1024 each) hit 429 on the sixth.
+  `refine_output_budget` is the text length + 256, capped at 2048 (measured
+  0.24 output tokens per character in Portuguese; CJK runs near one).
+
+Settings changed on the owner's machines (not code): refinement backup
+gpt-6-luna on the XPS and GB4 (it answered when Groq failed on GB4,
+2026-11-01); GB4 shortcuts set to the XPS ones (Left Ctrl + Win; keytap
+reads KEY_LEFTMETA, the Linux default is Right Ctrl + Right Shift);
+vocabulary + XPS, GB4, Dell, Log-In, Claude Code, Claude.
+
+Quality on the XPS (owner's report, 2026-10-31): the misheard words
+("Cloding", "Ladinda" for Log-In, "tetas", "GD4") are already in Groq
+whisper's raw transcript. OpenAI's transcription models were not better on
+the same audio (several dropped sentences), and neither qwen nor
+gpt-6-luna fixes them in refinement. The XPS recordings have digital
+silence between words (noise floor −90 dBFS and below, the Dell's −50), a
+sign of the laptop's noise suppression; untested whether turning Windows'
+audio effects off helps. Adding a term to the vocabulary fixed "XTBS" → XPS.
 
 ## Developing on GB4
 

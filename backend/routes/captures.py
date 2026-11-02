@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _with_reason(detail: str, error: Exception) -> str:
+    """``detail`` plus the provider's own reason (which limit, when to
+    retry), which the app writes to its dictation log."""
+    reason = getattr(error, "reason", None)
+    return f"{detail} ({reason})" if reason else detail
+
+
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
@@ -87,7 +95,7 @@ async def create_capture_endpoint(
         logger.warning("Transcription rate-limited: %s", e)
         raise HTTPException(
             status_code=429,
-            detail="Transcription failed: the speech-to-text provider's rate limit was reached",
+            detail=_with_reason("Transcription failed: the speech-to-text provider's rate limit was reached", e),
         )
     except Exception as e:
         logger.exception("Failed to create capture")
@@ -201,7 +209,8 @@ async def refine_capture_endpoint(
         # showing the provider's error body.
         logger.warning("Refinement rate-limited for capture %s: %s", capture_id, e)
         raise HTTPException(
-            status_code=429, detail="Refinement skipped: the LLM provider's rate limit was reached"
+            status_code=429,
+            detail=_with_reason("Refinement skipped: the LLM provider's rate limit was reached", e),
         )
     except Exception as e:
         logger.exception("Refinement failed for capture %s", capture_id)

@@ -11,7 +11,7 @@
 //!   flag and drops the paste otherwise (see the note on the event table).
 //!   Accessibility permission is load-bearing: without it the system
 //!   swallows the events silently, so callers must gate on
-//!   [`crate::accessibility::is_trusted`].
+//!   [`crate::accessibility::is_trusted`] (on Linux it checks /dev/uinput).
 //! - **Windows** — Ctrl down, V down, V up, Ctrl up via `SendInput`. No
 //!   permission gate, but UAC/UIPI blocks delivery into elevated target
 //!   windows when we run non-elevated — nothing we can do short of also

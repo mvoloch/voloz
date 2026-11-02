@@ -307,6 +307,19 @@ REFINEMENT_EXAMPLES: list[tuple[str, str]] = [
 # Claude models get the transcript back inside tags and only the tagged
 # text is kept. Local models keep the plain format their prompt was tuned
 # on; small models are poor at tag discipline.
+# Groq's free tier counts the requested ``max_tokens`` against its tokens
+# per minute (8000 for qwen3.8-27b), so a fixed 2048 plus a ~1600-token
+# prompt allowed two refinements a minute. One token per character covers
+# any script (CJK runs near one per character; Portuguese measured 0.24).
+REFINE_MAX_TOKENS = 2048
+REFINE_TOKEN_HEADROOM = 256
+
+
+def refine_output_budget(text: str) -> int:
+    """``max_tokens`` for refining ``text``: room for all of it, capped."""
+    return min(REFINE_MAX_TOKENS, len(text) + REFINE_TOKEN_HEADROOM)
+
+
 _TRANSCRIPT_TAG = "transcript"
 _TAGGED_OUTPUT_INSTRUCTION = (
     f"Return the cleaned transcript inside <{_TRANSCRIPT_TAG}></{_TRANSCRIPT_TAG}> tags "
@@ -394,7 +407,7 @@ async def refine_transcript(
         text = await backend.generate(
             prompt=cleaned_input,
             system=prompt,
-            max_tokens=2048,
+            max_tokens=refine_output_budget(cleaned_input),
             temperature=0.2,
             model_size=llm_service.resolve_model_size(backend, model_size),
             examples=examples,

@@ -16,6 +16,14 @@ import { MIC_WARM_MS } from '@/lib/hooks/micCapture';
 import { convertToWav, SPEECH_SAMPLE_RATE } from '@/lib/utils/audio';
 import { dictationLog } from '@/lib/utils/dictationLog';
 
+// The status for the dictation log, with the provider's own reason on a rate
+// limit (which limit, when to retry) as the server words it.
+function failureNote(err: Error): string {
+  const { status, detail } = err as { status?: number; detail?: unknown };
+  const reason = status === 429 && typeof detail === 'string' ? ` (${detail})` : '';
+  return `status ${status ?? 'none'}${reason}`;
+}
+
 /** An imported audio file as 16 kHz mono WAV, named after the original. */
 async function toSpeechWav(file: File): Promise<File> {
   let wav: Blob;
@@ -299,7 +307,7 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error, { auto }) => {
-      if (auto) dictationLog(`refine failed: status ${(err as { status?: number }).status ?? 'none'}`);
+      if (auto) dictationLog(`refine failed: ${failureNote(err)}`);
       // Deliver the raw transcript rather than lose the dictation, with its
       // text shortcuts expanded (``transcript_raw`` leaves them to the refine).
       const fallback = auto?.capture.fallback_text ?? auto?.capture.transcript_raw;
@@ -411,7 +419,7 @@ export function useCaptureRecordingSession(
       }
     },
     onError: (err: Error) => {
-      dictationLog(`upload failed: status ${(err as { status?: number }).status ?? 'none'}`);
+      dictationLog(`upload failed: ${failureNote(err)}`);
       // A newer recording owns the pill; don't paint an old error over it.
       if (pillStateRef.current === 'recording') return;
       // The speech-to-text provider's rate limit (Groq's free tier): say so

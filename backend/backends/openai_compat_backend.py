@@ -26,6 +26,7 @@ from . import (
     LLMRateLimitError,
     ProviderError,
     parse_retry_after,
+    provider_reason,
 )
 
 logger = logging.getLogger(__name__)
@@ -216,6 +217,7 @@ class OpenAICompatLLMBackend:
                 f"{body_preview[:200] or exc.response.reason_phrase}",
                 status_code=status,
                 retry_after=parse_retry_after(exc.response.headers),
+                reason=provider_reason(exc.response.text),
             ) from exc
         except httpx.RequestError as exc:
             logger.error("OpenAI-compat endpoint %s request failed: %s", url, exc)

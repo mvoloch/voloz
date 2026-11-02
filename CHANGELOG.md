@@ -5,6 +5,19 @@
 
 # Changelog
 
+## [0.8.19] - 2026-11-01
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **Linux: the text was never pasted on its own:** after every dictation Voloz stopped with a message about macOS settings, and the text had to be pasted by hand. It now types the paste into the app you are using, and voice commands read your selection again.
+- **Fewer "rate limit" refinements on Groq's free plan:** each refinement now reserves room in proportion to what you said instead of a fixed amount, so more dictations fit in Groq's per-minute budget.
+
+### Changed
+
+- **Logs say why a provider failed:** a rate limit now records which limit was hit and when to retry, and a new providers.log shows when a backup provider answered.
+
 ## [0.8.18] - 2026-10-30
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.

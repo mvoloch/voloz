@@ -12,6 +12,8 @@ and a model config registry that eliminates per-engine dispatch maps.
 # HF_HUB_OFFLINE=1 and on network failures.
 from ..utils import hf_offline_patch  # noqa: F401
 
+import json
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Protocol, Optional, Tuple, List
@@ -27,8 +29,10 @@ class ProviderError(RuntimeError):
 
     ``status_code`` is the HTTP status, ``None`` when no answer came back
     (timeout, DNS, TLS); ``retry_after`` the seconds the provider asked to
-    wait, when it said. The dictation path moves on to the next configured
-    provider on this error (see ``services/providers.py``).
+    wait, when it said; ``reason`` the provider's own explanation (which rate
+    limit, for instance), short and safe to log, see :func:`provider_reason`.
+    The dictation path moves on to the next configured provider on this
+    error (see ``services/providers.py``).
     """
 
     def __init__(
@@ -36,10 +40,12 @@ class ProviderError(RuntimeError):
         message: str,
         status_code: Optional[int] = None,
         retry_after: Optional[float] = None,
+        reason: str | None = None,
     ):
         super().__init__(message)
         self.status_code = status_code
         self.retry_after = retry_after
+        self.reason = reason
 
 
 def parse_retry_after(headers) -> Optional[float]:
@@ -50,6 +56,35 @@ def parse_retry_after(headers) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return seconds if seconds >= 0 else None
+
+
+# Groq names the account in its rate-limit message ("in organization `org_…`
+# service tier `on_demand`") and ends with an upgrade link; neither helps.
+_ACCOUNT_DETAILS = re.compile(r"\s+(?:in organization|service tier)\s+`[^`]*`")
+_UPSELL = re.compile(r"\s*(?:Need more tokens\?|Upgrade to|Visit https?://).*$", re.S)
+_URL = re.compile(r"https?://\S+")
+
+
+def provider_reason(body: str | None) -> str | None:
+    """The provider's explanation from an error body, e.g. Groq's "Rate limit
+    reached for model `qwen/qwen3.8-27b` on tokens per minute (TPM): Limit
+    8000, Used 6123, Requested 3834. Please try again in 13.2s."
+
+    Reads ``{"error": {"message": …}}`` (OpenAI, Groq, Anthropic) or
+    ``{"error": "…"}``; ``None`` for anything else, so a body that echoes the
+    prompt is never logged. Account ids and links are removed.
+    """
+    try:
+        data = json.loads(body or "")
+    except ValueError:
+        return None
+    error = data.get("error") if isinstance(data, dict) else None
+    message = error.get("message") if isinstance(error, dict) else error
+    if not isinstance(message, str):
+        return None
+    message = _URL.sub("", _UPSELL.sub("", _ACCOUNT_DETAILS.sub("", message)))
+    message = " ".join(message.split())
+    return message[:240] or None
 
 
 class LLMRateLimitError(ProviderError):

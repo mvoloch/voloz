@@ -22,7 +22,7 @@ from typing import Optional
 import httpx
 import soundfile as sf
 
-from . import ProviderError, STTRateLimitError, parse_retry_after
+from . import ProviderError, STTRateLimitError, parse_retry_after, provider_reason
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +197,7 @@ class OpenAICompatSTTBackend:
                 f"Custom STT endpoint {url} returned HTTP {status}: {body_preview}",
                 status_code=status,
                 retry_after=parse_retry_after(exc.response.headers),
+                reason=provider_reason(exc.response.text),
             ) from exc
         except httpx.HTTPError as exc:
             raise ProviderError(

@@ -26,6 +26,7 @@ from . import (
     LLMRateLimitError,
     ProviderError,
     parse_retry_after,
+    provider_reason,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,7 @@ class AnthropicLLMBackend:
                 f"Claude API {self.endpoint} returned HTTP {exc.status_code}: {exc.message}",
                 status_code=exc.status_code,
                 retry_after=parse_retry_after(getattr(response, "headers", None)),
+                reason=provider_reason(getattr(response, "text", None)),
             ) from exc
         except anthropic.APIConnectionError as exc:
             raise ProviderError(f"Claude API {self.endpoint} is unreachable: {exc}") from exc

@@ -228,7 +228,11 @@ def test_a_rate_limited_refine_answers_429_and_keeps_the_raw_transcript(api):
         res = api.post(f"/captures/{capture['id']}/refine", json={})
 
     assert res.status_code == 429
-    assert res.json()["detail"] == "Refinement skipped: the LLM provider's rate limit was reached"
+    # The provider's own reason follows, for the app's dictation log.
+    assert res.json()["detail"] == (
+        "Refinement skipped: the LLM provider's rate limit was reached "
+        "(Rate limit reached for model openai/gpt-oss-120b)"
+    )
     stored = api.get(f"/captures/{capture['id']}").json()
     assert stored["transcript_raw"] == "Bom dia a todos."
     assert stored["transcript_refined"] is None
@@ -257,7 +261,8 @@ def test_a_rate_limited_transcription_answers_429_and_keeps_nothing(api):
 
     assert res.status_code == 429, res.text
     assert res.json()["detail"] == (
-        "Transcription failed: the speech-to-text provider's rate limit was reached"
+        "Transcription failed: the speech-to-text provider's rate limit was reached "
+        "(Rate limit reached for model openai/gpt-oss-120b)"
     )
     # The dictation is lost: no capture row, and the uploaded audio is
     # deleted with the rest of the failed capture.

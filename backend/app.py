@@ -295,6 +295,10 @@ async def _run_startup(application: FastAPI) -> None:
     logger.info("Database: %s", _db_path)
     logger.info("Data directory: %s", config.get_data_dir())
 
+    from .services import providers
+
+    providers.enable_file_log(config.get_data_dir() / "logs")
+
     init_queue()
 
     # Mark stale "generating" records as failed -- leftovers from a killed process

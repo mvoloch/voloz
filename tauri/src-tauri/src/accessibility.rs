@@ -15,6 +15,10 @@
 //! non-elevated process, but that's per-target, not a global switch, and
 //! there's no Settings pane to send users to.) So the Windows branch just
 //! returns `true`.
+//!
+//! Linux types Ctrl+V / Ctrl+C through a uinput virtual keyboard
+//! (`synthetic_keys.rs`), so the permission is write access to
+//! `/dev/uinput`, which the .deb/.rpm udev rule gives the `input` group.
 
 #[cfg(target_os = "macos")]
 mod ffi {
@@ -36,7 +40,30 @@ pub fn is_trusted() -> bool {
     true
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(target_os = "linux")]
+pub fn is_trusted() -> bool {
+    std::fs::OpenOptions::new().write(true).open("/dev/uinput").is_ok()
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
 pub fn is_trusted() -> bool {
     false
+}
+
+/// The error shown when [`is_trusted`] is false; `action` reads like
+/// "paste into other apps".
+#[cfg(target_os = "linux")]
+pub fn denied_message(action: &str) -> String {
+    format!(
+        "Voloz can't {action}: it needs access to /dev/uinput. Add your user to the input group \
+         (the .deb and .rpm install the rule for /dev/uinput), then log out and back in."
+    )
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn denied_message(action: &str) -> String {
+    format!(
+        "Accessibility permission required to {action}. Open System Settings → Privacy & \
+         Security → Accessibility and enable Voloz."
+    )
 }

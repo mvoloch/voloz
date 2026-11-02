@@ -17,6 +17,7 @@ from backend.backends import (
     LLMRateLimitError,
     ProviderError,
     get_fallback_backends,
+    provider_reason,
     reset_backends,
     set_llm_config,
     set_stt_config,
@@ -257,3 +258,77 @@ async def test_transcription_falls_back_on_a_rate_limit(tmp_path):
         set_fallback_config("stt", [(ok.base_url, "gpt-transcribe", "k2")])
         text, label = await transcribe_with_fallback(str(audio), "pt", None, [])
     assert (text, label) == ("oi", "gpt-transcribe")
+
+
+# ── why a provider failed, and how much a refinement reserves ────────────
+
+GROQ_429 = {
+    "error": {
+        "message": "Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01abc` "
+        "service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6123, "
+        "Requested 3834. Please try again in 13.2s. Need more tokens? Upgrade to Dev Tier "
+        "today at https://console.groq.com/settings/billing",
+        "type": "tokens",
+        "code": "rate_limit_exceeded",
+    }
+}
+
+
+def test_provider_reason_keeps_the_limit_and_drops_the_account():
+    assert provider_reason(json.dumps(GROQ_429)) == (
+        "Rate limit reached for model `qwen/qwen3.8-27b` on tokens per minute (TPM): "
+        "Limit 8000, Used 6123, Requested 3834. Please try again in 13.2s."
+    )
+    assert provider_reason('{"error": "slow down"}') == "slow down"
+    # Anything but an error message (an echoed prompt, HTML) is not logged.
+    assert provider_reason("<html>the user's dictation</html>") is None
+    assert provider_reason('{"detail": "x"}') is None
+    assert provider_reason(None) is None
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limit_carries_the_providers_reason():
+    with FakeServer(lambda *_: (429, GROQ_429)) as limited:
+        set_llm_config(limited.base_url, "qwen", "k1")
+        with pytest.raises(LLMRateLimitError) as caught:
+            await refine_transcript("olá mundo", RefinementFlags())
+    assert "on tokens per minute (TPM): Limit 8000" in caught.value.reason
+    assert "org_01abc" not in caught.value.reason
+
+
+@pytest.mark.asyncio
+async def test_failures_and_backups_go_to_providers_log(tmp_path, monkeypatch):
+    primary = Remote(
+        "groq",
+        LLMRateLimitError("429", status_code=429, retry_after=12, reason="tokens per minute (TPM)"),
+    )
+    backup = Remote("openai", "ok")
+    monkeypatch.setattr(providers, "get_fallback_backends", lambda kind: [backup])
+    providers.enable_file_log(tmp_path)
+    providers.enable_file_log(tmp_path)  # a second call adds no second handler
+    handlers = [h for h in providers.logger.handlers if str(tmp_path) in getattr(h, "baseFilename", "")]
+    try:
+        assert len(handlers) == 1
+        await providers.run_with_fallback("llm", primary, _call)
+    finally:
+        for h in handlers:
+            providers.logger.removeHandler(h)
+            h.close()
+    log = (tmp_path / "providers.log").read_text(encoding="utf-8")
+    failure = "llm provider groq @ https://groq.test/v1 failed (HTTP 429: tokens per minute (TPM))"
+    assert f"{failure}; skipped for 12 s" in log
+    assert "llm served by backup provider openai @ https://openai.test/v1" in log
+
+
+@pytest.mark.asyncio
+async def test_refine_reserves_output_tokens_by_length():
+    def chat(*_):
+        return 200, {"choices": [{"message": {"content": "Olá, mundo."}}]}
+
+    long_text = " ".join(f"palavra{i}" for i in range(400))
+    with FakeServer(chat) as server:
+        set_llm_config(server.base_url, "qwen", "k1")
+        await refine_transcript("olá mundo", RefinementFlags())
+        await refine_transcript(long_text, RefinementFlags())
+    budgets = [json.loads(r["raw"])["max_tokens"] for r in server.requests if r["method"] == "POST"]
+    assert budgets == [len("olá mundo") + 256, 2048]
