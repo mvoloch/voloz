@@ -1,7 +1,15 @@
 // Run with `bun test app/tests`.
 import { describe, expect, test } from 'bun:test';
 import { audioBufferToWav } from '../src/lib/utils/audio';
-import { concatPcm, PcmRing, pcmToWav, samplesToMs, totalSamples } from '../src/lib/utils/pcm';
+import {
+  concatPcm,
+  describeLevel,
+  PcmRing,
+  pcmLevel,
+  pcmToWav,
+  samplesToMs,
+  totalSamples,
+} from '../src/lib/utils/pcm';
 
 /** ``count`` samples whose values are their index, in blocks of ``block``. */
 function blocks(count: number, block: number, start = 0): Float32Array[] {
@@ -93,5 +101,40 @@ describe('pcmToWav', () => {
     expect(view.getUint16(34, true)).toBe(16);
     expect(view.getUint32(40, true)).toBe(6);
     expect((await pcmToWav(new Float32Array(0), 48_000).arrayBuffer()).byteLength).toBe(44);
+  });
+});
+
+describe('pcmLevel (dictation log)', () => {
+  const rate = 16_000;
+  const tone = (n: number, amp: number) =>
+    Float32Array.from({ length: n }, (_, i) => amp * Math.sin((2 * Math.PI * 440 * i) / rate));
+
+  test('a muted microphone: all silent, muted 100%', () => {
+    const level = pcmLevel([new Float32Array(rate)], rate);
+    expect(level.peakDb).toBe(Number.NEGATIVE_INFINITY);
+    expect(level.mutedShare).toBe(1);
+    expect(describeLevel(level)).toBe(
+      'audio level: peak silent, rms silent, muted 100% (the microphone delivered no sound)',
+    );
+  });
+
+  test('speech-like level: peak and rms in dBFS, nothing muted', () => {
+    const level = pcmLevel([tone(rate / 2, 0.5), tone(rate / 2, 0.5)], rate);
+    expect(Math.round(level.peakDb)).toBe(-6);
+    expect(Math.round(level.rmsDb)).toBe(-9);
+    expect(level.mutedShare).toBe(0);
+    expect(describeLevel(level)).toBe('audio level: peak -6 dBFS, rms -9 dBFS, muted 0%');
+  });
+
+  test('voice cut out after the first 300 ms counts as muted', () => {
+    const level = pcmLevel([tone(4800, 0.1), new Float32Array(rate)], rate);
+    // 13 windows of 100 ms: 3 with sound, 10 of zeros (rounded share 77%).
+    expect(Math.round(level.mutedShare * 100)).toBe(77);
+    expect(describeLevel(level)).toContain('(the microphone delivered no sound)');
+  });
+
+  test('a quiet room is not muted', () => {
+    const level = pcmLevel([tone(rate, 0.001)], rate);
+    expect(level.mutedShare).toBe(0);
   });
 });

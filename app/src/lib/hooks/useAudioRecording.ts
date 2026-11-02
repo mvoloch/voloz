@@ -7,7 +7,7 @@ import {
   type RecordingEndReason,
   type StoppableRecorder,
 } from '@/lib/hooks/recorderLifecycle';
-import { concatPcm, pcmToWav } from '@/lib/utils/pcm';
+import { concatPcm, describeLevel, pcmLevel, pcmToWav } from '@/lib/utils/pcm';
 
 export type { RecordingEndReason } from '@/lib/hooks/recorderLifecycle';
 
@@ -216,6 +216,10 @@ export function useAudioRecording({
 
           // Don't fire completion callback if the recording was cancelled
           if (take.cancelled) return;
+
+          // A muted microphone still gives a recording, of silence, which
+          // whisper turns into made-up text ("Thank you for watching!").
+          writeLog(describeLevel(pcmLevel(mic.blocks, mic.sampleRate)));
 
           try {
             const wavBlob = await withTimeout(

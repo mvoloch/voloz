@@ -149,10 +149,37 @@ pub fn show_pill(window: &tauri::WebviewWindow) {
             unsafe {
                 let _ = ShowWindow(HWND(hwnd.0), SW_SHOWNOACTIVATE);
             }
+            log_pill_shown(window);
             return;
         }
     }
     let _ = window.show();
+    log_pill_shown(window);
+}
+
+/// Where the pill was shown, so a pill the user didn't see can be told
+/// apart from one that never showed (dictation.log).
+#[cfg(desktop)]
+fn log_pill_shown(window: &tauri::WebviewWindow) {
+    // X11 reports a window shown for the first time at (0, 0), 0x0 until
+    // the window manager maps it: say so rather than log a made-up place.
+    let place = match (window.outer_position(), window.outer_size()) {
+        (Ok(p), Ok(s)) if s.width > 0 => format!("at ({}, {}), {}x{}", p.x, p.y, s.width, s.height),
+        _ => "(position not reported yet)".into(),
+    };
+    let monitor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let (p, s) = (m.position(), m.size());
+            format!("monitor {}x{} at ({}, {})", s.width, s.height, p.x, p.y)
+        })
+        .unwrap_or_else(|| "no monitor".into());
+    let visible = window.is_visible().unwrap_or(false);
+    dictation_log::log(&format!(
+        "[rust] pill shown {place}, on {monitor}, visible={visible}"
+    ));
 }
 
 /// Position, undo click-through, and show the dictate pill window.
@@ -1993,6 +2020,7 @@ pub fn run() {
                         let _ = window.set_ignore_cursor_events(true);
                         let _ = window.set_position(PhysicalPosition::new(-10_000, -10_000));
                         let _ = window.hide();
+                        dictation_log::log("[rust] pill hidden");
                     }
                 });
 

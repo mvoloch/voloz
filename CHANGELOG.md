@@ -5,6 +5,15 @@
 
 # Changelog
 
+## [0.8.20] - 2026-11-02
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Changed
+
+- **The dictation log shows when the microphone sent no sound:** after each recording, dictation.log records how loud it was and how much of it was silence from the microphone. When a dictation comes back as made-up text ("Thank you for watching!"), the log now says whether the microphone was muted.
+- **The dictation log shows the pill:** when the pill appears, where and on which monitor, and when it hides, so a pill that never showed can be told apart from one that was missed.
+
 ## [0.8.19] - 2026-11-01
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.

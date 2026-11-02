@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-11-01 (`light`: Linux paste gate, rate-limit reasons in providers.log, refinement reserves tokens by length; not released yet). Update this file whenever state or decisions change._
+_Last updated: 2026-11-02 (`light`: dictation.log records the microphone level and the pill shown/hidden; Lite 0.8.20). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1108,6 +1108,31 @@ gpt-6-luna fixes them in refinement. The XPS recordings have digital
 silence between words (noise floor −90 dBFS and below, the Dell's −50), a
 sign of the laptop's noise suppression; untested whether turning Windows'
 audio effects off helps. Adding a term to the vocabulary fixed "XTBS" → XPS.
+
+## Muted microphone and the unseen pill on the XPS (`light`, 2026-11-02, Lite 0.8.20)
+
+The owner reported on the XPS (0.8.18, two Samsung LU28R55 monitors) that
+the pill stopped appearing and the dictation "disappeared". dictation.log
+showed every dictation going through (chord, upload, refine, `paste ok`),
+but the transcripts were whisper's inventions on silence ("Thank you for
+watching!", "And the other.", "Beer"). The WAVs had runs of digital
+silence: the 10:58 capture was all zeros, and a 3.9 s capture had sound only
+in its 300 ms pre-roll before the stream went to zero. The microphone
+(Realtek SoundWire array) delivered the silence; the cause on the Windows
+side (voice effects, another app, power management) is not known. A
+watcher on the pill window then saw it shown top-centre of the primary
+monitor for the whole of a good dictation (black notch over ChatGPT's dark
+title bar, easy to miss).
+
+So a failure can be read from the log next time:
+
+- `audio level: peak …, rms …, muted N%` after each recording
+  (`pcmLevel`/`describeLevel` in `lib/utils/pcm.ts`): a 100 ms window
+  below −90 dBFS counts as muted (a quiet room sits near −60 to −50);
+  "the microphone delivered no sound" at 50% or more.
+- `[rust] pill shown at (x, y), WxH, on monitor …, visible=…` ("position not reported yet" on a first show under X11) and
+  `[rust] pill hidden` (`log_pill_shown` and the `dictate:hide` listener in
+  `main.rs`).
 
 ## Developing on GB4
 
