@@ -5,6 +5,14 @@
 
 # Changelog
 
+## [0.8.22] - 2026-11-03
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Fixed
+
+- **A dictation is no longer pasted translated:** saying "in English" in a Portuguese dictation (about the slides, say) could make the refinement translate the whole text. When the refined text no longer matches what you said, Voloz now pastes the transcript instead.
+
 ## [0.8.21] - 2026-11-03
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.

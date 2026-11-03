@@ -336,6 +336,32 @@ _KEEP_LANGUAGE_INSTRUCTION = (
 )
 
 
+# The keep-language line did not stop Qwen 3.8 27B from translating two of
+# the owner's 187 Portuguese dictations to English: one ended "sempre em
+# inglês" (meaning the slides, not the dictation), one began "Oh sorry". Of
+# their refined words 9% and 21% were in the transcript; in every other
+# refinement at least 89% were. Below this share the reply is not a cleanup
+# of the transcript (a translation, an answer) and the transcript is kept.
+MIN_SHARED_WORD_SHARE = 0.5
+# Fewer distinct words than this can't be judged: "um yeah" → "Yeah.".
+MIN_WORDS_TO_JUDGE = 5
+_WORD_RE = re.compile(r"\w+")
+
+
+def strayed_from_transcript(transcript: str, refined: str) -> bool:
+    """Whether ``refined`` is no longer a cleanup of ``transcript``.
+
+    Measured as the share of the refined text's distinct words that occur in
+    the transcript: cleanup, spelling fixes and self-corrections keep most of
+    them, a translation or an answer does not.
+    """
+    refined_words = set(_WORD_RE.findall(refined.lower()))
+    if len(refined_words) < MIN_WORDS_TO_JUDGE:
+        return False
+    kept = refined_words & set(_WORD_RE.findall(transcript.lower()))
+    return len(kept) / len(refined_words) < MIN_SHARED_WORD_SHARE
+
+
 # Added only when the transcript holds text-shortcut placeholders
 # (``snippets.protect_snippets``), so other prompts stay as they were.
 _PLACEHOLDER_INSTRUCTION = (
@@ -416,4 +442,13 @@ async def refine_transcript(
 
     backend, text = await providers.run_with_fallback("llm", primary, generate_on)
     resolved_size = llm_service.resolve_model_size(backend, model_size)
-    return finish_for_style(text.strip(), app_style), resolved_size
+    text = text.strip()
+    if strayed_from_transcript(cleaned_input, text):
+        # providers.log: the server's own log is lost in a Windows build.
+        providers.logger.warning(
+            "refine: %s returned text that is not a cleanup of the transcript "
+            "(translated or answered); the transcript was kept",
+            providers.label(backend),
+        )
+        text = cleaned_input
+    return finish_for_style(text, app_style), resolved_size

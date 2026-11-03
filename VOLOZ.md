@@ -1168,6 +1168,30 @@ So the next occurrence can be read from the log (`EscapeWatcher` in
 No key is named in any line. If the shortcut does nothing and neither line
 appears, the raw tap got nothing either.
 
+## A refinement that translated the dictation (`light`, 2026-11-03, Lite 0.8.22)
+
+On the XPS a Portuguese dictation that ended "sempre em inglês" (the
+slides were to be in English) was pasted entirely in English. The
+transcript (gpt-transcribe) was right; the refinement (Groq
+`qwen/qwen3.8-27b`) translated it, despite `_KEEP_LANGUAGE_INSTRUCTION`.
+Re-run with the same prompt: Qwen translated 2 of 2, `gpt-6-luna` 0 of 3.
+The history had one more, 2026-10-30, a dictation that began "Oh sorry".
+
+`strayed_from_transcript` in `services/refinement.py` measures the share of
+the refined text's distinct words that occur in the transcript. Over the
+owner's 187 refined captures every cleanup kept at least 89%; the two
+translations kept 9% and 21%. Below 50% (`MIN_SHARED_WORD_SHARE`), with at
+least 5 distinct words to judge, the transcript is kept and
+`providers.log` says so (no text logged). It also catches a model that
+answers the dictation instead of cleaning it.
+
+The same night the owner's XPS moved transcription to OpenAI
+`gpt-transcribe` (Groq whisper as backup) and refinement to `gpt-6-luna`
+(Qwen as backup) for a one-week trial: on that day's 13 dictations
+gpt-transcribe got far more right (DRE, SG&A, LTL, Oaktree, customer
+service), though it can miss by writing a fluent sentence that says
+something else ("se tá tudo errado" for "se não sai tudo errado").
+
 ## Developing on GB4
 
 ```bash
