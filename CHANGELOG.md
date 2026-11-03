@@ -5,6 +5,15 @@
 
 # Changelog
 
+## [0.8.21] - 2026-11-03
+
+Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.
+
+### Changed
+
+- **The dictation log shows when the shortcut isn't reaching Voloz:** it records when the first key reaches Voloz after it opens, and when the shortcut's keys were held but no dictation started, so a shortcut that "does nothing" can be told apart from one Voloz never received. The log never says which keys were pressed.
+- **The dictation log shows when the shortcut couldn't be switched on,** instead of saying nothing.
+
 ## [0.8.20] - 2026-11-02
 
 Voloz Lite. Windows and Linux; the installers are not code-signed yet. Upgrading keeps your settings, keys and history.

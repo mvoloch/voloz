@@ -18,7 +18,9 @@
 //! coalesce into one `Restart` so hosts can discard the transition-
 //! moment audio rather than treat it as an unrelated Stop+Start pair.
 //!
-//! Esc stops a recording dictation (see [`EscapeWatcher`]).
+//! Esc stops a recording dictation (see [`EscapeWatcher`]). The same raw
+//! tap tells dictation.log when keys start reaching Voloz and when a chord
+//! was held without starting a dictation.
 //!
 //! The chord in progress is tracked here too ([`ChordState`]), not only in
 //! keytap: rebuilding the matcher drops keytap's state, and with it the
@@ -36,7 +38,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use keytap::chord::{Chord, ChordEvent, ChordMatcher};
 use keytap::{EventKind, Key, RecvTimeoutError, Tap};
@@ -169,6 +171,7 @@ impl HotkeyMonitor {
 
     fn apply(&mut self, bindings: Bindings) {
         self.bindings = bindings.clone();
+        set_armed(&bindings);
         // Tear down any existing matcher + dispatcher first. The
         // dispatcher sees the shutdown flag on its next recv_timeout
         // (≤100ms) and returns; joining waits for that. Dropping the
@@ -190,6 +193,9 @@ impl HotkeyMonitor {
                 eprintln!(
                     "HotkeyMonitor: ChordMatcher build failed ({err}). Global chord detection is disabled. On macOS, grant Input Monitoring in System Settings → Privacy & Security → Input Monitoring and relaunch."
                 );
+                dictation_log::log(&format!(
+                    "[rust] hotkey: the chord tap could not start ({err}); the shortcut is off"
+                ));
                 return;
             }
         };
@@ -232,6 +238,38 @@ pub fn set_dictation_recording(recording: bool) {
     DICTATION_RECORDING.store(recording, Ordering::Relaxed);
 }
 
+/// The chords the matcher was last built with, for [`EscapeWatcher`] to
+/// notice a chord held without a dictation starting.
+static ARMED: Mutex<Vec<(ChordAction, HashSet<Key>)>> = Mutex::new(Vec::new());
+
+fn set_armed(bindings: &Bindings) {
+    let mut armed = ARMED.lock().unwrap_or_else(|e| e.into_inner());
+    *armed = bindings
+        .iter()
+        .filter(|(_, keys)| !keys.is_empty())
+        .map(|(action, keys)| (*action, keys.clone()))
+        .collect();
+}
+
+/// How long after a chord's keys are all down its start may take before
+/// dictation.log says it never came. keytap's start normally arrives
+/// within milliseconds.
+const MISSED_CHORD_GRACE: Duration = Duration::from_millis(500);
+
+/// The longest armed chord that pressing `key` just completed, `held`
+/// being every key down now (`key` included).
+fn completed_chord(
+    armed: &[(ChordAction, HashSet<Key>)],
+    held: &HashSet<Key>,
+    key: Key,
+) -> Option<ChordAction> {
+    armed
+        .iter()
+        .filter(|(_, keys)| keys.contains(&key) && keys.is_subset(held))
+        .max_by_key(|(_, keys)| keys.len())
+        .map(|(action, _)| *action)
+}
+
 /// Esc stops a recording dictation and transcribes it, as releasing the
 /// chord does. The pill never takes keyboard focus, so the key comes from a
 /// global tap, which only observes: Esc still reaches the focused app.
@@ -243,6 +281,13 @@ pub fn set_dictation_recording(recording: bool) {
 /// when Esc is needed, and a held longer chord would win over a one-key one
 /// anyway. keytap documents two taps as the way to observe raw keys next to
 /// a matcher.
+///
+/// Seeing raw keys, it also logs when the first key reaches Voloz after the
+/// tap starts, and when an armed chord was held but no dictation started.
+/// On the XPS the shortcut once did nothing for ten minutes after Voloz
+/// opened and then worked again, with no trace in the log: these two lines
+/// tell a tap that receives nothing from a matcher that misses the chord.
+/// Neither names a key.
 struct EscapeWatcher {
     thread: Option<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
@@ -254,6 +299,9 @@ impl EscapeWatcher {
             Ok(tap) => tap,
             Err(err) => {
                 eprintln!("HotkeyMonitor: Esc tap failed ({err}); Esc will not stop a dictation.");
+                dictation_log::log(&format!(
+                    "[rust] hotkey: the Esc tap could not start ({err}); Esc will not stop a dictation"
+                ));
                 return None;
             }
         };
@@ -262,18 +310,62 @@ impl EscapeWatcher {
         let thread = thread::Builder::new()
             .name("voloz-escape-watcher".into())
             .spawn(move || {
+                let started = Instant::now();
+                let mut first_key_seen = false;
+                let mut held: HashSet<Key> = HashSet::new();
+                // A chord whose keys are all down: when, which, and the
+                // chord generation then, which its start would bump.
+                let mut pending: Option<(Instant, ChordAction, u64)> = None;
                 // Dropping the tap at the end closes the OS hook.
                 while !shutdown_for_thread.load(Ordering::Relaxed) {
                     match tap.recv_timeout(Duration::from_millis(100)) {
                         Ok(event) => {
-                            if event.kind == EventKind::KeyDown(Key::Escape)
-                                && DICTATION_RECORDING.load(Ordering::Relaxed)
-                            {
-                                stop_on_escape(&app);
+                            if !first_key_seen {
+                                first_key_seen = true;
+                                dictation_log::log(&format!(
+                                    "[rust] hotkey: keys are reaching Voloz (first key {} s after the tap started)",
+                                    started.elapsed().as_secs()
+                                ));
+                            }
+                            match event.kind {
+                                EventKind::KeyDown(key) => {
+                                    if key == Key::Escape
+                                        && DICTATION_RECORDING.load(Ordering::Relaxed)
+                                    {
+                                        stop_on_escape(&app);
+                                    }
+                                    held.insert(key);
+                                    let (idle, generation) = {
+                                        let state = chord_state();
+                                        (state.action.is_none(), state.generation)
+                                    };
+                                    // While a chord runs (hands-free above
+                                    // all), keytap ignores the others.
+                                    if idle {
+                                        let armed = ARMED.lock().unwrap_or_else(|e| e.into_inner());
+                                        if let Some(action) = completed_chord(&armed, &held, key) {
+                                            pending = Some((Instant::now(), action, generation));
+                                        }
+                                    }
+                                }
+                                EventKind::KeyUp(key) => {
+                                    held.remove(&key);
+                                }
+                                EventKind::KeyRepeat(_) => {}
                             }
                         }
-                        Err(RecvTimeoutError::Timeout) => continue,
+                        Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => break,
+                    }
+                    if let Some((at, action, generation)) = pending {
+                        if at.elapsed() >= MISSED_CHORD_GRACE {
+                            pending = None;
+                            if chord_state().generation == generation {
+                                dictation_log::log(&format!(
+                                    "[rust] hotkey: {action:?} keys held, but the chord did not start"
+                                ));
+                            }
+                        }
                     }
                 }
             });
@@ -638,5 +730,35 @@ mod tests {
         assert!(ends_on_release(ChordAction::PushToTalk));
         assert!(ends_on_release(ChordAction::Command));
         assert!(!ends_on_release(ChordAction::ToggleToTalk));
+    }
+
+    #[test]
+    fn completed_chord_is_the_longest_one_the_key_finished() {
+        let armed = vec![
+            (
+                ChordAction::PushToTalk,
+                HashSet::from([Key::ControlLeft, Key::MetaLeft]),
+            ),
+            (
+                ChordAction::ToggleToTalk,
+                HashSet::from([Key::ControlLeft, Key::ShiftLeft, Key::MetaLeft]),
+            ),
+        ];
+        let mut held = HashSet::from([Key::ControlLeft]);
+        assert_eq!(completed_chord(&armed, &held, Key::ControlLeft), None);
+        held.insert(Key::MetaLeft);
+        assert_eq!(
+            completed_chord(&armed, &held, Key::MetaLeft),
+            Some(ChordAction::PushToTalk)
+        );
+        held.insert(Key::ShiftLeft);
+        assert_eq!(
+            completed_chord(&armed, &held, Key::ShiftLeft),
+            Some(ChordAction::ToggleToTalk)
+        );
+        // A key outside every chord completes none, whatever else is held.
+        held.insert(Key::A);
+        assert_eq!(completed_chord(&armed, &held, Key::A), None);
+        assert_eq!(completed_chord(&[], &held, Key::MetaLeft), None);
     }
 }

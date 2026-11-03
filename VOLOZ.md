@@ -1134,6 +1134,40 @@ So a failure can be read from the log next time:
   `[rust] pill hidden` (`log_pill_shown` and the `dictate:hide` listener in
   `main.rs`).
 
+## A shortcut that did nothing after the update on the XPS (`light`, 2026-11-03, Lite 0.8.21)
+
+Right after installing 0.8.20 on the XPS, the owner pressed the shortcut
+(Left Ctrl + Left Win) over and over and nothing happened, with the Voloz
+window in front. dictation.log had `hotkey: spawn` at 10:47 and then no line
+at all until 10:57: no chord start, no pill. From about 11:01 the shortcut
+worked again with no rebuild of the matcher, the Voloz window in front or
+not. A separate WH_KEYBOARD_LL probe and Voloz then saw the same presses at
+the same instants. The same silence followed a fresh start on 2026-11-02
+23:00:57, until the shortcut was switched off and on (23:01:14). Ruled out:
+an elevated window in front (neither Voloz nor its WebView2 runs elevated),
+a rule that ignores the shortcut while Voloz has focus (there is none, and
+it worked with Voloz in front at 11:10), a stuck key in keytap's matcher
+(chords match on a subset of the held keys, so a stuck key would have
+started a dictation or a longer chord, both logged). Not known: whether
+keytap's hook received nothing in that window or received keys the matcher
+dropped; the log could not tell.
+
+So the next occurrence can be read from the log (`EscapeWatcher` in
+`hotkey_monitor.rs`, the raw tap already used for Esc, a second OS hook):
+
+- `[rust] hotkey: keys are reaching Voloz (first key N s after the tap
+  started)`, once per tap. A large N right after Voloz opens means the
+  hooks got nothing before.
+- `[rust] hotkey: <Action> keys held, but the chord did not start`: the raw
+  tap saw every key of an armed chord down, no chord was in progress, and
+  no start followed within 500 ms. That points at keytap's chord tap or
+  matcher, not at Windows.
+- A chord or Esc tap that fails to start now says so in dictation.log (it
+  was `eprintln!` only, invisible in a Windows build).
+
+No key is named in any line. If the shortcut does nothing and neither line
+appears, the raw tap got nothing either.
+
 ## Developing on GB4
 
 ```bash
