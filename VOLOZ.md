@@ -1095,6 +1095,30 @@ per failed provider ("llm provider qwen/qwen3.8-27b @ api.groq.com failed
 (HTTP 429: Rate limit reached ... on tokens per minute ...); skipped for 13 s")
 and one when a backup answered. 110 unit tests (109 pass, 1 skipped).
 
+Desktop Lite 0.8.20-0.8.22 parity (2026-11-03, Android 0.3.1):
+- *Microphone level* in the dictation log after every take, the desktop's
+  `pcmLevel` + `describeLevel` (`AudioMath.describeLevel`): "audio level:
+  peak -7 dBFS, rms -25 dBFS, muted 23%", with "the microphone delivered no
+  sound" at half or more of the 100 ms windows below -90 dBFS.
+- *A refinement that is not a cleanup of the transcript* (Groq's Qwen
+  translated Portuguese dictations that said "in English") is dropped for
+  the transcript: `RefinementPrompt.strayedFromTranscript`, under half of
+  the refined text's distinct words in the transcript, at least 5 to judge.
+  The history entry says "refinement did not match the transcript". The
+  first version used `Regex("(?U)\\w+")`: the JVM unit tests passed, and
+  on the emulator the class failed to load (Android's ICU regex rejects
+  `(?U)`), so every dictation with refinement errored; it now uses the
+  explicit class of `NON_WORD_PATTERN`. The mock API has an `english` mode
+  for it; emulator scenario G (in `et_0831.sh` on GB4) inserts the
+  Portuguese transcript.
+- Not ported, not applicable: the 0.8.20 "pill shown/hidden" lines (the
+  phone's bubble is placed by the app next to the focused field, not on a
+  monitor) and the 0.8.21 hotkey diagnostics (no keyboard chord on Android).
+Unit tests 115 (114 pass, 1 skipped). Emulator (emutest + mock): A-F and G
+recovered. The emulator runs in English, which the app has followed since
+0.3.0, so `et_setup.sh` now sets the app's language to pt-BR before tapping
+the Portuguese texts.
+
 **Next release: vocabulary shared across devices.** The owner wants the
 phone to pick up the vocabulary he keeps on Windows, and the same list on
 every PC and the phone, which needs one identity across devices. Not

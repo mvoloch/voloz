@@ -3,7 +3,7 @@
 Serves GET/HEAD /openai/v1/models, POST /openai/v1/audio/transcriptions and
 POST /openai/v1/chat/completions on 127.0.0.1:8765 (the emulator reaches it as
 10.0.2.2). The mode is read from the file given as the second argument on every
-request: "ok", "fail" (HTTP 503), "hang" (no answer for 300 s) or "hangrefine"
+request: "ok", "fail" (HTTP 503), "hang" (no answer for 300 s), "english" (the refinement comes back translated) or "hangrefine"
 (transcription answers, refinement hangs); MODEFILE.text, when
 present, is the transcription returned (default below). Each request is
 logged on stdout: method, path, upload size and type, never the Authorization.
@@ -81,6 +81,10 @@ class Handler(BaseHTTPRequestHandler):
             if sent.startswith("<instruction>"):
                 selected = "<selection>" in sent
                 refined = "Texto reescrito pelo comando." if selected else "Rascunho escrito pelo comando."
+                return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})
+            if m == "english":
+                # A refinement that translated the dictation (Qwen did, desktop 0.8.22).
+                refined = "Ok, I want you to create an appendix at the end of the presentation, always in English."
                 return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})
             refined = (sent[:1].upper() + sent[1:]).rstrip(".") + "." if sent else REFINED
             return self.reply(200, {"choices": [{"index": 0, "message": {"role": "assistant", "content": refined}, "finish_reason": "stop"}]})

@@ -154,6 +154,28 @@ object RefinementPrompt {
         return if (parts.isEmpty()) null else parts.joinToString(", ")
     }
 
+    /**
+     * refinement.py `strayed_from_transcript` (desktop 0.8.22): whether [refined] is no
+     * longer a cleanup of [transcript], as a translation or an answer. Groq's Qwen
+     * translated Portuguese dictations that said "in English"; every real cleanup of the
+     * owner's 187 kept at least 89% of its distinct words in the transcript, the two
+     * translations 9% and 21%. Below [MIN_SHARED_WORD_SHARE] the transcript is kept.
+     */
+    fun strayedFromTranscript(transcript: String, refined: String): Boolean {
+        val refinedWords = WORD.findAll(refined.lowercase()).map { it.value }.toSet()
+        if (refinedWords.size < MIN_WORDS_TO_JUDGE) return false
+        val kept = refinedWords intersect WORD.findAll(transcript.lowercase()).map { it.value }.toSet()
+        return kept.size.toDouble() / refinedWords.size < MIN_SHARED_WORD_SHARE
+    }
+
+    const val MIN_SHARED_WORD_SHARE = 0.5
+
+    /** Fewer distinct words than this can't be judged: "um yeah" -> "Yeah.". */
+    const val MIN_WORDS_TO_JUDGE = 5
+
+    /** Python's `\w+`, the complement of [NON_WORD_PATTERN]: "você" is one word. */
+    private val WORD = Regex("[\\p{L}\\p{M}\\p{Nd}\\p{Pc}\\x{200C}\\x{200D}]+")
+
     /** refinement.py `collapse_repetitive_artifacts`: strip Whisper loops before the LLM sees them. */
     fun collapseRepetitiveArtifacts(text: String, minRun: Int = REPETITION_RUN_THRESHOLD): String =
         collapseCharacterRuns(collapseWordRuns(text, minRun), minRun)

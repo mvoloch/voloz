@@ -125,4 +125,31 @@ class RefinementPromptTest {
             )
         }
     }
+
+    @Test
+    fun translationStrayedFromTheTranscript() {
+        val pt = "Ok, eu quero que você faça o seguinte: na apresentação, você fazer um apêndice no final " +
+            "explicando exatamente os cálculos, sempre em inglês."
+        val en = "Ok, I want you to do the following: in the presentation, create an appendix at the end " +
+            "explaining exactly the calculations, always in English."
+        assertTrue(RefinementPrompt.strayedFromTranscript(pt, en))
+        assertFalse(RefinementPrompt.strayedFromTranscript(pt, pt.replace("você fazer", "faça")))
+    }
+
+    @Test
+    fun cleanupsAndShortTextsDidNotStray() {
+        assertFalse(
+            RefinementPrompt.strayedFromTranscript(
+                "então um a gente vai desminuir o custo agora a pouco né",
+                "Então a gente vai diminuir o custo agora há pouco, né?",
+            ),
+        )
+        assertFalse(
+            RefinementPrompt.strayedFromTranscript(
+                "it has three hundred k no no no actually four hundred k stars on github today",
+                "It has four hundred k stars on GitHub today.",
+            ),
+        )
+        assertFalse(RefinementPrompt.strayedFromTranscript("um yeah", "Yeah."))
+    }
 }

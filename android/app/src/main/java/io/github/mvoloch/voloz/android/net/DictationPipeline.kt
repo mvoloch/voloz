@@ -195,6 +195,11 @@ class DictationPipeline(private val client: ApiClient, private val fallback: Fal
             val answer = fallback.run("llm", route.refine, { cancel.cancelled }) { p ->
                 client.refine(p, keyOrThrow(route, p), cleaned, PromptOptions(vocabulary, flags, tokens.keys.toList(), appStyle))
             }
+            // Desktop 0.8.22: a reply that is not a cleanup of the transcript (a translation,
+            // an answer) is dropped for the transcript.
+            if (RefinementPrompt.strayedFromTranscript(cleaned, answer.value)) {
+                return Finished(unrefined, null, "refinement did not match the transcript (translated or answered)", ms(), false)
+            }
             val restored = Snippets.restore(AppStyle.finish(answer.value.trim(), appStyle), tokens)
             // A lost or repeated placeholder: guessing where a shortcut belonged could put it
             // in the wrong place; the unrefined text has each one where it was said.

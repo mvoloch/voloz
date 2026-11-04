@@ -254,6 +254,7 @@ class DictationController(
         recorder = null
         val command = (_state.value as? BubbleState.Recording)?.command == true
         val take = rec.stop()
+        log?.add(AudioMath.describeLevel(take.pcm, take.sampleRate))
         takePackage = inserter?.targetPackage()
         takeSelection = if (command) inserter?.selectedText().orEmpty() else null
         stopForegroundService()

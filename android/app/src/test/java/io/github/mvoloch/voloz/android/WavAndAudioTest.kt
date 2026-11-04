@@ -75,4 +75,35 @@ class WavAndAudioTest {
         assertTrue(AudioMath.hasSignal(quiet, quiet.size))
         assertTrue(AudioMath.level(quiet, quiet.size) < 0.05f)
     }
+
+    private fun pcm16(samples: DoubleArray): ByteArray {
+        val out = ByteArray(samples.size * 2)
+        samples.forEachIndexed { i, x ->
+            val v = Math.round(x * 32767).toInt()
+            out[2 * i] = (v and 0xFF).toByte()
+            out[2 * i + 1] = (v shr 8).toByte()
+        }
+        return out
+    }
+
+    @Test
+    fun levelOfAMutedTakeSaysTheMicDeliveredNoSound() {
+        assertEquals(
+            "audio level: peak silent, rms silent, muted 100% (the microphone delivered no sound)",
+            AudioMath.describeLevel(ByteArray(16_000 * 2), 16_000),
+        )
+    }
+
+    @Test
+    fun levelOfAHalfScaleSine() {
+        val sine = DoubleArray(16_000) { 0.5 * Math.sin(2 * Math.PI * 440 * it / 16_000) }
+        assertEquals("audio level: peak -6 dBFS, rms -9 dBFS, muted 0%", AudioMath.describeLevel(pcm16(sine), 16_000))
+    }
+
+    @Test
+    fun voiceCutAfter300msIsMostlyMuted() {
+        val take = DoubleArray(16_000 * 13 / 10) { if (it < 4_800) 0.3 * Math.sin(2 * Math.PI * 200 * it / 16_000) else 0.0 }
+        val line = AudioMath.describeLevel(pcm16(take), 16_000)
+        assertTrue(line, line.endsWith("muted 77% (the microphone delivered no sound)"))
+    }
 }

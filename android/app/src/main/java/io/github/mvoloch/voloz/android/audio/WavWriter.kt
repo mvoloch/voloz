@@ -2,6 +2,7 @@ package io.github.mvoloch.voloz.android.audio
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.abs
 import kotlin.math.log10
 import kotlin.math.sqrt
 
@@ -57,6 +58,49 @@ object AudioMath {
             off += window
         }
         return peak
+    }
+
+    /** A 100 ms window below this is a microphone delivering no sound, not a quiet room (-60..-50). */
+    const val MUTED_DBFS = -90.0
+
+    private fun dbfs(amplitude: Double): Double =
+        if (amplitude > 0) 20 * log10(amplitude) else Double.NEGATIVE_INFINITY
+
+    /**
+     * The desktop's `pcmLevel` + `describeLevel` (pcm.ts, Lite 0.8.20), for the dictation
+     * log: "audio level: peak -7 dBFS, rms -24 dBFS, muted 0%". Muted is the share of
+     * 100 ms windows below [MUTED_DBFS]; at half or more the note says the microphone
+     * delivered no sound (a muted mic, or a noise suppressor gating the voice).
+     */
+    fun describeLevel(pcm: ByteArray, sampleRate: Int): String {
+        val n = pcm.size / 2
+        val window = maxOf(1, Math.round(sampleRate / 10.0).toInt())
+        var peak = 0.0
+        var total = 0.0
+        var windows = 0
+        var muted = 0
+        var windowSum = 0.0
+        var windowCount = 0
+        fun closeWindow() {
+            windows++
+            if (dbfs(sqrt(windowSum / windowCount)) < MUTED_DBFS) muted++
+            windowSum = 0.0
+            windowCount = 0
+        }
+        for (i in 0 until n) {
+            val x = sample(pcm, i) / 32768.0
+            peak = maxOf(peak, abs(x))
+            total += x * x
+            windowSum += x * x
+            windowCount++
+            if (windowCount == window) closeWindow()
+        }
+        if (windowCount > 0) closeWindow()
+        val share = if (windows > 0) muted.toDouble() / windows else 0.0
+        fun db(v: Double) = if (v.isFinite()) "${Math.round(v)} dBFS" else "silent"
+        val rms = if (n > 0) dbfs(sqrt(total / n)) else Double.NEGATIVE_INFINITY
+        val note = if (share >= 0.5) " (the microphone delivered no sound)" else ""
+        return "audio level: peak ${db(dbfs(peak))}, rms ${db(rms)}, muted ${Math.round(share * 100)}%$note"
     }
 
     /** RMS level mapped from -60..0 dBFS to 0..1. */
