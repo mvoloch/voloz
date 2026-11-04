@@ -42,6 +42,7 @@ class UploadAudio(val bytes: ByteArray, val fileName: String, val mime: String)
 class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
     companion object {
         const val MAX_TOKENS = 2048
+        const val REFINE_TOKEN_HEADROOM = 256
         const val TEMPERATURE = 0.2
         const val ANTHROPIC_VERSION = "2023-06-01"
         /** Desktop anthropic_backend.py: effort "low" and room for its thinking on top of the text. */
@@ -54,6 +55,16 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             .readTimeout(120, TimeUnit.SECONDS)
             .callTimeout(180, TimeUnit.SECONDS)
             .build()
+
+        /**
+         * `max_tokens` for refining [text]: room for all of it, capped (desktop
+         * `refine_output_budget`). Groq's free tier counts the requested `max_tokens`
+         * against its tokens per minute (8000 for qwen3.8-27b), so a fixed 2048 plus a
+         * ~1600-token prompt allowed two refinements a minute. One token per character
+         * covers any script; Portuguese measured 0.24.
+         */
+        fun refineOutputBudget(text: String): Int =
+            minOf(MAX_TOKENS, text.codePointCount(0, text.length) + REFINE_TOKEN_HEADROOM)
 
         /** Whether [endpoint] is the OpenAI API itself (its GPT-5/6 models need other parameters). */
         fun isOpenAiApi(endpoint: String): Boolean = hostOf(endpoint) == "api.openai.com"
@@ -132,7 +143,8 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
     private fun refineOpenAiCompatible(provider: Provider, apiKey: String, transcript: String, opts: PromptOptions): String {
         val id = "${base(provider.endpoint)}|${provider.model}"
         val reasoningOff = isOpenAiApi(provider.endpoint) && id !in reasoningRefused
-        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff)
+        val budget = refineOutputBudget(transcript)
+        var payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff, budget)
         try {
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         } catch (e: ProviderException) {
@@ -140,7 +152,7 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
             // reason (gpt-4.1) refuse the field outright: drop it for good, once.
             if (!(reasoningOff && e.status == 400 && e.detail?.contains("reasoning_effort") == true)) throw e
             reasoningRefused += id
-            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff = false)
+            payload = chatPayload(provider, RefinementPrompt.buildMessages(transcript, opts), reasoningOff = false, maxTokens = budget)
             return execute(provider, chatRequest(provider, apiKey, payload)) { refinedText(it) }
         }
     }
@@ -200,7 +212,7 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
 
     internal fun anthropicPayload(provider: Provider, transcript: String, opts: PromptOptions): JsonObject = buildJsonObject {
         put("model", provider.model)
-        put("max_tokens", MAX_TOKENS + THINKING_HEADROOM_TOKENS)
+        put("max_tokens", refineOutputBudget(transcript) + THINKING_HEADROOM_TOKENS)
         put("system", RefinementPrompt.buildSystemPrompt(opts, tagged = true))
         put(
             "messages",
@@ -303,21 +315,47 @@ class ApiClient(private val http: OkHttpClient = defaultHttpClient()) {
         if (!response.isSuccessful) {
             // The provider's own message (and the parameter it names), never the body:
             // some servers echo the whole prompt in their errors.
-            val detail = runCatching {
+            val param = runCatching {
                 val error = json.parseToJsonElement(body).jsonObject["error"] as? JsonObject
-                val message = error?.get("message")?.jsonPrimitive?.contentOrNull
-                val param = (error?.get("param") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
-                listOfNotNull(message, param?.let { "(param $it)" }).joinToString(" ").ifEmpty { null }
+                (error?.get("param") as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull
             }.getOrNull()
+            val detail = listOfNotNull(providerReason(body), param?.let { "(param $it)" }).joinToString(" ").ifEmpty { null }
             throw ProviderException(
                 provider,
                 response.code,
-                detail?.take(200),
+                detail?.take(REASON_MAX_CHARS),
                 retryAfterSeconds = parseRetryAfter(response.header("retry-after")),
             )
         }
         return body
     }
+}
+
+const val REASON_MAX_CHARS = 240
+
+// Groq names the account in its rate-limit message ("in organization `org_…`
+// service tier `on_demand`") and ends with an upgrade link; neither helps.
+private val ACCOUNT_DETAILS = Regex("""\s+(?:in organization|service tier)\s+`[^`]*`""")
+private val UPSELL = Regex("""\s*(?:Need more tokens\?|Upgrade to|Visit https?://).*$""", RegexOption.DOT_MATCHES_ALL)
+private val URL = Regex("""https?://\S+""")
+
+/**
+ * The provider's explanation from an error body (desktop `provider_reason`), e.g. Groq's
+ * "Rate limit reached for model `qwen/qwen3.8-27b` on tokens per minute (TPM): Limit
+ * 8000, Used 6123, Requested 3834. Please try again in 13.2s." Reads
+ * `{"error": {"message": …}}` (OpenAI, Groq, Anthropic) or `{"error": "…"}`; null for
+ * anything else, so a body that echoes the prompt is never logged. Account ids and
+ * links are removed.
+ */
+fun providerReason(body: String?): String? {
+    val error = runCatching { (Json.parseToJsonElement(body ?: "") as? JsonObject)?.get("error") }.getOrNull()
+    val message = when (error) {
+        is JsonObject -> (error["message"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+        is kotlinx.serialization.json.JsonPrimitive -> error.takeIf { it.isString }?.content
+        else -> null
+    } ?: return null
+    val cleaned = message.replace(ACCOUNT_DETAILS, "").replace(UPSELL, "").replace(URL, "")
+    return cleaned.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").take(REASON_MAX_CHARS).ifEmpty { null }
 }
 
 /** Seconds from a `Retry-After` header ("7", "2.5"), null otherwise (desktop `parse_retry_after`). */

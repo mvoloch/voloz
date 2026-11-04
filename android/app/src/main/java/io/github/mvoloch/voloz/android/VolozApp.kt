@@ -7,6 +7,7 @@ import io.github.mvoloch.voloz.android.data.SettingsRepository
 import io.github.mvoloch.voloz.android.dictation.DictationController
 import io.github.mvoloch.voloz.android.net.DictationPipeline
 import io.github.mvoloch.voloz.android.net.ApiClient
+import io.github.mvoloch.voloz.android.net.Fallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,8 +31,8 @@ class VolozApp : Application() {
         super.onCreate()
         settings = SettingsRepository(this, appScope)
         history = HistoryRepository(this, appScope)
-        pipeline = DictationPipeline(api)
         log = DictationLog(this)
+        pipeline = DictationPipeline(api, Fallback(log = log::add))
         controller = DictationController(this, settings, history, pipeline, appScope, log)
     }
 }

@@ -7,8 +7,15 @@ package io.github.mvoloch.voloz.android.net
  * wait it asked for (or [DEFAULT_COOLDOWN_MS]) has passed, so a spent free tier
  * doesn't cost a failed round trip on every dictation. When every provider is
  * cooling down they are all tried anyway, in order.
+ *
+ * [log] gets one line per failed provider (with the provider's own reason, such as
+ * which rate limit) and one when a backup answered, like the desktop's providers.log.
  */
-class Fallback(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) {
+class Fallback(
+    private val log: (String) -> Unit = {},
+    // Last, so `Fallback { now }` in tests still sets the clock.
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+) {
     companion object {
         const val DEFAULT_COOLDOWN_MS = 60_000L
         const val MAX_COOLDOWN_MS = 600_000L
@@ -50,19 +57,24 @@ class Fallback(private val now: () -> Long = { System.nanoTime() / 1_000_000 }) 
                 if (stop()) throw DictationCancelled()
                 last = e
                 failed++
-                if (e.status == 429) park(kind, p, e.retryAfterSeconds)
+                val skipped = if (e.status == 429) "; skipped for ${park(kind, p, e.retryAfterSeconds) / 1000} s" else ""
+                log("$kind provider ${p.model} @ ${p.host} failed (${e.reason})$skipped")
                 continue
             }
             synchronized(this) { cooldownUntil.remove(identity(kind, p)) }
-            return Answer(p, result, backup = !p.sameAs(providers.first()), failedBefore = failed)
+            val backup = !p.sameAs(providers.first())
+            if (backup) log("$kind served by backup provider ${p.model} @ ${p.host}")
+            return Answer(p, result, backup, failedBefore = failed)
         }
         throw checkNotNull(last)
     }
 
+    /** Parks [p] and returns for how long (ms). */
     @Synchronized
-    private fun park(kind: String, p: Provider, retryAfterSeconds: Double?) {
-        val wait = retryAfterSeconds?.let { (it * 1000).toLong() } ?: DEFAULT_COOLDOWN_MS
-        cooldownUntil[identity(kind, p)] = now() + wait.coerceAtMost(MAX_COOLDOWN_MS)
+    private fun park(kind: String, p: Provider, retryAfterSeconds: Double?): Long {
+        val wait = (retryAfterSeconds?.let { (it * 1000).toLong() } ?: DEFAULT_COOLDOWN_MS).coerceAtMost(MAX_COOLDOWN_MS)
+        cooldownUntil[identity(kind, p)] = now() + wait
+        return wait
     }
 
     /** Forget every cooldown (after the user changes providers). */

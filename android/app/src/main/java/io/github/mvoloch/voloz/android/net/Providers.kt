@@ -120,4 +120,12 @@ class ProviderException(
         detail?.let { append(": ").append(it) }
     },
     cause,
-)
+) {
+    /** Why it failed, for the log: "HTTP 429: Rate limit reached for model …", "unreachable: SocketTimeoutException". */
+    val reason: String
+        get() = when {
+            missingKey -> "no key saved for this host"
+            status != null -> if (detail != null) "HTTP $status: $detail" else "HTTP $status"
+            else -> if (detail != null) "unreachable: $detail" else "unreachable"
+        }
+}

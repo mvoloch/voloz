@@ -1084,6 +1084,17 @@ on a phone), audio retention (Android never stores audio), browser-tab
 styles (no tab title), the optional Claude key in the first-run setup (any
 provider's key is added in Ajustes).
 
+Desktop Lite 0.8.19 parity (2026-11-01, Android 0.3.1): the refinement's
+`max_tokens` is sized to the text, min(2048, characters + 256) (Groq's free
+tier counts the requested amount against its 8000 tokens per minute, so the
+fixed 2048 allowed two refinements a minute); Claude gets the same plus its
+1024 of thinking room. A provider's error keeps its own reason (port of
+`provider_reason`: Groq's account id, service tier and upgrade link removed,
+240 characters, never the raw body), and the dictation log now gets a line
+per failed provider ("llm provider qwen/qwen3.8-27b @ api.groq.com failed
+(HTTP 429: Rate limit reached ... on tokens per minute ...); skipped for 13 s")
+and one when a backup answered. 110 unit tests (109 pass, 1 skipped).
+
 **Next release: vocabulary shared across devices.** The owner wants the
 phone to pick up the vocabulary he keeps on Windows, and the same list on
 every PC and the phone, which needs one identity across devices. Not

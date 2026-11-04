@@ -10,6 +10,7 @@ import io.github.mvoloch.voloz.android.net.ProviderPresets
 import io.github.mvoloch.voloz.android.net.UploadAudio
 import io.github.mvoloch.voloz.android.net.Vendor
 import io.github.mvoloch.voloz.android.net.parseRetryAfter
+import io.github.mvoloch.voloz.android.net.providerReason
 import io.github.mvoloch.voloz.android.refine.RefinementPrompt
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -62,6 +63,8 @@ private fun chatReply(text: String) =
     """{"choices":[{"index":0,"message":{"role":"assistant","content":"$text"},"finish_reason":"stop"}]}"""
 
 private val json = Json
+
+private const val GROQ_429 = """{"error":{"message":"Rate limit reached for model `qwen/qwen3.8-27b` in organization `org_01abc` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 6123, Requested 3834. Please try again in 13.2s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing","type":"tokens","code":"rate_limit_exceeded"}}"""
 
 private fun bodyJson(body: String): JsonObject = json.parseToJsonElement(body).jsonObject
 
@@ -184,7 +187,7 @@ class ProvidersTest {
         val b = bodyJson(body)
         assertEquals("https://api.openai.com/v1/chat/completions", req.url.toString())
         assertEquals("Bearer k", req.header("Authorization"))
-        assertEquals("2048", b["max_completion_tokens"]!!.jsonPrimitive.content)
+        assertEquals("259", b["max_completion_tokens"]!!.jsonPrimitive.content) // "olá" + 256
         assertNull(b["max_tokens"])
         assertEquals("none", b["reasoning_effort"]!!.jsonPrimitive.content)
         assertEquals("0.2", b["temperature"]!!.jsonPrimitive.content)
@@ -213,9 +216,9 @@ class ProvidersTest {
         client.refine(GROQ_LLM, "k", "x", emptyList())
         client.refine(QWEN, "k", "x", emptyList())
         val (oss, qwen) = server.sent.map { bodyJson(it.second) }
-        assertEquals("2048", oss["max_tokens"]!!.jsonPrimitive.content)
+        assertEquals("257", oss["max_tokens"]!!.jsonPrimitive.content)
         assertEquals("low", oss["reasoning_effort"]!!.jsonPrimitive.content)
-        assertEquals("2048", qwen["max_tokens"]!!.jsonPrimitive.content)
+        assertEquals("257", qwen["max_tokens"]!!.jsonPrimitive.content)
         assertNull(qwen["reasoning_effort"])
         assertNull(qwen["max_completion_tokens"])
         // Non-Claude models get the keep-language rule and plain examples.
@@ -234,7 +237,7 @@ class ProvidersTest {
         assertEquals("2023-06-01", req.header("anthropic-version"))
         assertNull(req.header("Authorization"))
         val b = bodyJson(body)
-        assertEquals("3072", b["max_tokens"]!!.jsonPrimitive.content)
+        assertEquals("${12 + 256 + 1024}", b["max_tokens"]!!.jsonPrimitive.content) // text + headroom + thinking
         assertEquals("low", b["output_config"]!!.jsonObject["effort"]!!.jsonPrimitive.content)
         assertNull(b["temperature"])
         assertTrue(b["system"]!!.jsonPrimitive.content.endsWith(RefinementPrompt.TAGGED_OUTPUT_INSTRUCTION))
@@ -260,6 +263,67 @@ class ProvidersTest {
             assertEquals(12.0, e.retryAfterSeconds!!, 0.0)
             assertEquals("Rate limit reached", e.detail)
         }
+    }
+
+    @Test
+    fun theProvidersReasonKeepsTheLimitAndDropsTheAccount() {
+        assertEquals(
+            "Rate limit reached for model `qwen/qwen3.8-27b` on tokens per minute (TPM): " +
+                "Limit 8000, Used 6123, Requested 3834. Please try again in 13.2s.",
+            providerReason(GROQ_429),
+        )
+        assertEquals("slow down", providerReason("""{"error": "slow down"}"""))
+        // Anything but an error message (an echoed prompt, HTML) is not logged.
+        assertNull(providerReason("<html>the user's dictation</html>"))
+        assertNull(providerReason("""{"detail": "x"}"""))
+        assertNull(providerReason("""{"error": {"message": 42}}"""))
+        assertNull(providerReason(null))
+        assertEquals(240, providerReason("""{"error":"${"a".repeat(500)}"}""")!!.length)
+    }
+
+    @Test
+    fun aRateLimitCarriesTheProvidersReason() {
+        val server = FakeServer { _, _ -> Triple(429, GROQ_429, emptyMap()) }
+        try {
+            server.client().refine(QWEN, "k", "olá mundo", emptyList())
+            fail()
+        } catch (e: ProviderException) {
+            assertTrue(e.reason, e.reason.startsWith("HTTP 429: Rate limit reached"))
+            assertTrue("on tokens per minute (TPM): Limit 8000" in e.message!!)
+            assertFalse("org_01abc" in e.message!!)
+            assertFalse("https://" in e.message!!)
+        }
+    }
+
+    @Test
+    fun failuresAndBackupsGoToTheLog() {
+        val lines = mutableListOf<String>()
+        val f = Fallback(now = { 0L }, log = { lines += it })
+        f.run("llm", listOf(QWEN, LUNA)) { p ->
+            if (p == QWEN) throw ProviderException(p, 429, "tokens per minute (TPM)", retryAfterSeconds = 12.0)
+            "ok"
+        }
+        assertEquals(
+            listOf(
+                "llm provider qwen/qwen3.8-27b @ api.groq.com failed (HTTP 429: tokens per minute (TPM)); skipped for 12 s",
+                "llm served by backup provider gpt-6-luna @ api.openai.com",
+            ),
+            lines,
+        )
+        lines.clear()
+        runCatching { f.run("stt", listOf(GROQ_STT)) { p -> throw ProviderException(p, null, "SocketTimeoutException") } }
+        assertEquals(listOf("stt provider whisper-large-v3 @ api.groq.com failed (unreachable: SocketTimeoutException)"), lines)
+    }
+
+    @Test
+    fun refineReservesOutputTokensByLength() {
+        val server = FakeServer { _, _ -> Triple(200, chatReply("Olá, mundo."), emptyMap()) }
+        val client = server.client()
+        val long = (0 until 400).joinToString(" ") { "palavra$it" }
+        client.refine(QWEN, "k", "olá mundo", emptyList())
+        client.refine(QWEN, "k", long, emptyList())
+        client.refine(QWEN, "k", "😀", emptyList()) // one emoji, two UTF-16 units: counted as one, like Python
+        assertEquals(listOf("265", "2048", "257"), server.sent.map { bodyJson(it.second)["max_tokens"]!!.jsonPrimitive.content })
     }
 
     @Test
