@@ -20,6 +20,12 @@
 //! a round that produced no frames escalates backoff up to a 30 s cap so
 //! long-term outages stop filling stderr with reconnect log lines.
 //!
+//! A 404 is the exception: the server answered, so it is up, and it doesn't
+//! have the route. The lite edition doesn't serve `/events/speak` (it lives
+//! with MCP, which lite leaves out), and retrying it every 30 s filled the
+//! log for as long as the app ran. The monitor logs that once and stops;
+//! connection failures still retry as above.
+//!
 //! The idle timeout guards against the worst silent-failure mode: a
 //! backend that accepts the TCP connection but stops producing frames
 //! (deadlocked SSE endpoint, zombie process). Without a timeout the
@@ -61,7 +67,14 @@ async fn run(app: AppHandle) {
     let mut attempt: u32 = 0;
 
     loop {
-        let stream_result = stream_once(&client, &url, &app).await;
+        let stream_result = match connect(&client, &url).await {
+            Ok(Some(resp)) => stream_once(resp, &app).await,
+            Ok(None) => {
+                eprintln!("speak_monitor: backend doesn't serve /events/speak (404); not retrying");
+                return;
+            }
+            Err(e) => Err(e),
+        };
         let had_success = matches!(stream_result, Ok(true));
 
         if had_success {
@@ -86,23 +99,31 @@ async fn run(app: AppHandle) {
     }
 }
 
-/// Consume the SSE stream until it closes or errors. Returns `Ok(true)`
-/// if at least one frame was received (the connection was genuinely
-/// productive), `Ok(false)` on a clean but empty close, and `Err` for
-/// any connection or parse failure.
-async fn stream_once(
-    client: &reqwest::Client,
-    url: &str,
-    app: &AppHandle,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
-    let mut resp = client
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Open the SSE stream. `Ok(None)` means the server answered 404: it is up
+/// but has no such route, so retrying can't help. Any other non-success
+/// status, or a failed connection, is an `Err` the caller retries.
+async fn connect(client: &reqwest::Client, url: &str) -> Result<Option<reqwest::Response>, BoxError> {
+    let resp = client
         .get(url)
         .header("Accept", "text/event-stream")
         .send()
         .await?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
     if !resp.status().is_success() {
         return Err(format!("speak_monitor: backend returned {}", resp.status()).into());
     }
+    Ok(Some(resp))
+}
+
+/// Consume the SSE stream until it closes or errors. Returns `Ok(true)`
+/// if at least one frame was received (the connection was genuinely
+/// productive), `Ok(false)` on a clean but empty close, and `Err` for
+/// any read or parse failure.
+async fn stream_once(mut resp: reqwest::Response, app: &AppHandle) -> Result<bool, BoxError> {
     let mut buf = String::new();
     let mut saw_data = false;
     loop {
@@ -176,5 +197,54 @@ fn dispatch(app: &AppHandle, event: &str, data: &str) {
         }
         // `ready` and `ping` are heartbeats; ignore.
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::connect;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    /// A one-shot HTTP server that answers the first request with `status_line`.
+    async fn serve_once(status_line: &'static str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut req = [0u8; 1024];
+            let _ = sock.read(&mut req).await;
+            let reply = format!("HTTP/1.1 {status_line}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+            let _ = sock.write_all(reply.as_bytes()).await;
+        });
+        format!("http://{addr}/events/speak")
+    }
+
+    #[tokio::test]
+    async fn not_found_means_stop() {
+        let url = serve_once("404 Not Found").await;
+        let got = connect(&reqwest::Client::new(), &url).await.unwrap();
+        assert!(got.is_none());
+    }
+
+    #[tokio::test]
+    async fn server_error_is_retried() {
+        let url = serve_once("503 Service Unavailable").await;
+        assert!(connect(&reqwest::Client::new(), &url).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn ok_opens_the_stream() {
+        let url = serve_once("200 OK").await;
+        assert!(connect(&reqwest::Client::new(), &url).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn refused_connection_is_retried() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let url = format!("http://{addr}/events/speak");
+        assert!(connect(&reqwest::Client::new(), &url).await.is_err());
     }
 }

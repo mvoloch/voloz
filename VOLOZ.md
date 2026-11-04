@@ -345,9 +345,15 @@ Owner decisions pending (the build works either way):
   is still to be designed.
 - Both editions use port 17493 and the desktop app reuses a server already
   running there, so running both at once is not supported.
-- Known noise: the desktop's speak monitor subscribes to `/events/speak`,
-  which lite doesn't serve (it lives with MCP); it retries with backoff
-  capped at 30 s, so one log line every 30 s.
+- The desktop's speak monitor subscribes to `/events/speak`, which lite
+  doesn't serve (it lives with MCP). Through 0.8.22 it retried every 30 s
+  for as long as the app ran (1,159 log lines in one day on GB4); it now
+  treats a 404 as final, logs one line and stops. Connection failures
+  still retry. The Rust binary can't tell the editions apart (same code,
+  different config and sidecar), so the server's answer decides. If a
+  studio server later takes the port, the pill won't surface for agent
+  speech until the app restarts; running both editions at once isn't
+  supported anyway.
 
 ## Shortcuts, audio retention, first-run setup (`feat/shortcuts-privacy-onboarding`, 2026-10-29)
 
