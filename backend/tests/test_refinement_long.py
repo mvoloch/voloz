@@ -131,3 +131,10 @@ def test_portuguese_crutch_words_are_removed_but_the_verb_stays():
 def test_the_crutch_rule_needs_smart_cleanup():
     flags = refinement.RefinementFlags(smart_cleanup=False)
     assert "crutch words" not in refinement.build_refinement_prompt(flags)
+
+
+def test_the_crutch_rule_does_not_say_where_the_message_ends():
+    # "only when it closes the whole message" made qwen cut everything after a
+    # mid-message "tá bom?".
+    prompt = refinement.build_refinement_prompt(refinement.RefinementFlags())
+    assert "closes the whole message" not in prompt

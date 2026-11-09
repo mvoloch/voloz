@@ -169,13 +169,17 @@ Add sentence-level punctuation and capitalization so the transcript reads like s
 
 For example, cleaning "so um like the meeting is at 3pm you know on tuesday" yields "So the meeting is at 3pm on Tuesday.\""""
 
+# The crutch-word rule first ended with 'Keep "tá bom?" or "ok?" only when it
+# closes the whole message'. Qwen took a mid-message "tá bom?" as the end and
+# dropped the sentence after it, 5 of 5 times on the owner's test dictation;
+# without that line, 0 of 4.
 # The owner's Portuguese dictations came back with "agora a pouco" (há
 # pouco) and the non-word "desminuir": the old "when in doubt, leave it"
 # kept them. Spelling is fixed; word choice and register are not.
 _SPELLING = """The text will be sent as written text, so it must have no spelling or grammar mistakes in its language. Fix every one, keeping the speaker's words:
 - A word that does not exist becomes the word the speaker meant (Portuguese: "desminuir" → "diminuir", "concerteza" → "com certeza").
 - Words that sound alike but are written differently are chosen by the meaning of the sentence. In Portuguese: "há" for time that has passed and for "existe" ("agora há pouco", "há dois dias", "há muito tempo"), "a" otherwise; "mas" and "mais"; "por que", "porque", "por quê" and "porquê"; "a gente" and "agente"; "mal" and "mau"; accents ("é"/"e", "está"/"esta", "têm"/"tem") and the crase ("às três horas", "vou à reunião").
-These are corrections, not rewrites: keep the speaker's word choice, word order and informal register. Colloquial words such as "pra" and "a gente" stay. "tá" stays when it is the verb "está" ("tá demorando", "tá errado", "não tá funcionando"). In Portuguese, delete crutch words that carry no meaning: "tá?", "tá bom?", "né?" and "certo?" used as a tag at the end of a sentence or clause, repeated "tá, tá", and hesitations such as "é...", "deixa eu ver", "como é que você fala", "assim" and "tipo" when they only fill the pause. Keep "tá bom?" or "ok?" only when it closes the whole message as a real question to the listener."""
+These are corrections, not rewrites: keep the speaker's word choice, word order and informal register. Colloquial words such as "pra" and "a gente" stay. "tá" stays when it is the verb "está" ("tá demorando", "tá errado", "não tá funcionando"). In Portuguese, delete crutch words that carry no meaning: "tá?", "tá bom?", "né?" and "certo?" used as a tag at the end of a sentence or clause, repeated "tá, tá", and hesitations such as "é...", "deixa eu ver", "como é que você fala", "assim" and "tipo" when they only fill the pause."""
 
 _SELF_CORRECTION = """If the speaker audibly changes their mind mid-utterance, drop the retracted portion AND the correction cue itself, keeping only the final intent. Typical cues: "no wait", "actually", "scratch that", "I mean", "let me start over", "no no no", "make that".
 

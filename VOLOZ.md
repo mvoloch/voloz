@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-11-09 (`light`: refinement in pieces for long transcripts, Portuguese crutch words removed; Lite 0.8.24). Update this file whenever state or decisions change._
+_Last updated: 2026-11-09 (`light`: refinement in pieces for long transcripts, Portuguese crutch words removed, mid-message "tá bom?" no longer ends the text; Lite 0.8.25, Android 0.3.3). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1240,7 +1240,7 @@ Python 3.12 (in `/mnt/data/dev/.uv`), `backend/venv` with CPU PyTorch,
 toolchain 1.93.1 with the `x86_64-pc-windows-gnu` target in
 `/mnt/data/dev/.rustup` (proxies in `/mnt/data/dev/.rustup-bin`, not on PATH).
 
-## Refinement: long transcripts and Portuguese crutch words (Lite 0.8.24, Android 0.3.2)
+## Refinement: long transcripts and Portuguese crutch words (Lite 0.8.24-0.8.25, Android 0.3.2-0.3.3)
 
 - **Long transcripts:** a refinement is capped at `REFINE_MAX_TOKENS` (2048) of
   output. A 38-minute file (29,962 characters) came back with 7,984, stored as
@@ -1257,6 +1257,11 @@ toolchain 1.93.1 with the `x86_64-pc-windows-gnu` target in
   now keeps "tá" as a verb and deletes "tá?", "tá bom?", "né?", "certo?" and
   hesitations used as filler. On 16 of the owner's dictations with qwen: 26 "tá"
   left with the old prompt, 7 with the new one; 7 of 8 verbs kept with both.
+- **0.8.25 / Android 0.3.3:** 0.8.24 ended the crutch rule with "Keep 'tá bom?' or
+  'ok?' only when it closes the whole message". On the owner's test dictation
+  qwen took a mid-message "tá bom?" as the end and dropped the sentence after
+  it, 5 of 5 runs; without that line, 0 of 4. The line is gone and
+  `test_the_crutch_rule_does_not_say_where_the_message_ends` keeps it out.
 - **Android:** the prompt is regenerated with `android/tools/gen_prompt.py`.
   Android has no file import, and `ApiClient.refinedText` already treats
   `finish_reason=length` as a failure, so a cut reply pastes the raw transcript
