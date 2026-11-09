@@ -7,7 +7,7 @@ dictation (hotkey → speak → polished text pasted anywhere) without Wispr's
 cost or weekly word cap, usable across Windows, Linux and Android, with the
 user choosing cloud APIs or local models.
 
-_Last updated: 2026-11-02 (`light`: dictation.log records the microphone level and the pill shown/hidden; Lite 0.8.20). Update this file whenever state or decisions change._
+_Last updated: 2026-11-09 (`light`: refinement in pieces for long transcripts, Portuguese crutch words removed; Lite 0.8.24). Update this file whenever state or decisions change._
 
 ## Where things are
 
@@ -1239,3 +1239,25 @@ Python 3.12 (in `/mnt/data/dev/.uv`), `backend/venv` with CPU PyTorch,
 (account mvoloch) so GB4 can push directly; `mingw-w64` (apt) and a rustup
 toolchain 1.93.1 with the `x86_64-pc-windows-gnu` target in
 `/mnt/data/dev/.rustup` (proxies in `/mnt/data/dev/.rustup-bin`, not on PATH).
+
+## Refinement: long transcripts and Portuguese crutch words (Lite 0.8.24, Android 0.3.2)
+
+- **Long transcripts:** a refinement is capped at `REFINE_MAX_TOKENS` (2048) of
+  output. A 38-minute file (29,962 characters) came back with 7,984, stored as
+  the refinement; the raw text stayed in the database. `refine_transcript` now
+  cuts text above `REFINE_PIECE_CHARS` (6000) into pieces on sentence ends and
+  refines each one. The same file, run through the real split and models, came
+  back with 29,983 characters in 6 pieces (qwen for 2, the gpt-5.4-nano backup
+  for 4 after Groq's 429s). A dictation under 6000 characters is still one call.
+- **Guard:** `lost_most_of_transcript` keeps a piece of 100 words or more as
+  transcribed when the reply has under 60% of its words (cut off or summarized).
+  It looks at the text only, so it covers every provider. In the owner's history
+  the lowest share on an uncut reply was 81%.
+- **Crutch words:** `_SPELLING` used to tell the model to keep "tá" and "né". It
+  now keeps "tá" as a verb and deletes "tá?", "tá bom?", "né?", "certo?" and
+  hesitations used as filler. On 16 of the owner's dictations with qwen: 26 "tá"
+  left with the old prompt, 7 with the new one; 7 of 8 verbs kept with both.
+- **Android:** the prompt is regenerated with `android/tools/gen_prompt.py`.
+  Android has no file import, and `ApiClient.refinedText` already treats
+  `finish_reason=length` as a failure, so a cut reply pastes the raw transcript
+  there; it does not refine in pieces.

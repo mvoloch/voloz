@@ -175,7 +175,7 @@ For example, cleaning "so um like the meeting is at 3pm you know on tuesday" yie
 _SPELLING = """The text will be sent as written text, so it must have no spelling or grammar mistakes in its language. Fix every one, keeping the speaker's words:
 - A word that does not exist becomes the word the speaker meant (Portuguese: "desminuir" → "diminuir", "concerteza" → "com certeza").
 - Words that sound alike but are written differently are chosen by the meaning of the sentence. In Portuguese: "há" for time that has passed and for "existe" ("agora há pouco", "há dois dias", "há muito tempo"), "a" otherwise; "mas" and "mais"; "por que", "porque", "por quê" and "porquê"; "a gente" and "agente"; "mal" and "mau"; accents ("é"/"e", "está"/"esta", "têm"/"tem") and the crase ("às três horas", "vou à reunião").
-These are corrections, not rewrites: keep the speaker's word choice, word order and informal register. Colloquial words such as "tá", "né", "pra" and "a gente" stay."""
+These are corrections, not rewrites: keep the speaker's word choice, word order and informal register. Colloquial words such as "pra" and "a gente" stay. "tá" stays when it is the verb "está" ("tá demorando", "tá errado", "não tá funcionando"). In Portuguese, delete crutch words that carry no meaning: "tá?", "tá bom?", "né?" and "certo?" used as a tag at the end of a sentence or clause, repeated "tá, tá", and hesitations such as "é...", "deixa eu ver", "como é que você fala", "assim" and "tipo" when they only fill the pause. Keep "tá bom?" or "ok?" only when it closes the whole message as a real question to the listener."""
 
 _SELF_CORRECTION = """If the speaker audibly changes their mind mid-utterance, drop the retracted portion AND the correction cue itself, keeping only the final intent. Typical cues: "no wait", "actually", "scratch that", "I mean", "let me start over", "no no no", "make that".
 
@@ -320,6 +320,41 @@ def refine_output_budget(text: str) -> int:
     return min(REFINE_MAX_TOKENS, len(text) + REFINE_TOKEN_HEADROOM)
 
 
+# A 38-minute file (29,962 characters) came back with 7,984: the model stopped
+# at the cap above and the cut text was stored. Portuguese measured 0.256 tokens
+# per character on that reply, so 6000 characters need about 1540 of the 2048.
+REFINE_PIECE_CHARS = 6000
+_SENTENCE_END_RE = re.compile("(?<=[.!?…\u3002\uff01\uff1f])\\s+")
+
+
+def split_for_refinement(text: str, limit: int = REFINE_PIECE_CHARS) -> list[str]:
+    """Cut ``text`` into pieces of at most ``limit`` characters.
+
+    Pieces end on a sentence where possible, else between words. Text within
+    the limit stays whole, so an ordinary dictation is still a single call.
+    """
+    if len(text) <= limit:
+        return [text]
+    pieces: list[str] = []
+    current = ""
+    for sentence in _SENTENCE_END_RE.split(text):
+        while len(sentence) > limit:
+            cut = sentence.rfind(" ", 0, limit + 1)
+            head, sentence = (sentence[:cut], sentence[cut + 1:]) if cut > 0 else (sentence[:limit], sentence[limit:])
+            if current:
+                pieces.append(current)
+                current = ""
+            pieces.append(head)
+        if current and len(current) + 1 + len(sentence) > limit:
+            pieces.append(current)
+            current = sentence
+        else:
+            current = f"{current} {sentence}" if current else sentence
+    if current:
+        pieces.append(current)
+    return pieces
+
+
 _TRANSCRIPT_TAG = "transcript"
 _TAGGED_OUTPUT_INSTRUCTION = (
     f"Return the cleaned transcript inside <{_TRANSCRIPT_TAG}></{_TRANSCRIPT_TAG}> tags "
@@ -360,6 +395,21 @@ def strayed_from_transcript(transcript: str, refined: str) -> bool:
         return False
     kept = refined_words & set(_WORD_RE.findall(transcript.lower()))
     return len(kept) / len(refined_words) < MIN_SHARED_WORD_SHARE
+
+
+# In 59 refinements of 100 words or more that weren't cut off, the reply kept
+# at least 81% of the transcript's words; the one cut at the output cap kept
+# 27%. Short dictations are left out: a self-correction can drop most of one.
+MIN_KEPT_WORD_SHARE = 0.6
+MIN_WORDS_TO_JUDGE_LENGTH = 100
+
+
+def lost_most_of_transcript(transcript: str, refined: str) -> bool:
+    """Whether ``refined`` holds too few of the words of ``transcript``: cut off or summarized."""
+    transcript_words = len(_WORD_RE.findall(transcript))
+    if transcript_words < MIN_WORDS_TO_JUDGE_LENGTH:
+        return False
+    return len(_WORD_RE.findall(refined)) / transcript_words < MIN_KEPT_WORD_SHARE
 
 
 # Added only when the transcript holds text-shortcut placeholders
@@ -411,12 +461,25 @@ async def refine_transcript(
         # and a local model would make something up, so there is nothing to do.
         return "", llm_service.resolve_model_size(primary, model_size)
 
-    system_prompt = build_refinement_prompt(flags, vocabulary, app_style)
-    tokens = list(placeholders)
-    if tokens:
-        system_prompt = (
-            f"{system_prompt}\n\n{_PLACEHOLDER_INSTRUCTION.format(tokens=', '.join(tokens))}"
-        )
+    base_prompt = build_refinement_prompt(flags, vocabulary, app_style)
+    placeholders = list(placeholders)
+
+    async def refine_piece(piece: str) -> tuple[str, str]:
+        system_prompt = base_prompt
+        tokens = [token for token in placeholders if token in piece]
+        if tokens:
+            system_prompt = (
+                f"{system_prompt}\n\n{_PLACEHOLDER_INSTRUCTION.format(tokens=', '.join(tokens))}"
+            )
+        return await _refine_piece(piece, system_prompt, primary, model_size)
+
+    results = [await refine_piece(piece) for piece in split_for_refinement(cleaned_input)]
+    text = " ".join(piece_text for piece_text, _size in results).strip()
+    return finish_for_style(text, app_style), results[-1][1]
+
+
+async def _refine_piece(piece: str, system_prompt: str, primary, model_size: str | None) -> tuple[str, str]:
+    """Refine one piece on the LLM, or keep it as transcribed if the reply can't be trusted."""
 
     async def generate_on(backend) -> str:
         # Claude gets tagged output, the others the keep-language rule; a
@@ -431,9 +494,9 @@ async def refine_transcript(
         else:
             prompt = f"{system_prompt}\n\n{_KEEP_LANGUAGE_INSTRUCTION}"
         text = await backend.generate(
-            prompt=cleaned_input,
+            prompt=piece,
             system=prompt,
-            max_tokens=refine_output_budget(cleaned_input),
+            max_tokens=refine_output_budget(piece),
             temperature=0.2,
             model_size=llm_service.resolve_model_size(backend, model_size),
             examples=examples,
@@ -443,12 +506,20 @@ async def refine_transcript(
     backend, text = await providers.run_with_fallback("llm", primary, generate_on)
     resolved_size = llm_service.resolve_model_size(backend, model_size)
     text = text.strip()
-    if strayed_from_transcript(cleaned_input, text):
+    if strayed_from_transcript(piece, text):
         # providers.log: the server's own log is lost in a Windows build.
         providers.logger.warning(
             "refine: %s returned text that is not a cleanup of the transcript "
             "(translated or answered); the transcript was kept",
             providers.label(backend),
         )
-        text = cleaned_input
-    return finish_for_style(text, app_style), resolved_size
+        text = piece
+    elif lost_most_of_transcript(piece, text):
+        providers.logger.warning(
+            "refine: %s returned %d of %d characters (cut off or summarized); the transcript was kept",
+            providers.label(backend),
+            len(text),
+            len(piece),
+        )
+        text = piece
+    return text, resolved_size
