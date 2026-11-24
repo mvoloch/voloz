@@ -245,7 +245,7 @@ export async function startMicTake(log: Log, requestedAt: number): Promise<MicTa
   // Another take holds the shared microphone (two recorders in one
   // window): this one gets its own, closed when it ends.
   const shared = !mic;
-  const opened = await openMic(log, shared);
+  const opened = await openMic(log, shared, requestedAt);
   if (shared) current = opened;
   const take = new MicTake(opened, [], false, requestedAt);
   opened.take = take;
@@ -265,7 +265,8 @@ export async function takeToWav(take: MicTake, sampleRate?: number): Promise<Blo
   return convertToWav(wav, { monoSampleRate: sampleRate });
 }
 
-async function openMic(log: Log, shared: boolean): Promise<Mic> {
+async function openMic(log: Log, shared: boolean, requestedAt: number): Promise<Mic> {
+  const askedAt = performance.now();
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: true,
@@ -273,6 +274,15 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
       autoGainControl: true,
     },
   });
+  // Diagnostic: when the browser handed the microphone over, on the page's
+  // own clock (``performance.now()``, like "first sample at +N ms"), so
+  // the three waits of a cold start can be told apart without the delay
+  // the log line itself picks up on its way to the file: request to this
+  // line, this line to "microphone open", "open" to the first sample.
+  const grantedAt = performance.now();
+  log(
+    `microphone granted at +${Math.round(grantedAt - requestedAt)} ms from the start (getUserMedia took ${Math.round(grantedAt - askedAt)} ms)`,
+  );
   let context: AudioContext | null = null;
   try {
     const track = stream.getAudioTracks()[0];
@@ -417,7 +427,7 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
     };
 
     log(
-      `microphone open: ${track.label || 'unnamed device'} (${ctx.sampleRate} Hz, audio graph ${ctx.state})`,
+      `microphone open: ${track.label || 'unnamed device'} (${ctx.sampleRate} Hz, audio graph ${ctx.state}) at +${Math.round(performance.now() - requestedAt)} ms from the start`,
     );
     return mic;
   } catch (err) {
