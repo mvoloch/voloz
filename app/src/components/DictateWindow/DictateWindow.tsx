@@ -468,6 +468,7 @@ export function DictateWindow() {
           stopTitle={pillT('captures.pill.stopEscTitle')}
           handsFree={handsFree}
           levelSource={session.recordingLevel}
+          startCue={session.startCue}
           notch={IS_LITE}
         />
       ) : null}

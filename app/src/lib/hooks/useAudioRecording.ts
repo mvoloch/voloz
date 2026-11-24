@@ -85,6 +85,12 @@ interface UseAudioRecordingOptions {
    * through ``onRecordingComplete`` once converted.
    */
   onRecordingEnded?: (reason: RecordingEndReason, duration?: number) => void;
+  /**
+   * Sound is flowing into this recording: its first block arrived (at once
+   * for a warm microphone). Not called for a start that was given up or
+   * cancelled.
+   */
+  onAudioFlowing?: () => void;
   /** Diagnostics (the dictation log). Never audio or text. */
   log?: (message: string) => void;
 }
@@ -95,6 +101,7 @@ export function useAudioRecording({
   keepMicWarmMs = 0,
   onRecordingComplete,
   onRecordingEnded,
+  onAudioFlowing,
   log,
 }: UseAudioRecordingOptions = {}) {
   const platform = usePlatform();
@@ -122,6 +129,8 @@ export function useAudioRecording({
   onCompleteRef.current = onRecordingComplete;
   const onEndedRef = useRef(onRecordingEnded);
   onEndedRef.current = onRecordingEnded;
+  const onFlowingRef = useRef(onAudioFlowing);
+  onFlowingRef.current = onAudioFlowing;
   const logRef = useRef(log);
   logRef.current = log;
   const writeLog = useCallback((message: string) => logRef.current?.(message), []);
@@ -254,6 +263,11 @@ export function useAudioRecording({
       // The track may end (device removed, Bluetooth profile switch): end
       // the recording and deliver what was recorded.
       mic.onTrackEnded = () => lifecycle.end('device-ended');
+
+      // Tell the caller when sound starts to arrive (the pill's "Speak now").
+      mic.onFirstBlock(() => {
+        if (startId === startIdRef.current && !take.cancelled) onFlowingRef.current?.();
+      });
 
       setIsRecording(true);
       setAnalyser(mic.analyser);

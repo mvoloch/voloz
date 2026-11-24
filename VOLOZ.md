@@ -1327,3 +1327,34 @@ toolchain 1.93.1 with the `x86_64-pc-windows-gnu` target in
   Android has no file import, and `ApiClient.refinedText` already treats
   `finish_reason=length` as a failure, so a cut reply pastes the raw transcript
   there; it does not refine in pieces.
+
+## Pill cue while the microphone starts (`lite/pill-cue`, from `light` c4e453d, 2026-11-24)
+
+On a cold start (the microphone was closed after `MIC_WARM_MS`) the pill said
+"Recording" at the key press, but the microphone could take from a fraction of
+a second to over a second to deliver sound, and words said in between were lost
+(measurements: Notion handoff page, section "Teste sob carga e largada do
+microfone"). The pill now shows when sound is not flowing yet:
+
+- `app/src/lib/hooks/startCue.ts` (`StartCue`, timers injectable for tests):
+  `begin()` runs at the key press. If no sound has arrived after
+  `START_CUE_DELAY_MS` (400 ms) the pill reads "Starting…" with a spinner in
+  place of the red dot. When the first sound arrives it reads "Speak now" for
+  `SPEAK_CUE_MS` (900 ms), then "Recording" as before. A start that delivers
+  sound in under 400 ms shows nothing new. "Speak now" only follows a
+  "Starting…" that was shown.
+- "First sound" is `MicTake.onFirstBlock`, called by `push` on the first
+  non-empty block (the moment of the `first sample at +N ms` log line). It goes
+  through `useAudioRecording` (`onAudioFlowing`, ignored for a stale start or a
+  cancelled take) to `useCaptureRecordingSession` (`startCue`) and to
+  `CapturePill` (prop `startCue`, used only while `state === 'recording'`).
+  New log lines: `pill: waiting for the microphone (N ms after the request)`
+  and `pill: speak now (N ms after the request)`.
+- Strings: `captures.pill.starting`, `captures.pill.speakNow`; English only, like
+  the rest of the pill (`pillT`).
+- 400 ms and 900 ms are design choices, not measured values.
+- Checked: `app/tests/startCue.test.ts` (8 tests, fake clock; the suite is 51
+  tests, 0 failing), `tsc` clean, `biome` counts equal to the baseline
+  (`lint app/src`: 19 errors, 70 warnings, 2 infos). The pill states were seen in
+  a browser (Vite, `VITE_EDITION=lite`) with the real `StartCue` and real timers.
+  Not yet seen in the installed app with a real cold microphone.

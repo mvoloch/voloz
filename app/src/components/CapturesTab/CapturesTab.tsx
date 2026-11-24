@@ -798,6 +798,7 @@ export function CapturesTab() {
                 onDismiss={session.dismissError}
                 onStop={session.isRecording ? session.stopRecording : undefined}
                 levelSource={session.recordingLevel}
+                startCue={session.startCue}
               />
             ) : (
               <>

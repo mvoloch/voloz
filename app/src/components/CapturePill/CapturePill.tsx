@@ -136,7 +136,17 @@ export function PillLevelBars({ analyser }: { analyser: AnalyserNode | null }) {
  * dot while recording (hands-free too), a spinner while the text is being
  * made, a speaker for agent speech, a check when done.
  */
-function PillSymbol({ state }: { state: Exclude<PillState, 'error'> }) {
+function PillSymbol({
+  state,
+  waiting = false,
+}: {
+  state: Exclude<PillState, 'error'>;
+  /** Recording, but the microphone has not yet delivered sound: a spinner, not the red dot. */
+  waiting?: boolean;
+}) {
+  if (state === 'recording' && waiting) {
+    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden />;
+  }
   if (state === 'recording') {
     return (
       <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
@@ -181,6 +191,7 @@ export function CapturePill({
   stopTitle,
   handsFree,
   levelSource,
+  startCue,
   errorMessage,
   errorCopyText,
   onDismiss,
@@ -200,6 +211,12 @@ export function CapturePill({
    * animation.
    */
   levelSource?: AnalyserNode | null;
+  /**
+   * While recording: ``starting`` when the microphone is slow to deliver its
+   * first sound (words said now are lost), ``speak`` for a moment once it
+   * does. Unset or null: the label is "Recording" as usual.
+   */
+  startCue?: 'starting' | 'speak' | null;
   errorMessage?: string | null;
   /** What a click on the error pill copies instead of its message. */
   errorCopyText?: string | null;
@@ -224,12 +241,17 @@ export function CapturePill({
   }
 
   const visible = state !== 'rest';
+  const cue = state === 'recording' ? (startCue ?? null) : null;
   const labelText = t(
-    state === 'recording' && handsFree
-      ? 'captures.pill.handsFree'
-      : state === 'rest'
-        ? PILL_LABEL_KEYS.recording
-        : PILL_LABEL_KEYS[state],
+    cue === 'starting'
+      ? 'captures.pill.starting'
+      : cue === 'speak'
+        ? 'captures.pill.speakNow'
+        : state === 'recording' && handsFree
+          ? 'captures.pill.handsFree'
+          : state === 'rest'
+            ? PILL_LABEL_KEYS.recording
+            : PILL_LABEL_KEYS[state],
   );
   const barMode = barModeFor(state);
 
@@ -281,7 +303,7 @@ export function CapturePill({
         className,
       )}
     >
-      <PillSymbol state={state} />
+      <PillSymbol state={state} waiting={cue === 'starting'} />
       <span className="text-sm font-medium shrink-0" style={{ minWidth: '104px' }}>
         {labelText}
       </span>

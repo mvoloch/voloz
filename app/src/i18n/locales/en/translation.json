@@ -120,6 +120,8 @@
     "pill": {
       "recording": "Recording",
       "handsFree": "Hands Free",
+      "starting": "Starting…",
+      "speakNow": "Speak now",
       "transcribing": "Transcribing",
       "refining": "Refining",
       "speaking": "Speaking",

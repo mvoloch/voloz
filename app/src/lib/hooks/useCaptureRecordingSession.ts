@@ -13,6 +13,7 @@ import type {
 import { IS_LITE } from '@/lib/edition';
 import { useAudioRecording } from '@/lib/hooks/useAudioRecording';
 import { MIC_WARM_MS } from '@/lib/hooks/micCapture';
+import { StartCue, type StartCueState } from '@/lib/hooks/startCue';
 import { convertToWav, SPEECH_SAMPLE_RATE } from '@/lib/utils/audio';
 import { dictationLog } from '@/lib/utils/dictationLog';
 
@@ -153,6 +154,11 @@ export interface UseCaptureRecordingSessionResult {
   isRecording: boolean;
   /** The microphone's level analyser while recording (for the pill's level meter). */
   recordingLevel: AnalyserNode | null;
+  /**
+   * While recording: ``starting`` when the microphone is slow to deliver its
+   * first sound, ``speak`` for a moment once it does, else null (``startCue.ts``).
+   */
+  startCue: StartCueState;
   isUploading: boolean;
   isRefining: boolean;
   startRecording: (context?: unknown, options?: RecordingOptions) => void;
@@ -191,6 +197,19 @@ export function useCaptureRecordingSession(
   const [errorCopyText, setErrorCopyText] = useState<string | null>(null);
   const restTimerRef = useRef<number | null>(null);
   const errorTimerRef = useRef<number | null>(null);
+  // What the pill says while the microphone has not yet delivered sound.
+  const [startCue, setStartCue] = useState<StartCueState>(null);
+  const startCueRef = useRef<StartCue | null>(null);
+  if (startCueRef.current === null) {
+    startCueRef.current = new StartCue((state, sinceRequestMs) => {
+      setStartCue(state);
+      if (state === 'starting') {
+        dictationLog(`pill: waiting for the microphone (${sinceRequestMs} ms after the request)`);
+      } else if (state === 'speak') {
+        dictationLog(`pill: speak now (${sinceRequestMs} ms after the request)`);
+      }
+    });
+  }
 
   // Mutation callbacks close over stale pillState otherwise.
   const pillStateRef = useRef<CapturePillState>('hidden');
@@ -247,6 +266,7 @@ export function useCaptureRecordingSession(
     (message: string, durationMs: number = ERROR_PILL_VISIBLE_MS, copyText?: string) => {
       clearRestTimer();
       clearErrorTimer();
+      startCueRef.current?.reset();
       setErrorMessage(message || 'Something went wrong');
       setErrorCopyText(copyText ?? null);
       setPillState('error');
@@ -279,6 +299,7 @@ export function useCaptureRecordingSession(
     () => () => {
       clearRestTimer();
       clearErrorTimer();
+      startCueRef.current?.reset();
     },
     [clearRestTimer, clearErrorTimer],
   );
@@ -460,7 +481,9 @@ export function useCaptureRecordingSession(
     wavSampleRate: SPEECH_SAMPLE_RATE,
     keepMicWarmMs: options.warmMicrophone ? MIC_WARM_MS : 0,
     log: dictationLog,
+    onAudioFlowing: () => startCueRef.current?.flowing(),
     onRecordingEnded: (_reason, recordedDuration) => {
+      startCueRef.current?.reset();
       // Leave "Recording" as soon as the recorder stops: the audio still has
       // to be converted, and the timer must not look like it is running.
       if (
@@ -535,6 +558,7 @@ export function useCaptureRecordingSession(
       setErrorMessage(null);
       setFrozenElapsedMs(0);
       setPillState('recording');
+      startCueRef.current?.begin();
       beginAudioRecording();
       // Open the remote STT/LLM connections while the user is still speaking,
       // so the upload after release doesn't pay the TLS handshake. Never awaited.
@@ -575,6 +599,8 @@ export function useCaptureRecordingSession(
     errorCopyText,
     isRecording,
     recordingLevel,
+    // Only meaningful while the pill says "Recording".
+    startCue: pillState === 'recording' ? startCue : null,
     isUploading: uploadMutation.isPending,
     isRefining: refineMutation.isPending || commandMutation.isPending,
     startRecording,

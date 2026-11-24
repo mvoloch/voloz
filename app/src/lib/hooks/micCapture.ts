@@ -113,6 +113,7 @@ export class MicTake {
   private firstBlockSeen: boolean;
   /** Called once if the microphone's track ends during the take. */
   onTrackEnded: (() => void) | null = null;
+  private firstBlockCallback: (() => void) | null = null;
 
   constructor(
     private readonly mic: Mic,
@@ -147,16 +148,29 @@ export class MicTake {
     return this.stopped !== null;
   }
 
+  /**
+   * Run ``callback`` once, when sound is flowing into this take: at once for
+   * a warm microphone (it already has pre-roll), else when the first block
+   * arrives. The pill uses it to tell the user the microphone is ready.
+   */
+  onFirstBlock(callback: () => void): void {
+    if (this.firstBlockSeen) callback();
+    else this.firstBlockCallback = callback;
+  }
+
   /** A block from the tap, while this take is the receiver. */
   push(block: Float32Array): void {
     if (block.length === 0) return;
+    this.blocks.push(block);
     if (!this.firstBlockSeen) {
       this.firstBlockSeen = true;
       // The block's first sample was captured about one block earlier.
       const ms = performance.now() - this.requestedAt - (block.length / this.mic.sampleRate) * 1000;
       this.mic.log(`first sample at +${Math.max(0, Math.round(ms))} ms from the start (cold mic)`);
+      const callback = this.firstBlockCallback;
+      this.firstBlockCallback = null;
+      callback?.();
     }
-    this.blocks.push(block);
   }
 
   /** Stop taking samples; resolves once the tap's last partial block is in. */
