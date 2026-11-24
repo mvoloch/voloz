@@ -4,6 +4,8 @@ import { audioBufferToWav } from '../src/lib/utils/audio';
 import {
   concatPcm,
   describeLevel,
+  describeReceived,
+  mixToMono,
   PcmRing,
   pcmLevel,
   pcmToWav,
@@ -136,5 +138,65 @@ describe('pcmLevel (dictation log)', () => {
   test('a quiet room is not muted', () => {
     const level = pcmLevel([tone(rate, 0.001)], rate);
     expect(level.mutedShare).toBe(0);
+  });
+});
+
+describe('describeReceived (audio lost before the tap)', () => {
+  test('a complete warm take: everything held arrived, pre-roll included', () => {
+    // 10 s held on a warm mic: 10.3 s of samples at 48 kHz.
+    expect(describeReceived(494_400, 48_000, 10, 300)).toBe(
+      'audio received: 10.3 s of 10.3 s (complete)',
+    );
+  });
+
+  test('blocks dropped on a busy computer are reported as a share lost', () => {
+    // The 23/11 20:16 dictation: held 53.1 s, the WAV had 37.5 s.
+    expect(describeReceived(37.5 * 48_000, 48_000, 53.1, 0)).toBe(
+      'audio received: 37.5 s of 53.1 s (29% lost: the audio graph fell behind)',
+    );
+  });
+
+  test('under 2% is timing noise, not loss', () => {
+    expect(describeReceived(47_200, 48_000, 1, 0)).toBe('audio received: 1.0 s of 1.0 s (complete)');
+  });
+
+  test('a cold take missing under 0.3 s is the graph starting, not loss', () => {
+    // Before 11-16 cold takes came out up to 0.11 s short (p90) of the time held.
+    expect(describeReceived(2.8 * 48_000, 48_000, 3, 0)).toBe('audio received: 2.8 s of 3.0 s (complete)');
+  });
+
+  test('more samples than time held (clock skew) is complete, never negative', () => {
+    expect(describeReceived(50_000, 48_000, 1, 0)).toBe('audio received: 1.0 s of 1.0 s (complete)');
+  });
+
+  test('an unknown hold time says only what arrived', () => {
+    expect(describeReceived(24_000, 48_000, undefined, 0)).toBe('audio received: 0.5 s');
+  });
+});
+
+describe('mixToMono (direct capture frames to one channel)', () => {
+  test('a single channel is passed on as it is', () => {
+    const plane = Float32Array.from([0.1, -0.2, 0.3]);
+    expect(mixToMono([plane])).toBe(plane);
+  });
+
+  test('two channels are averaged', () => {
+    const left = Float32Array.from([1, 0.5, -1, 0]);
+    const right = Float32Array.from([0, 0.5, 1, 0]);
+    expect(Array.from(mixToMono([left, right]))).toEqual([0.5, 0.5, 0, 0]);
+  });
+
+  test('three channels are averaged and the inputs are left alone', () => {
+    const a = Float32Array.from([0.3, 0.6]);
+    const b = Float32Array.from([0.3, 0.0]);
+    const c = Float32Array.from([0.3, -0.3]);
+    const mono = mixToMono([a, b, c]);
+    expect(mono[0]).toBeCloseTo(0.3, 6);
+    expect(mono[1]).toBeCloseTo(0.1, 6);
+    expect(Array.from(a)).toEqual([Math.fround(0.3), Math.fround(0.6)]);
+  });
+
+  test('no channels give no samples', () => {
+    expect(mixToMono([]).length).toBe(0);
   });
 });

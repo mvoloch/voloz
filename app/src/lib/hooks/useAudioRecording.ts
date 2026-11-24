@@ -7,7 +7,14 @@ import {
   type RecordingEndReason,
   type StoppableRecorder,
 } from '@/lib/hooks/recorderLifecycle';
-import { concatPcm, describeLevel, pcmLevel, pcmToWav } from '@/lib/utils/pcm';
+import {
+  concatPcm,
+  describeLevel,
+  describeReceived,
+  pcmLevel,
+  pcmToWav,
+  totalSamples,
+} from '@/lib/utils/pcm';
 
 export type { RecordingEndReason } from '@/lib/hooks/recorderLifecycle';
 
@@ -220,6 +227,10 @@ export function useAudioRecording({
           // A muted microphone still gives a recording, of silence, which
           // whisper turns into made-up text ("Thank you for watching!").
           writeLog(describeLevel(pcmLevel(mic.blocks, mic.sampleRate)));
+          // Audio the graph dropped on a busy computer shows only here.
+          writeLog(
+            describeReceived(totalSamples(mic.blocks), mic.sampleRate, take.duration, mic.prerollMs),
+          );
 
           try {
             const wavBlob = await withTimeout(

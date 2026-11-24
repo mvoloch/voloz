@@ -1,7 +1,9 @@
 /**
  * The recording microphone as raw PCM: one MediaStream feeding one
- * AudioContext graph — source → level analyser, and source → a PCM tap
- * (AudioWorklet) that posts mono blocks at the device's rate. A recording
+ * AudioContext graph — source → level analyser — and the samples read
+ * straight from the track (``MediaStreamTrackProcessor``, mono, at the
+ * device's rate), or, where the webview has none, from a PCM tap in the
+ * graph (AudioWorklet) that posts mono blocks. A recording
  * ("take") keeps every block from the first one the stream delivers;
  * nothing waits for an encoder to start, so the first words are not lost.
  *
@@ -16,7 +18,14 @@
  * are in `lib/utils/pcm.ts`.
  */
 import { convertToWav } from '@/lib/utils/audio';
-import { concatPcm, PcmRing, pcmToWav, samplesToMs, totalSamples } from '@/lib/utils/pcm';
+import {
+  concatPcm,
+  mixToMono,
+  PcmRing,
+  pcmToWav,
+  samplesToMs,
+  totalSamples,
+} from '@/lib/utils/pcm';
 
 /** How long the microphone stays open after a dictation, for the next one. */
 export const MIC_WARM_MS = 3 * 60_000;
@@ -290,8 +299,18 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
       else ring.push(samples);
     };
 
-    let tapNode: AudioNode;
-    if (typeof AudioWorkletNode !== 'undefined' && ctx.audioWorklet) {
+    let tapNode: AudioNode | null = null;
+    let keepAlive: GainNode | null = null;
+    const direct = startDirectCapture(mic, onBlock);
+    if (direct) {
+      mic.flush = direct.flush;
+      // The level analyser still lives in the graph. Silent on any output.
+      keepAlive = ctx.createGain();
+      keepAlive.gain.value = 0;
+      analyser.connect(keepAlive);
+      keepAlive.connect(ctx.destination);
+      log('microphone: direct capture (the samples do not go through the audio graph)');
+    } else if (typeof AudioWorkletNode !== 'undefined' && ctx.audioWorklet) {
       const url = URL.createObjectURL(new Blob([TAP_SOURCE], { type: 'text/javascript' }));
       try {
         await ctx.audioWorklet.addModule(url);
@@ -334,10 +353,12 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
       tapNode = processor;
       log('microphone: no AudioWorklet, using ScriptProcessor');
     }
-    source.connect(tapNode);
-    // The tap outputs silence; connected so the graph pulls it. With no
-    // output device (``sinkId: none``) nothing is opened for it.
-    tapNode.connect(ctx.destination);
+    if (tapNode) {
+      source.connect(tapNode);
+      // The tap outputs silence; connected so the graph pulls it. With no
+      // output device (``sinkId: none``) nothing is opened for it.
+      tapNode.connect(ctx.destination);
+    }
 
     const onEnded = () => {
       mic.log('microphone track ended');
@@ -375,8 +396,10 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
       for (const resolve of pendingFlushes.values()) resolve(false);
       pendingFlushes.clear();
       ctx.onstatechange = null;
+      direct?.stop();
       source.disconnect();
-      tapNode.disconnect();
+      tapNode?.disconnect();
+      keepAlive?.disconnect();
     };
 
     log(
@@ -392,10 +415,124 @@ async function openMic(log: Log, shared: boolean): Promise<Mic> {
   }
 }
 
+/** Unread frames of audio the direct capture may hold: 6000 of 10 ms, a minute. */
+const DIRECT_BUFFER_FRAMES = 6000;
+/** How long ``flush`` lets the frames still on their way arrive. */
+const DIRECT_FLUSH_MS = 20;
+
+/** The part of WebCodecs' ``AudioData`` that the direct capture reads. */
+interface AudioFrame {
+  sampleRate: number;
+  numberOfFrames: number;
+  numberOfChannels: number;
+  copyTo(destination: Float32Array, options: { planeIndex: number; format: 'f32-planar' }): void;
+  close(): void;
+}
+
+type TrackProcessorConstructor = new (init: {
+  track: MediaStreamTrack;
+  maxBufferSize?: number;
+}) => { readable: ReadableStream<AudioFrame> };
+
+/** Set when the direct capture failed in this webview: later microphones use the audio graph. */
+let directCaptureBroken = false;
+
+interface DirectCapture {
+  flush: () => Promise<boolean>;
+  stop: () => void;
+}
+
+/**
+ * Read the microphone's frames straight from the track
+ * (``MediaStreamTrackProcessor``), without the audio graph. Why: the graph
+ * is rendered by a thread that, on a busy computer, falls behind the
+ * clock, and the capture buffer in front of it overflows in 10 ms pieces,
+ * so recordings came out short, with clicks and missing syllables
+ * (measured: 20-29 % of the audio lost with 8 cores busy). Frames read
+ * directly lost nothing in the same tests, even with the page's main
+ * thread frozen for seconds, as long as the queue is long
+ * (``DIRECT_BUFFER_FRAMES``; the default one dropped half). Null when the
+ * webview has no ``MediaStreamTrackProcessor`` (WebKitGTK) or it failed
+ * here before: the caller then uses the audio-graph tap.
+ */
+function startDirectCapture(
+  mic: Pick<Mic, 'track' | 'sampleRate' | 'log' | 'stale'>,
+  onBlock: (samples: Float32Array) => void,
+): DirectCapture | null {
+  const Processor = (globalThis as { MediaStreamTrackProcessor?: TrackProcessorConstructor })
+    .MediaStreamTrackProcessor;
+  if (!Processor || directCaptureBroken) return null;
+  let reader: ReadableStreamDefaultReader<AudioFrame>;
+  try {
+    reader = new Processor({ track: mic.track, maxBufferSize: DIRECT_BUFFER_FRAMES }).readable.getReader();
+  } catch {
+    return null;
+  }
+  let stopped = false;
+  let delivered = 0;
+  let checkedRate = false;
+  void (async () => {
+    try {
+      while (!stopped) {
+        const { value: frame, done } = await reader.read();
+        if (done || !frame) break;
+        try {
+          if (!checkedRate) {
+            checkedRate = true;
+            if (frame.sampleRate !== mic.sampleRate) {
+              mic.log(`microphone: frames at ${frame.sampleRate} Hz, the graph at ${mic.sampleRate} Hz`);
+              mic.sampleRate = frame.sampleRate;
+            }
+          }
+          const planes: Float32Array[] = [];
+          for (let channel = 0; channel < frame.numberOfChannels; channel++) {
+            const plane = new Float32Array(frame.numberOfFrames);
+            frame.copyTo(plane, { planeIndex: channel, format: 'f32-planar' });
+            planes.push(plane);
+          }
+          onBlock(mixToMono(planes));
+          delivered++;
+        } finally {
+          frame.close();
+        }
+      }
+    } catch (err) {
+      if (!stopped) {
+        directCaptureBroken = true;
+        mic.stale = true;
+        mic.log(
+          `microphone: direct capture failed (${err instanceof Error ? err.name : String(err)}); the audio graph is used from now on`,
+        );
+      }
+    }
+  })();
+  return {
+    // The frames already queued are read in the same turn of the event loop,
+    // so a short wait plus one new frame means everything captured before
+    // the call is in (the audio-graph tap's flush gives the same).
+    flush: () =>
+      new Promise<boolean>((resolve) => {
+        const seen = delivered;
+        const started = performance.now();
+        const poll = () => {
+          if (delivered > seen) return resolve(true);
+          if (stopped || performance.now() - started >= FLUSH_TIMEOUT_MS) return resolve(false);
+          window.setTimeout(poll, 5);
+        };
+        window.setTimeout(poll, DIRECT_FLUSH_MS);
+      }),
+    stop: () => {
+      stopped = true;
+      reader.cancel().catch(() => {});
+    },
+  };
+}
+
 /**
  * An AudioContext at the microphone's rate with no output device where
  * the browser supports one (Chromium's ``sinkId: { type: 'none' }``): it
- * only reads the microphone, so it never opens or follows a speaker.
+ * never opens or follows a speaker. With the direct capture it only feeds
+ * the level meter; without it, it also carries the samples.
  */
 function createContext(sampleRate: number | undefined): AudioContext {
   const base: AudioContextOptions = { latencyHint: 'playback' };

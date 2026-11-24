@@ -691,11 +691,15 @@ so the first words were not recorded.
   `onstart` took 0.58–1.48 s on the owner's PC after the headset change
   (on top of 0.1–1.24 s of `getUserMedia`). Now `micCapture.ts` takes PCM
   straight from the stream: one AudioContext at the microphone's rate
-  (`sinkId: none` where Chromium supports it, so no speaker is opened),
-  source → AudioWorklet tap posting mono blocks of 2048 samples, and
-  source → the pill's level analyser (no second AudioContext). A
+  (`sinkId: none` where Chromium supports it, so no speaker is opened)
+  feeding the pill's level analyser (no second AudioContext), and the
+  samples read from the track itself with `MediaStreamTrackProcessor`
+  (mono 10 ms frames, no audio graph in the way: see "Audio lost on a
+  busy computer" below). Where the webview has none (WebKitGTK, probably)
+  or it failed before, source → AudioWorklet tap posting mono blocks of
+  2048 samples, as before. A
   recording keeps every block from the first one the stream delivers; on
-  stop the tap hands over its partial block. The WAV is mono 16 kHz,
+  stop the last frames (or the tap's partial block) are handed over. The WAV is mono 16 kHz,
   resampled by the same `convertToWav(…, { monoSampleRate })` imported
   files use; if that fails or takes 10 s, the device-rate WAV is sent (the
   server resamples). Before, the dictation WAV was at the decode
@@ -719,6 +723,63 @@ so the first words were not recorded.
   (cold mic)` / `at -300 ms (warm mic)`, `mic warm: kept open`, `mic warm:
   reused (pre-roll N ms)`, `mic warm: closed after 3 min idle` /
   `(audio devices changed)` / `(microphone ended)`.
+- **Audio lost on a busy computer (24/11/26).** The audio graph is
+  rendered by a thread that, on a busy computer, falls behind the clock;
+  the capture buffer in front of it overflows in 10 ms pieces, before
+  the tap (the worklet and `MicTake.push` never drop a block). Dictations
+  came out shorter than the key was held, with clicks and missing
+  syllables (23/11 20:16: held 53.1 s, 37.5 s recorded). Fix:
+  `micCapture.ts` reads the frames straight from the track
+  (`MediaStreamTrackProcessor`, `startDirectCapture`), mixed to mono
+  (`mixToMono` in `pcm.ts`); the graph stays only for the level meter.
+  The frame queue is set to 6000 frames (a minute): the default queue
+  dropped half the audio (51.5 % lost, 2 takes) with the page frozen
+  twice, 1.5 s and 4 s. `flush` waits
+  20 ms for one more frame (the queued ones are read in the same turn of
+  the event loop). A failure turns the direct capture off for the
+  webview and the next microphone uses the tap.
+  Bench on the XPS (Edge 159, WebView2's engine; real microphone, the
+  real `micCapture.ts` before (fcfa337) and after, bundled with `bun
+  build`; 8 s takes, 3 per cell; load = 8 busy processes on 8 logical
+  processors; "frozen page" = main thread blocked 1.5 s and 3 s).
+  Audio received ÷ time held, min–max of 3 takes per cell (not a
+  statistic; the test clock has about 10 ms of noise in 8 s, so "after"
+  reads as 1.000 with under 0.3 % of loss). Time held = the take's
+  length minus the first sample's delay, read from the log line `first
+  sample at +N ms`; the `ratio` field the bench saved did not subtract it
+  (a parsing slip), so it reads lower (0.935 where this reads 0.964 on the
+  first row):
+
+  | | before | after |
+  |---|---|---|
+  | no extra load (machine 46–100 % busy anyway) | 0.957–0.975 | 0.999–1.000 |
+  | 8 busy | 0.713–0.796 | ≈ 1.000 |
+  | 8 busy + frozen page | 0.616–0.826 | ≈ 1.000 |
+
+  Warm microphone and an immediate second press (8 busy): after, 3.32 s
+  for 3.30 s expected (300 ms pre-roll included) and 3.02–3.03 s for 3.00
+  s; before, 2.74–2.90 s and 2.36–2.42 s. First sample 78–608 ms after
+  the request (before: 119–405 ms, once 4.4 s; both include
+  `getUserMedia`).
+  Tried and dropped: (a) the default output instead of `sinkId: none`:
+  no loss, but the first block came after 0.15–1.5 s (once 5.5 s)
+  against 56–128 ms; (b) start on `none` and `setSinkId('')` after the
+  first block: the context is suspended during the move and the
+  microphone is not read; in the real module 3 of 5 cold starts stalled
+  1.1–1.4 s at the start (in two the move itself took 1.1–1.4 s; in the
+  third it took 49 ms and the stall began after it, cause not explained
+  by the log; the replica bench had moves of 15–151 ms, so it did not
+  show this). Not tested: the installed app itself (the XPS has WebView2
+  Runtime 159.0.4402.13, the same engine build as the Edge used, but the
+  bench ran in Edge, not in `voloz.exe`), a Bluetooth headset, WebKitGTK (no
+  `MediaStreamTrackProcessor` there: the old tap, unchanged), a stereo
+  microphone (only the down-mix is unit-tested), a page frozen for more
+  than a minute. Log lines: `microphone: direct capture (…)` when it
+  runs; `microphone: frames at N Hz, the graph at M Hz` if the rates
+  differ (the frames' rate wins); `microphone: direct capture failed
+  (<error>); the audio graph is used from now on`; per dictation `audio
+  received: X s of Y s (complete | N% lost: the audio graph fell
+  behind)`, which should read `complete` on a busy computer now.
 
 Measured on GB4 in headless Chrome 156 with a fake microphone playing a
 dictation (`v87-harness`; not WebView2, not Windows, not a real device):

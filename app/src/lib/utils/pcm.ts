@@ -68,6 +68,22 @@ export function concatPcm(blocks: readonly Float32Array[]): Float32Array<ArrayBu
   return out;
 }
 
+/**
+ * Mono from one plane per channel: the average of the channels (what the
+ * audio graph's down-mix of a stereo input does). A single plane is
+ * returned as it is.
+ */
+export function mixToMono(planes: readonly Float32Array[]): Float32Array {
+  if (planes.length === 0) return new Float32Array(0);
+  if (planes.length === 1) return planes[0];
+  const out = new Float32Array(planes[0].length);
+  for (const plane of planes) {
+    for (let i = 0; i < out.length; i++) out[i] += plane[i];
+  }
+  for (let i = 0; i < out.length; i++) out[i] /= planes.length;
+  return out;
+}
+
 /** Duration of ``samples`` at ``sampleRate``, in whole milliseconds. */
 export function samplesToMs(samples: number, sampleRate: number): number {
   return sampleRate > 0 ? Math.round((samples / sampleRate) * 1000) : 0;
@@ -136,6 +152,38 @@ export function describeLevel(level: PcmLevel): string {
   return `audio level: peak ${db(level.peakDb)}, rms ${db(level.rmsDb)}, muted ${Math.round(
     level.mutedShare * 100,
   )}%${note}`;
+}
+
+/**
+ * Below this share, or this many seconds, missing is start/stop timing,
+ * not lost audio: before 11-16 (no loss) a cold take was up to 0.11 s
+ * short of the time held in 9 of 10 dictations, a warm one 0.05 s.
+ */
+const LOSS_NOISE = 0.02;
+const LOSS_NOISE_S = 0.3;
+
+/**
+ * ``audio received: 37.5 s of 53.1 s (29% lost: …)`` for the dictation
+ * log: the samples a take holds against the time the key was held plus
+ * the pre-roll. Audio the graph drops before the tap (it fell behind on a
+ * busy computer) leaves no mark in the WAV but clicks and missing
+ * syllables; this line is the only place it shows.
+ */
+export function describeReceived(
+  receivedSamples: number,
+  sampleRate: number,
+  heldSeconds: number | undefined,
+  prerollMs: number,
+): string {
+  const received = receivedSamples / sampleRate;
+  if (heldSeconds === undefined) return `audio received: ${received.toFixed(1)} s`;
+  const expected = heldSeconds + prerollMs / 1000;
+  const lost = expected > 0 ? 1 - received / expected : 0;
+  const note =
+    lost < LOSS_NOISE || (expected - received) < LOSS_NOISE_S
+      ? 'complete'
+      : `${Math.round(lost * 100)}% lost: the audio graph fell behind`;
+  return `audio received: ${received.toFixed(1)} s of ${expected.toFixed(1)} s (${note})`;
 }
 
 /**
