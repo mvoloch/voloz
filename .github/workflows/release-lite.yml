@@ -101,12 +101,15 @@ jobs:
           RUST_BACKTRACE: "1"
         with:
           projectPath: tauri
-          tagName: lite-v__VERSION__
-          releaseName: "Voloz Lite v__VERSION__"
-          releaseBody: ${{ steps.changelog.outputs.notes }}
+          # DIAGNOSTIC BRANCH ONLY (diag/mic-granted): its own tag and draft so
+          # it can never upload into the lite-v<version> draft, Windows
+          # installer (NSIS) only, no Linux job. Never merge this file back.
+          tagName: lite-diag-v__VERSION__
+          releaseName: "DIAG Voloz Lite v__VERSION__ (microphone timing log, not a release)"
+          releaseBody: "Diagnostic build: adds the microphone granted-at line to dictation.log. Not for publishing."
           releaseDraft: true
-          prerelease: false
-          args: --config src-tauri/tauri.lite.conf.json
+          prerelease: true
+          args: --config src-tauri/tauri.lite.conf.json --bundles nsis
           includeUpdaterJson: false
 
   # Linux: built after Windows so the draft release already exists; its
@@ -116,6 +119,7 @@ jobs:
   # on the clipboard (copy_final_text) and the global shortcut needs read
   # access to /dev/input (the user in the "input" group).
   linux:
+    if: false # diagnostic branch: no Linux build
     needs: release
     permissions:
       contents: write
